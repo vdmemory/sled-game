@@ -1,0 +1,28 @@
+name: Deploy to Roblox
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+env:
+  ROJO_VERSION: "7.4.4"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging' }}
+    concurrency: deploy-${{ github.ref_type }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rojo
+        run: |
+          curl -sSfL -o rojo.zip "https://github.com/rojo-rbx/rojo/releases/download/v${ROJO_VERSION}/rojo-${ROJO_VERSION}-linux-x86_64.zip"
+          unzip -q rojo.zip -d "$HOME/.local/bin" && chmod +x "$HOME/.local/bin/rojo"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build place
+        run: rojo build default.project.json -o game.rbxl
+      - name: Publish via Open Cloud
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          UNIVERSE_ID: ${{ vars.UNIVERSE_ID }}
+          PLACE_ID: ${{ vars.PLACE_ID }}
+        run: ./scripts/publish.sh game.rbxl
