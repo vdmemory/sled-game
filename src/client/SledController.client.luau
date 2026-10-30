@@ -16,7 +16,20 @@ local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-local FWD = Vector3.new(0, 0, -1) -- все трассы идут по -Z
+-- Направление «вниз по трассе». Трасса петляет, поэтому берём его из куска трассы под санками
+-- (у кусков Floor/Bank ось -Z смотрит вдоль трассы, у трамплина — наоборот).
+local fwd = Vector3.new(0, 0, -1)
+local TRACK_PARTS = { Floor = 1, Bank = 1, Ramp = -1 }
+local function updateForward(ground: BasePart)
+	local sign = TRACK_PARTS[ground.Name]
+	if sign then
+		local look = ground.CFrame.LookVector * sign
+		local flat = Vector3.new(look.X, 0, look.Z)
+		if flat.Magnitude > 0.1 then
+			fwd = flat.Unit
+		end
+	end
+end
 
 ------------------------------------------------------------------ руль: читаем ввод сами
 -- Не полагаемся на VehicleSeat.SteerFloat: он заполняется, только если клиент «увидел» посадку.
@@ -179,7 +192,7 @@ local function crash()
 		a.Enabled = false
 	end
 	local side = if math.random() < 0.5 then -1 else 1
-	s.AssemblyLinearVelocity = FWD * math.min(speed, 60) * 0.35 + Vector3.new(side * 6, 28, 0)
+	s.AssemblyLinearVelocity = fwd * math.min(speed, 60) * 0.35 + fwd:Cross(Vector3.yAxis) * side * 6 + Vector3.new(0, 28, 0)
 	s.AssemblyAngularVelocity = Vector3.new(-9, side * 2, side * 5) -- кувырок через «нос»
 	speed = 0
 	rocketOn.Value = false
@@ -246,6 +259,7 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	humanoid = hum
 	speed = 0
 	lateral = 0
+	fwd = Vector3.new(0, 0, -1)
 	started = false
 	crashed = false
 	airborne, flipping, flipHeld, rocketHeld = false, false, false, false
@@ -379,7 +393,8 @@ RunService.Heartbeat:Connect(function(dt)
 	if hit then
 		-- На земле: считаем скорость сами
 		local n = hit.Normal
-		local d = (FWD - n * FWD:Dot(n)).Unit
+		updateForward(hit.Instance)
+		local d = (fwd - n * fwd:Dot(n)).Unit
 		local right = d:Cross(n)
 
 		-- Трамплин — пусковая площадка: скорость на нём не теряется, и он подбрасывает вверх
@@ -419,6 +434,11 @@ RunService.Heartbeat:Connect(function(dt)
 			if airTime > 0.35 then
 				sfx:Fire("land")
 			end
+			-- Air time: бонус за долгий полёт (как в оригинале)
+			if airTime >= Config.AIR_MIN_TIME then
+				Remotes.Air:FireServer(airTime)
+				trickPopup:Fire(string.format("✈ Air time %.1fс  +%d", airTime, math.floor(math.min(airTime, 4) * Config.AIR_COINS_PER_SEC)))
+			end
 			if flipping then
 				local upright = s.CFrame.UpVector:Dot(n) > 0.5
 				local flips = math.floor((flipAngle + math.pi / 2) / (2 * math.pi))
@@ -440,22 +460,24 @@ RunService.Heartbeat:Connect(function(dt)
 		-- В воздухе: летим по физике, немного рулим, ракета толкает вперёд
 		airborne = true
 		airTime += dt
-		speed = math.max(0, vel:Dot(FWD))
+		local rightH = fwd:Cross(Vector3.yAxis)
+		local along = vel:Dot(fwd)
+		speed = math.max(0, along)
 		lateral += (steer * Config.STEER_SPEED * 0.6 - lateral) * math.min(1, dt * Config.STEER_RESPONSE * 0.5)
-		local newVel = Vector3.new(lateral, vel.Y, vel.Z)
+		local newVel = fwd * along + rightH * lateral + Vector3.new(0, vel.Y, 0)
 		if useRocket then
-			newVel += FWD * Config.ROCKET_THRUST * dt
+			newVel += fwd * Config.ROCKET_THRUST * dt
 		end
 		s.AssemblyLinearVelocity = newVel
 
 		if flipHeld then
 			flipping = true
 			a.Enabled = false
-			s.AssemblyAngularVelocity = Vector3.new(-Config.FLIP_SPEED, 0, 0)
+			s.AssemblyAngularVelocity = -rightH * Config.FLIP_SPEED
 			flipAngle += Config.FLIP_SPEED * dt
 		else
 			a.Enabled = true
-			a.CFrame = CFrame.lookAt(Vector3.zero, FWD, Vector3.yAxis)
+			a.CFrame = CFrame.lookAt(Vector3.zero, fwd, Vector3.yAxis)
 		end
 	end
 	speedValue.Value = speed

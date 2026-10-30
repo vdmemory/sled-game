@@ -24,6 +24,7 @@ end
 local StartRun: RemoteEvent = remote("RemoteEvent", "StartRun")
 local Launch: RemoteEvent = remote("RemoteEvent", "Launch")
 local Crash: RemoteEvent = remote("RemoteEvent", "Crash")
+local Air: RemoteEvent = remote("RemoteEvent", "Air")
 local Trick: RemoteEvent = remote("RemoteEvent", "Trick")
 local RunEnded: RemoteEvent = remote("RemoteEvent", "RunEnded")
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
@@ -170,6 +171,7 @@ type Run = {
 	startTime: number,
 	launchTime: number?,
 	crashed: boolean?,
+	lastAir: number?,
 	ended: boolean?,
 }
 local runs: { [Player]: Run } = {}
@@ -376,6 +378,22 @@ Launch.OnServerEvent:Connect(function(player, power)
 	player:SetAttribute("Launched", true)
 end)
 
+-- Air time: монеты за время в полёте (с ограничением, чтобы не накручивали)
+Air.OnServerEvent:Connect(function(player, seconds)
+	local run = runs[player]
+	if not run or not run.launched or run.crashed or typeof(seconds) ~= "number" then
+		return
+	end
+	local now = os.clock()
+	if now - (run.lastAir or 0) < 0.8 or seconds < Config.AIR_MIN_TIME then
+		return
+	end
+	run.lastAir = now
+	local add = math.floor(math.min(seconds, 4) * Config.AIR_COINS_PER_SEC)
+	run.bonusCoins += add
+	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
+end)
+
 -- Врезался: даём кувырку доиграть на экране, потом заканчиваем заезд
 Crash.OnServerEvent:Connect(function(player)
 	local run = runs[player]
@@ -506,9 +524,7 @@ RunService.Heartbeat:Connect(function(dt)
 		run.distance = math.max(run.distance, h)
 		player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
 
-		local idx = track:segmentIndexAt(math.max(0, h))
-		track:ensure(idx - Config.SEGMENTS_BEHIND, idx + Config.SEGMENTS_AHEAD)
-		track:cleanup(idx - Config.SEGMENTS_BEHIND)
+		track:ensureAround(math.max(0, run.distance))
 
 		if not run.launched or run.crashed then
 			continue

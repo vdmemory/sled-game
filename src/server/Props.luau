@@ -274,44 +274,156 @@ function Props.signpost(rng: Random, base: CFrame, parent: Instance, collide: bo
 	end
 end
 
+------------------------------------------------------------------ ещё препятствия из оригинала
+-- Грузовик-фургон
+function Props.truck(rng: Random, base: CFrame, parent: Instance)
+	local cab = pick(rng, { Color3.fromRGB(60, 110, 200), Color3.fromRGB(210, 60, 50), Color3.fromRGB(240, 240, 240) })
+	part("Part", { Size = Vector3.new(7, 8, 14), CFrame = base * CFrame.new(0, 5.6, 2.5), Color = Color3.fromRGB(235, 235, 240) }, parent) -- будка
+	part("Part", { Size = Vector3.new(6.8, 5.4, 5), CFrame = base * CFrame.new(0, 3.9, -7), Color = cab }, parent)
+	deco({ Size = Vector3.new(6, 2, 0.3), CFrame = base * CFrame.new(0, 5, -9.55), Material = Enum.Material.Glass, Color = GLASS, Reflectance = 0.3 }, parent)
+	deco({ Size = Vector3.new(6.9, 1.8, 3.2), CFrame = base * CFrame.new(0, 5, -7.2), Material = Enum.Material.Glass, Color = GLASS }, parent)
+	for _, side in { -1, 1 } do
+		deco({ Size = Vector3.new(0.15, 2.4, 10), CFrame = base * CFrame.new(side * 3.55, 6, 2.5), Color = cab }, parent) -- полоса на будке
+	end
+	deco({ Size = Vector3.new(6.8, 0.5, 13.8), CFrame = base * CFrame.new(0, 9.85, 2.5), Material = Enum.Material.Snow, Color = SNOW }, parent)
+	wheels(base, 3.4, { -6.5, 4, 7.5 }, 1.5, parent)
+end
+
+-- Автобусная остановка: навес со стеклянной стенкой и табличкой
+function Props.busStop(base: CFrame, parent: Instance)
+	local frame = Color3.fromRGB(70, 75, 90)
+	for _, x in { -5, 5 } do
+		for _, z in { -1.6, 1.6 } do
+			part("Part", { Size = Vector3.new(0.4, 7, 0.4), CFrame = base * CFrame.new(x, 3.5, z), Material = Enum.Material.Metal, Color = frame }, parent)
+		end
+	end
+	part("Part", { Size = Vector3.new(11, 0.5, 4), CFrame = base * CFrame.new(0, 7.2, 0), Color = frame }, parent)
+	part("Part", { Size = Vector3.new(10, 5, 0.2), CFrame = base * CFrame.new(0, 4, 1.6), Material = Enum.Material.Glass, Color = Color3.fromRGB(180, 215, 240), Transparency = 0.4 }, parent)
+	part("Part", { Size = Vector3.new(8, 0.6, 1.4), CFrame = base * CFrame.new(0, 2, 1), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(150, 105, 65) }, parent)
+	local sign = deco({ Size = Vector3.new(2.4, 1.4, 0.2), CFrame = base * CFrame.new(4, 8.3, 0), Color = Color3.fromRGB(40, 120, 210) }, parent)
+	label(sign, Enum.NormalId.Front, "BUS", Color3.new(1, 1, 1))
+	label(sign, Enum.NormalId.Back, "BUS", Color3.new(1, 1, 1))
+	deco({ Size = Vector3.new(11.2, 0.6, 4.2), CFrame = base * CFrame.new(0, 7.75, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+end
+
+-- Дорожные конусы (2–3 штуки)
+function Props.cones(rng: Random, base: CFrame, parent: Instance)
+	for k = 1, rng:NextInteger(2, 3) do
+		local c = base * CFrame.new((k - 2) * 2.6, 0, rng:NextNumber(-1, 1))
+		part("Part", { Size = Vector3.new(2.4, 0.4, 2.4), CFrame = c * CFrame.new(0, 0.2, 0), Color = Color3.fromRGB(240, 110, 30) }, parent)
+		for t = 0, 3 do
+			local w = 1.6 - t * 0.35
+			part("Part", {
+				Size = Vector3.new(w, 0.9, w),
+				CFrame = c * CFrame.new(0, 0.85 + t * 0.9, 0),
+				Color = if t == 1 then Color3.new(1, 1, 1) else Color3.fromRGB(245, 120, 35),
+			}, parent)
+		end
+	end
+end
+
+-- Бочки (по 2–3, иногда одна на боку)
+function Props.barrels(rng: Random, base: CFrame, parent: Instance)
+	local col = pick(rng, { Color3.fromRGB(200, 60, 45), Color3.fromRGB(60, 110, 190), Color3.fromRGB(80, 140, 80) })
+	for k = 1, rng:NextInteger(2, 3) do
+		local c = base * CFrame.new((k - 2) * 3.2, 0, rng:NextNumber(-1.2, 1.2))
+		part("Part", { Shape = Enum.PartType.Cylinder, Size = Vector3.new(4, 3, 3), CFrame = c * CFrame.new(0, 2, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = col }, parent)
+		for _, y in { 0.9, 3.1 } do
+			deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 3.15, 3.15), CFrame = c * CFrame.new(0, y, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(60, 60, 65) }, parent)
+		end
+		deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 2.8, 2.8), CFrame = c * CFrame.new(0, 4.1, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Snow, Color = SNOW }, parent)
+	end
+end
+
+-- Поваленное бревно поперёк полосы
+function Props.log(rng: Random, base: CFrame, parent: Instance)
+	local len = rng:NextNumber(10, 13)
+	local c = base * CFrame.Angles(0, rng:NextNumber(-0.25, 0.25), 0)
+	part("Part", { Shape = Enum.PartType.Cylinder, Size = Vector3.new(len, 2.6, 2.6), CFrame = c * CFrame.new(0, 1.3, 0), Material = Enum.Material.Wood, Color = Color3.fromRGB(125, 85, 55) }, parent)
+	for _, x in { -len / 2, len / 2 } do
+		deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 2.3, 2.3), CFrame = c * CFrame.new(x, 1.3, 0), Color = Color3.fromRGB(215, 175, 120) }, parent) -- спил
+	end
+	deco({ Size = Vector3.new(len * 0.8, 0.5, 1.6), CFrame = c * CFrame.new(0, 2.6, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+	deco({ Size = Vector3.new(0.6, 2.2, 0.6), CFrame = c * CFrame.new(len * 0.2, 3, 0) * CFrame.Angles(0, 0, math.rad(25)), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 45) }, parent) -- сучок
+end
+
+-- Поленница
+function Props.woodpile(base: CFrame, parent: Instance)
+	for row = 0, 2 do
+		for k = 0, 3 - row do
+			-- Полено лежит вдоль трассы: торцы смотрят на игрока
+			part("Part", {
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(4.5, 1.6, 1.6),
+				CFrame = base * CFrame.new(-2.4 + k * 1.6 + row * 0.8, 0.8 + row * 1.4, 0) * CFrame.Angles(0, math.rad(90), 0),
+				Material = Enum.Material.Wood,
+				Color = Color3.fromRGB(150 - row * 12, 100, 60),
+			}, parent)
+			deco({ -- светлый спил
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.1, 1.3, 1.3),
+				CFrame = base * CFrame.new(-2.4 + k * 1.6 + row * 0.8, 0.8 + row * 1.4, -2.27) * CFrame.Angles(0, math.rad(90), 0),
+				Color = Color3.fromRGB(220, 180, 125),
+			}, parent)
+		end
+	end
+	deco({ Size = Vector3.new(6, 0.5, 4.6), CFrame = base * CFrame.new(0, 4.4, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+end
+
 ------------------------------------------------------------------ препятствия по мирам
 -- Возвращает модель-препятствие (все детали потом получают тег Obstacle)
 function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instance): Model
 	local m = Instance.new("Model")
 	m.Name = "Obstacle"
-	local yaw = if rng:NextNumber() < 0.5 then 0 else math.pi / 2 -- машины стоят вдоль или поперёк
-	local t = rng:NextNumber()
+	-- Машины стоят вдоль или поперёк; остальное слегка развёрнуто
+	local turned = base * CFrame.Angles(0, if rng:NextNumber() < 0.5 then 0 else math.pi / 2, 0)
+	local twisted = base * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0)
+	-- Взвешенный выбор: { вес, функция }
+	local options
 	if theme == 1 then
-		if t < 0.35 then
-			Props.snowman(rng, base, m)
-		elseif t < 0.65 then
-			Props.boulder(rng, base, m)
-		elseif t < 0.85 then
-			Props.barrier(base, m)
-		else
-			Props.car(rng, base * CFrame.Angles(0, yaw, 0), m)
-		end
+		options = {
+			{ 24, function() Props.snowman(rng, base, m) end },
+			{ 18, function() Props.boulder(rng, base, m) end },
+			{ 14, function() Props.log(rng, base, m) end },
+			{ 10, function() Props.woodpile(twisted, m) end },
+			{ 10, function() Props.barrier(twisted, m) end },
+			{ 12, function() Props.car(rng, turned, m) end },
+			{ 6, function() Props.signpost(rng, base, m, true) end },
+			{ 6, function() Props.barrels(rng, twisted, m) end },
+		}
 	elseif theme == 2 then
-		if t < 0.4 then
-			Props.car(rng, base * CFrame.Angles(0, yaw, 0), m)
-		elseif t < 0.55 then
-			Props.van(rng, base * CFrame.Angles(0, yaw, 0), m, rng:NextNumber() < 0.5)
-		elseif t < 0.7 then
-			Props.hydrant(base, m)
-		elseif t < 0.85 then
-			Props.stopSign(base, m)
-		else
-			Props.barrier(base, m)
-		end
+		options = {
+			{ 24, function() Props.car(rng, turned, m) end },
+			{ 10, function() Props.van(rng, turned, m, rng:NextNumber() < 0.5) end },
+			{ 8, function() Props.truck(rng, turned, m) end },
+			{ 8, function() Props.busStop(twisted, m) end },
+			{ 10, function() Props.hydrant(base, m) end },
+			{ 10, function() Props.stopSign(base, m) end },
+			{ 12, function() Props.cones(rng, twisted, m) end },
+			{ 8, function() Props.barrier(twisted, m) end },
+			{ 10, function() Props.barrels(rng, twisted, m) end },
+		}
 	else
-		if t < 0.35 then
-			Props.boulder(rng, base, m, true)
-		elseif t < 0.6 then
-			Props.cactus(rng, base, m, true)
-		elseif t < 0.85 then
-			Props.jeep(rng, base * CFrame.Angles(0, yaw, 0), m)
-		else
-			Props.signpost(rng, base, m, true)
+		options = {
+			{ 22, function() Props.boulder(rng, base, m, true) end },
+			{ 18, function() Props.cactus(rng, base, m, true) end },
+			{ 16, function() Props.jeep(rng, turned, m) end },
+			{ 10, function() Props.signpost(rng, base, m, true) end },
+			{ 12, function() Props.barrels(rng, twisted, m) end },
+			{ 10, function() Props.woodpile(twisted, m) end },
+			{ 8, function() Props.log(rng, base, m) end },
+		}
+	end
+	local total = 0
+	for _, o in options do
+		total += o[1]
+	end
+	local roll = rng:NextNumber() * total
+	for _, o in options do
+		roll -= o[1]
+		if roll <= 0 then
+			o[2]()
+			break
 		end
 	end
 	m.Parent = parent

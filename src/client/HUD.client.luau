@@ -246,6 +246,14 @@ local runCoins = label({
 	Size = UDim2.new(0, 300, 0, 40),
 	TextColor3 = Color3.fromRGB(255, 220, 90),
 })
+-- Пройденная дистанция крупно сверху, как в оригинале
+local distLabel = label({
+	Parent = runUi,
+	Text = "",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 52),
+	Size = UDim2.new(0, 260, 0, 34),
+})
 local speedLabel = label({
 	Parent = runUi,
 	Text = "",
@@ -470,6 +478,7 @@ local function updateRun()
 	pctBubble.Position = UDim2.new(0, -8, 1 - p, 0)
 	local c = player:GetAttribute("RunCoins") or 0
 	runCoins.Text = if c > 0 then "💰 +" .. c else ""
+	distLabel.Text = (player:GetAttribute("RunDistance") or 0) .. " м"
 end
 player:GetAttributeChangedSignal("RunDistance"):Connect(updateRun)
 player:GetAttributeChangedSignal("RunCoins"):Connect(updateRun)

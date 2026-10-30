@@ -6,13 +6,26 @@ local Config = {}
 ------------------------------------------------------------------ МИР
 Config.LOBBY_POS = Vector3.new(0, 3000, 400) -- лобби
 Config.TRACKS_ORIGIN = Vector3.new(0, 3000, 0) -- старт трассы игрока в слоте 0
-Config.SLOT_SPACING = 480 -- расстояние между трассами разных игроков (по X)
+Config.SLOT_SPACING = 1000 -- расстояние между трассами разных игроков (по X); трассы петляют
 
 ------------------------------------------------------------------ ТРАССА (жёлоб)
 Config.TRACK_WIDTH = 80 -- ширина снежного дна (широкий склон / улица, как в оригинале)
 Config.LANES = 6 -- полосы для препятствий; в ряду всегда свободно минимум 2
-Config.SEGMENTS_AHEAD = 7
-Config.SEGMENTS_BEHIND = 2
+Config.BUILD_AHEAD = 650 -- строим трассу на столько studs вперёд от игрока
+Config.KEEP_BEHIND = 150 -- и держим столько позади
+
+-- Повороты: ледяной жёлоб, который петляет (как в трейлере оригинала)
+Config.CURVE_CHANCE = 0.3 -- шанс поворота вместо прямого участка
+Config.CURVE_ANGLE = { 30, 55 } -- градусов на один поворот
+Config.CURVE_STEP = 5 -- градусов на один кусок поворота
+Config.CURVE_PIECE = 14 -- длина куска поворота (studs)
+Config.CURVE_PITCH = { 8, 12 } -- уклон в поворотах
+Config.MAX_HEADING = 50 -- трасса не уходит дальше ±этого от общего направления
+Config.MAX_DRIFT = 140 -- и не уплывает вбок дальше этого (studs)
+
+-- Время в воздухе
+Config.AIR_COINS_PER_SEC = 12
+Config.AIR_MIN_TIME = 0.6
 
 -- Длина уровня по горизонтали (studs)
 function Config.levelLength(level: number): number
