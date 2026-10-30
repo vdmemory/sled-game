@@ -55,13 +55,20 @@ Lighting.EnvironmentSpecularScale = 1
 Lighting.GlobalShadows = true
 do
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.3
-	atmosphere.Offset = 0.1
-	atmosphere.Color = Color3.fromRGB(200, 225, 255)
-	atmosphere.Decay = Color3.fromRGB(120, 160, 210)
-	atmosphere.Glare = 0.4
-	atmosphere.Haze = 1.1
+	atmosphere.Density = 0.25
+	atmosphere.Offset = 0.15
+	atmosphere.Color = Color3.fromRGB(190, 220, 255)
+	atmosphere.Decay = Color3.fromRGB(110, 160, 230)
+	atmosphere.Glare = 0.3
+	atmosphere.Haze = 0.5 -- меньше дымки: небо насыщенно-голубое, как в оригинале
 	atmosphere.Parent = Lighting
+
+	-- Объёмные облака (встроенные в Terrain, ассеты не нужны)
+	local clouds = Instance.new("Clouds")
+	clouds.Cover = 0.55
+	clouds.Density = 0.6
+	clouds.Color = Color3.fromRGB(255, 255, 255)
+	clouds.Parent = workspace.Terrain
 	local cc = Instance.new("ColorCorrectionEffect")
 	cc.Brightness = -0.02
 	cc.Contrast = 0.18

@@ -116,6 +116,208 @@ end
 
 local DECOR = { decorTree, decorBuilding, decorRock }
 
+------------------------------------------------------------------ окружение (стилизованный low-poly)
+-- Округлое дерево со снежной шапкой
+local function decorRoundTree(rng: Random, base: CFrame, parent: Instance)
+	local h = rng:NextNumber(10, 18)
+	decorPart({
+		Size = Vector3.new(1.6, h * 0.5, 1.6),
+		CFrame = base * CFrame.new(0, h * 0.25, 0),
+		Material = Enum.Material.Wood,
+		Color = Color3.fromRGB(130, 85, 55),
+	}, parent)
+	local green = Color3.fromRGB(80 + rng:NextInteger(0, 30), 150 + rng:NextInteger(0, 30), 70)
+	local r = h * 0.45
+	decorPart({
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * r * 2,
+		CFrame = base * CFrame.new(0, h * 0.6, 0),
+		Material = Enum.Material.SmoothPlastic,
+		Color = green,
+		CastShadow = true,
+	}, parent)
+	decorPart({
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * r * 1.4,
+		CFrame = base * CFrame.new(r * 0.5, h * 0.75, r * 0.3),
+		Material = Enum.Material.SmoothPlastic,
+		Color = green:Lerp(Color3.new(1, 1, 1), 0.08),
+	}, parent)
+	decorPart({ -- снег сверху
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(r * 1.5, r * 0.6, r * 1.5),
+		CFrame = base * CFrame.new(0, h * 0.6 + r * 0.8, 0),
+		Material = Enum.Material.Snow,
+		Color = Color3.fromRGB(250, 252, 255),
+	}, parent)
+end
+
+-- Ограждение вдоль кромки: металлические перила (город) или деревянный забор (лес, каньон)
+local function fence(cf: CFrame, len: number, side: number, metal: boolean, parent: Instance)
+	local x = side * (WALL_OUT + 5)
+	local color = if metal then Color3.fromRGB(200, 205, 215) else Color3.fromRGB(150, 100, 60)
+	local material = if metal then Enum.Material.Metal else Enum.Material.WoodPlanks
+	local step = if metal then 8 else 12
+	for z = 0, len, step do
+		decorPart({
+			Size = Vector3.new(0.5, 4, 0.5),
+			CFrame = sidePoint(cf, x, z) * CFrame.new(0, 2, 0),
+			Material = material,
+			Color = color,
+		}, parent)
+	end
+	for _, y in (if metal then { 3.7, 2 } else { 3.2, 1.6 }) do
+		decorPart({
+			Size = Vector3.new(0.35, if metal then 0.35 else 0.6, len),
+			CFrame = cf * CFrame.new(x, WALL_TOP + y, -len / 2),
+			Material = material,
+			Color = color,
+		}, parent)
+	end
+end
+
+-- Фонарь
+local function streetLamp(base: CFrame, side: number, parent: Instance)
+	local pole = Color3.fromRGB(70, 75, 90)
+	decorPart({ Size = Vector3.new(0.7, 16, 0.7), CFrame = base * CFrame.new(0, 8, 0), Material = Enum.Material.Metal, Color = pole }, parent)
+	decorPart({ Size = Vector3.new(4, 0.5, 0.5), CFrame = base * CFrame.new(-side * 2, 16, 0), Material = Enum.Material.Metal, Color = pole }, parent)
+	decorPart({ Size = Vector3.new(1.6, 0.8, 1.2), CFrame = base * CFrame.new(-side * 4, 15.7, 0), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 240, 200) }, parent)
+end
+
+-- Дом с полосами окон на фасаде к трассе и снегом на крыше
+local function cityBuilding(rng: Random, base: CFrame, side: number, w: number, parent: Instance)
+	local d, h = rng:NextNumber(18, 30), rng:NextNumber(35, 110)
+	local glassy = rng:NextNumber() < 0.35
+	local body = if glassy then Color3.fromRGB(120, 175, 225) else BUILDING_COLORS[rng:NextInteger(1, #BUILDING_COLORS)]
+	local center = base * CFrame.new(side * d / 2, h / 2, 0)
+	decorPart({
+		Size = Vector3.new(d, h, w),
+		CFrame = center,
+		Material = if glassy then Enum.Material.Glass else Enum.Material.SmoothPlastic,
+		Color = body,
+		Reflectance = if glassy then 0.25 else 0,
+		CastShadow = true,
+	}, parent)
+	-- Окна: горизонтальные ленты на стороне, обращённой к трассе
+	local floors = math.floor(h / 9)
+	for f = 1, floors do
+		decorPart({
+			Size = Vector3.new(0.4, 2.6, w - 3),
+			CFrame = base * CFrame.new(-side * 0.1, f * 9 - 3, 0),
+			Material = Enum.Material.Glass,
+			Color = if glassy then Color3.fromRGB(200, 230, 255) else Color3.fromRGB(70, 110, 160),
+			Reflectance = 0.3,
+		}, parent)
+	end
+	decorPart({
+		Size = Vector3.new(d + 1, 1.5, w + 1),
+		CFrame = base * CFrame.new(side * d / 2, h + 0.75, 0),
+		Material = Enum.Material.Snow,
+		Color = Color3.fromRGB(250, 252, 255),
+	}, parent)
+end
+
+-- Скальная стена каньона: несколько слоёв песчаника
+local function canyonCliff(rng: Random, base: CFrame, side: number, parent: Instance)
+	local h = rng:NextNumber(40, 110)
+	local y = 0
+	local layer = 0
+	while y < h do
+		local lh = rng:NextNumber(12, 24)
+		local shade = 0.85 + (layer % 2) * 0.12
+		local w = rng:NextNumber(26, 40) - layer * 2
+		decorPart({
+			Size = Vector3.new(w, lh, rng:NextNumber(24, 36)),
+			CFrame = base * CFrame.new(side * (w / 2 + layer * 1.5), y + lh / 2, 0) * CFrame.Angles(0, rng:NextNumber(-0.15, 0.15), 0),
+			Material = Enum.Material.Sandstone,
+			Color = Color3.fromRGB(math.floor(225 * shade), math.floor(160 * shade), math.floor(110 * shade)),
+			CastShadow = true,
+		}, parent)
+		y += lh
+		layer += 1
+	end
+	-- Снег на макушке
+	decorPart({
+		Size = Vector3.new(22, 1.2, 26),
+		CFrame = base * CFrame.new(side * (11 + layer * 1.5), y + 0.6, 0),
+		Material = Enum.Material.Snow,
+		Color = Color3.fromRGB(250, 250, 255),
+	}, parent)
+end
+
+-- Горы на горизонте: повёрнутый «ромбом» блок + снежная шапка
+local function mountain(rng: Random, base: CFrame, rock: Color3, cap: Color3?, parent: Instance)
+	local s = rng:NextNumber(90, 170)
+	local rot = CFrame.Angles(0, rng:NextNumber(0, math.pi), 0) * CFrame.Angles(math.rad(45), 0, math.rad(45))
+	decorPart({
+		Size = Vector3.one * s,
+		CFrame = base * CFrame.new(0, -s * 0.15, 0) * rot,
+		Material = Enum.Material.Slate,
+		Color = rock,
+	}, parent)
+	if cap then
+		local peak = s * 0.866 - s * 0.15 -- верхняя вершина куба на диагонали
+		local cs = s * 0.32
+		decorPart({
+			Size = Vector3.one * cs,
+			CFrame = base * CFrame.new(0, peak - cs * 0.866 + 0.5, 0) * rot,
+			Material = Enum.Material.Snow,
+			Color = cap,
+		}, parent)
+	end
+end
+
+local function dressSegment(theme: number, rng: Random, cf: CFrame, len: number, m: Instance)
+	for _, side in { -1, 1 } do
+		-- Ограждение
+		fence(cf, len, side, theme == 2, m)
+
+		if theme == 1 then
+			-- Снежный лес: густой ряд ёлок и круглых деревьев
+			for z = 6, len, 14 do
+				local x = side * (WALL_OUT + rng:NextNumber(10, 45))
+				local base = sidePoint(cf, x, z + rng:NextNumber(-4, 4))
+				if rng:NextNumber() < 0.55 then
+					decorTree(rng, base, m)
+				else
+					decorRoundTree(rng, base, m)
+				end
+			end
+		elseif theme == 2 then
+			-- Ледяной город: плотная застройка у самой трассы, фонари
+			local z = 0
+			while z < len do
+				local w = rng:NextNumber(16, 26)
+				cityBuilding(rng, sidePoint(cf, side * (WALL_OUT + 14), z + w / 2), side, w, m)
+				z += w + rng:NextNumber(1, 4)
+			end
+			for lz = 10, len, 40 do
+				streetLamp(sidePoint(cf, side * (WALL_OUT + 8), lz), side, m)
+			end
+		else
+			-- Каньон: слоистые скалы, кактусы, камни
+			for z = 10, len, 28 do
+				canyonCliff(rng, sidePoint(cf, side * (WALL_OUT + rng:NextNumber(18, 30)), z), side, m)
+			end
+			-- Кактус на полке у забора
+			if rng:NextNumber() < 0.6 then
+				local base = sidePoint(cf, side * (WALL_OUT + 11), rng:NextNumber(0, len))
+				local green = Color3.fromRGB(80, 150, 75)
+				decorPart({ Size = Vector3.new(2.4, 9, 2.4), CFrame = base * CFrame.new(0, 4.5, 0), Material = Enum.Material.Grass, Color = green }, m)
+				decorPart({ Size = Vector3.new(4, 1.6, 1.6), CFrame = base * CFrame.new(1.6, 5, 0), Material = Enum.Material.Grass, Color = green }, m)
+				decorPart({ Size = Vector3.new(1.6, 3.5, 1.6), CFrame = base * CFrame.new(3, 6.5, 0), Material = Enum.Material.Grass, Color = green }, m)
+			end
+		end
+
+		-- Горы на горизонте
+		if rng:NextNumber() < 0.6 then
+			local rock = if theme == 3 then Color3.fromRGB(200, 140, 95) else Color3.fromRGB(125, 140, 165)
+			local cap = if theme == 3 then nil else Color3.fromRGB(245, 248, 255)
+			mountain(rng, sidePoint(cf, side * (WALL_OUT + rng:NextNumber(150, 220)), rng:NextNumber(0, len)), rock, cap, m)
+		end
+	end
+end
+
 ------------------------------------------------------------------ препятствия (тормозят, не убивают)
 local function tagObstacle(model: Model)
 	for _, d in model:GetDescendants() do
@@ -361,17 +563,18 @@ function Track:buildSegment(i: number)
 		Name = "Floor",
 		Size = Vector3.new(W, 4, len + 2),
 		CFrame = cf * CFrame.new(0, -2, -len / 2),
-		Material = Enum.Material.Ice,
+		Material = Enum.Material.Glacier, -- лёд с трещинами, как в оригинале
 		Color = theme.floor,
+		Reflectance = 0.08,
 	}, m)
-	-- Полосы на льду — видно скорость
-	for _, x in { -W / 4, W / 4 } do
+	-- Накатанные полосы на льду — видно скорость
+	for _, x in { -W * 0.3, -W * 0.1, W * 0.1, W * 0.3 } do
 		decorPart({
-			Size = Vector3.new(0.4, 0.05, len),
-			CFrame = cf * CFrame.new(x, 0.03, -len / 2),
+			Size = Vector3.new(0.5, 0.05, len),
+			CFrame = cf * CFrame.new(x + rng:NextNumber(-2, 2), 0.03, -len / 2),
 			Material = Enum.Material.SmoothPlastic,
 			Color = Color3.new(1, 1, 1),
-			Transparency = 0.4,
+			Transparency = 0.55,
 		}, m)
 	end
 	-- Наклонные борта, полка сверху и невидимые стенки
@@ -380,8 +583,16 @@ function Track:buildSegment(i: number)
 			Name = "Wall",
 			Size = Vector3.new(WALL_W, 2, len + 2),
 			CFrame = cf * CFrame.new(side * W / 2, 0, -len / 2) * CFrame.Angles(0, 0, side * WALL_A) * CFrame.new(side * WALL_W / 2, -1, 0),
-			Material = Enum.Material.Ice,
+			Material = Enum.Material.Glacier,
 			Color = theme.wall,
+		}, m)
+		-- Снежная кромка по верху борта (округлый сугроб)
+		decorPart({
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(len + 3, 7, 7),
+			CFrame = cf * CFrame.new(side * (WALL_OUT + 1.5), WALL_TOP - 0.5, -len / 2) * CFrame.Angles(0, math.rad(90), 0),
+			Material = Enum.Material.Snow,
+			Color = Color3.fromRGB(250, 252, 255),
 		}, m)
 		part("Part", {
 			Name = "Ground",
@@ -400,15 +611,8 @@ function Track:buildSegment(i: number)
 		}, m)
 	end
 
-	-- Декор вдоль трассы
-	local decor = DECOR[self.theme]
-	for z = 15, len, 32 do
-		for _, side in { -1, 1 } do
-			if rng:NextNumber() < 0.85 then
-				decor(rng, sidePoint(cf, side * (WALL_OUT + rng:NextNumber(14, 60)), z + rng:NextNumber(-8, 8)), m)
-			end
-		end
-	end
+	-- Окружение мира: ограждения, дома/ёлки/скалы, горы на горизонте
+	dressSegment(self.theme, rng, cf, len, m)
 
 	-- Обрыв: трамплин в конце + скала вниз
 	if seg.kind == "kicker" then

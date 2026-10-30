@@ -71,6 +71,7 @@ end
 
 local controller = script.Parent:WaitForChild("SledController")
 local rocketOn = controller:WaitForChild("State"):WaitForChild("RocketOn")
+local speedState = controller.State:WaitForChild("Speed")
 
 local sleds = workspace:WaitForChild("Sleds")
 sleds.ChildAdded:Connect(addSnowTrail)
@@ -112,16 +113,72 @@ for _, c in CollectionService:GetTagged("Coin") do
 	trackCoin(c)
 end
 
+------------------------------------------------------------------ Снегопад и линии скорости (вокруг камеры)
+local fxAnchor = Instance.new("Part")
+fxAnchor.Name = "CameraFX"
+fxAnchor.Anchored = true
+fxAnchor.CanCollide = false
+fxAnchor.CanQuery = false
+fxAnchor.CanTouch = false
+fxAnchor.Transparency = 1
+fxAnchor.Size = Vector3.new(160, 1, 160)
+fxAnchor.Parent = workspace
+
+local snow = Instance.new("ParticleEmitter")
+snow.Name = "Snowfall"
+snow.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+snow.Color = ColorSequence.new(Color3.new(1, 1, 1))
+snow.LightEmission = 0.4
+snow.Size = NumberSequence.new(0.35, 0.25)
+snow.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 1),
+	NumberSequenceKeypoint.new(0.15, 0.1),
+	NumberSequenceKeypoint.new(1, 0.4),
+})
+snow.Lifetime = NumberRange.new(4, 6)
+snow.Speed = NumberRange.new(10, 16)
+snow.EmissionDirection = Enum.NormalId.Bottom
+snow.SpreadAngle = Vector2.new(15, 15)
+snow.Acceleration = Vector3.new(2, 0, 0)
+snow.Rate = 120
+snow.Parent = fxAnchor
+
+local linesAtt = Instance.new("Attachment")
+linesAtt.Parent = fxAnchor
+local speedLines = Instance.new("ParticleEmitter")
+speedLines.Name = "SpeedLines"
+speedLines.Color = ColorSequence.new(Color3.new(1, 1, 1))
+speedLines.LightEmission = 1
+speedLines.Orientation = Enum.ParticleOrientation.VelocityParallel
+speedLines.Size = NumberSequence.new(0.12)
+speedLines.Squash = NumberSequence.new(-4) -- вытягиваем в полоски
+speedLines.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 1),
+	NumberSequenceKeypoint.new(0.3, 0.4),
+	NumberSequenceKeypoint.new(1, 1),
+})
+speedLines.Lifetime = NumberRange.new(0.25, 0.4)
+speedLines.Speed = NumberRange.new(120, 160)
+speedLines.SpreadAngle = Vector2.new(60, 35)
+speedLines.Rate = 0
+speedLines.Parent = linesAtt
+
 ------------------------------------------------------------------ Кадр
 local spin = 0
 RunService.RenderStepped:Connect(function(dt)
 	-- FOV растёт со скоростью своих санок
-	local character = player.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	local seat = humanoid and humanoid.SeatPart
-	local speed = if seat then seat.AssemblyLinearVelocity.Magnitude else 0
+	-- Скорость берём у контроллера санок (SeatPart на клиенте может быть пустым)
+	local speed = speedState.Value
 	local targetFov = BASE_FOV + (MAX_FOV - BASE_FOV) * math.clamp(speed / FOV_SPEED_FULL, 0, 1)
 	camera.FieldOfView += (targetFov - camera.FieldOfView) * math.min(1, dt * 4)
+
+	-- Снег падает вокруг камеры; линии скорости летят навстречу, когда разогнался
+	local camCF = camera.CFrame
+	fxAnchor.CFrame = CFrame.new(camCF.Position + Vector3.new(0, 35, 0))
+	-- Эмиттер полос впереди камеры, «дует» назад на игрока
+	linesAtt.WorldCFrame = CFrame.lookAt(camCF.Position + camCF.LookVector * 40, camCF.Position)
+		* CFrame.Angles(-math.pi / 2, 0, 0) -- частицы летят по +Y аттачмента → направляем на камеру
+	speedLines.Rate = if speed > 70 then math.clamp((speed - 70) * 2.5, 0, 150) else 0
 
 	-- Снежная пыль сильнее на скорости и только на земле
 	for _, s in sleds:GetChildren() do
