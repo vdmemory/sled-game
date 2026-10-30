@@ -442,7 +442,10 @@ function Track:buildSegment(i: number)
 			for lane = 1, Config.LANES do
 				table.insert(free, lane)
 			end
-			for _ = 1, rng:NextInteger(0, maxBlocked) do
+			-- Первые метры после старта без препятствий: успеть разогнаться и сориентироваться
+			local h = seg.hStart + z * math.cos(math.rad(seg.angle))
+			local count = if h < Config.SAFE_START then 0 else rng:NextInteger(0, maxBlocked)
+			for _ = 1, count do
 				local idx = rng:NextInteger(1, #free)
 				local om = Instance.new("Model")
 				om.Name = "Obstacle"

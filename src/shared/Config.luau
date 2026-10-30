@@ -32,6 +32,7 @@ Config.STEEP_ANGLE = { 12, 16 }
 
 -- Препятствия, ускорители, монеты
 Config.OBSTACLE_ROWS = 3 -- рядов на сегмент
+Config.SAFE_START = 220 -- первые N studs после старта без препятствий
 Config.BOOST_CHANCE = 0.1 -- ускоритель в ряду (≈ 1 на 3 сегмента)
 Config.FORCED_KICKERS = { 0.35, 0.7 } -- обязательные обрывы на этих долях уровня
 Config.COIN_LINE_CHANCE = 0.5
