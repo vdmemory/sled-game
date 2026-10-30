@@ -80,7 +80,7 @@ end
 
 ------------------------------------------------------------------ всегда видно
 local coinsLabel = label({
-	Text = "🪙 0",
+	Text = "💰 0",
 	TextXAlignment = Enum.TextXAlignment.Left,
 	Position = UDim2.new(0, 16, 0, 12),
 	Size = UDim2.new(0, 220, 0, 42),
@@ -171,7 +171,7 @@ workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitShop
 fitShop()
 
 label({ Parent = shop, Text = "🎨 Ватрушки", Position = UDim2.new(0, 20, 0, 12), Size = UDim2.new(0, 300, 0, 40), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 11 })
-local closeBtn = button("✕", Color3.fromRGB(200, 70, 70), {
+local closeBtn = button("X", Color3.fromRGB(200, 70, 70), {
 	Parent = shop,
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -12, 0, 12),
@@ -404,7 +404,7 @@ local function refresh()
 	local inRun = player:GetAttribute("InRun") == true
 	local loaded = player:GetAttribute("Loaded") == true
 
-	coinsLabel.Text = "🪙 " .. coins
+	coinsLabel.Text = "💰 " .. coins
 	runUi.Visible = inRun
 
 	levelTitle.Text = "Уровень " .. level .. " · " .. (player:GetAttribute("ThemeName") or "")
@@ -425,7 +425,7 @@ local function refresh()
 			b.BackgroundColor3 = Color3.fromRGB(90, 90, 110)
 		else
 			local cost = Config.upgradeCost(name, lvl)
-			b.Text = ICONS[name] .. " " .. u.title .. "\nур. " .. lvl .. " · " .. effect .. "\n🪙 " .. cost
+			b.Text = ICONS[name] .. " " .. u.title .. "\nур. " .. lvl .. " · " .. effect .. "\n💰 " .. cost
 			b.BackgroundColor3 = if coins >= cost then Color3.fromRGB(60, 120, 220) else Color3.fromRGB(75, 85, 115)
 		end
 	end
@@ -448,7 +448,7 @@ local function refresh()
 			c.status.Text = "Надеть"
 			c.card.BackgroundColor3 = Color3.fromRGB(45, 70, 115)
 		else
-			c.status.Text = "🪙 " .. skin.price
+			c.status.Text = "💰 " .. skin.price
 			c.card.BackgroundColor3 = if coins >= skin.price then Color3.fromRGB(45, 70, 115) else Color3.fromRGB(55, 60, 80)
 		end
 	end
@@ -469,7 +469,7 @@ local function updateRun()
 	pctBubble.Text = math.floor(p * 100) .. "%"
 	pctBubble.Position = UDim2.new(0, -8, 1 - p, 0)
 	local c = player:GetAttribute("RunCoins") or 0
-	runCoins.Text = if c > 0 then "🪙 +" .. c else ""
+	runCoins.Text = if c > 0 then "💰 +" .. c else ""
 end
 player:GetAttributeChangedSignal("RunDistance"):Connect(updateRun)
 player:GetAttributeChangedSignal("RunCoins"):Connect(updateRun)
@@ -524,10 +524,10 @@ end
 Remotes.RunEnded.OnClientEvent:Connect(function(r)
 	local text
 	if r.reason == "finish" then
-		text = "🏁 Уровень " .. r.level .. " пройден!\n+" .. r.coins .. " 🪙"
+		text = "🏁 Уровень " .. r.level .. " пройден!\n+" .. r.coins .. " 💰"
 	else
 		local head = if r.reason == "fell" then "Улетел с трассы!" elseif r.reason == "stopped" then "Остановился" else "Заезд окончен"
-		text = head .. " на " .. r.percent .. "%\n+" .. r.coins .. " 🪙" .. (if r.newBest then "  · 🏆 рекорд!" else "")
+		text = head .. " на " .. r.percent .. "%\n+" .. r.coins .. " 💰" .. (if r.newBest then "  · 🏆 рекорд!" else "")
 	end
 	showToast(text, 3.5)
 end)
