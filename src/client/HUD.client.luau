@@ -526,7 +526,11 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 	if r.reason == "finish" then
 		text = "🏁 Уровень " .. r.level .. " пройден!\n+" .. r.coins .. " 💰"
 	else
-		local head = if r.reason == "fell" then "Улетел с трассы!" elseif r.reason == "stopped" then "Остановился" else "Заезд окончен"
+		local head = if r.reason == "crash"
+			then "💥 Врезался"
+			elseif r.reason == "fell" then "Улетел с трассы!"
+			elseif r.reason == "stopped" then "Остановился"
+			else "Заезд окончен"
 		text = head .. " на " .. r.percent .. "%\n+" .. r.coins .. " 💰" .. (if r.newBest then "  · 🏆 рекорд!" else "")
 	end
 	showToast(text, 3.5)

@@ -80,9 +80,28 @@ end
 
 ------------------------------------------------------------------ Монеты крутятся
 local coins: { [BasePart]: CFrame } = {}
+local coinPhase: { [BasePart]: number } = {}
 local function trackCoin(coin: Instance)
 	if coin:IsA("BasePart") then
 		coins[coin] = coin.CFrame
+		coinPhase[coin] = math.random() * math.pi * 2
+		-- Блёстки
+		local att = Instance.new("Attachment")
+		att.Parent = coin
+		local sparkle = Instance.new("ParticleEmitter")
+		sparkle.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		sparkle.Color = ColorSequence.new(Color3.fromRGB(255, 240, 170))
+		sparkle.LightEmission = 1
+		sparkle.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.5, 0.7),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		sparkle.Lifetime = NumberRange.new(0.4, 0.7)
+		sparkle.Speed = NumberRange.new(0)
+		sparkle.SpreadAngle = Vector2.new(180, 180)
+		sparkle.Rate = 1.5
+		sparkle.Parent = att
 	end
 end
 CollectionService:GetInstanceAddedSignal("Coin"):Connect(trackCoin)
@@ -123,13 +142,22 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	-- Вращаем только монеты рядом с камерой
-	spin += dt * 3
+	spin += dt * 2.5
+	local t = os.clock()
 	local camPos = camera.CFrame.Position
 	for coin, base in coins do
 		if coin.Parent == nil then
 			coins[coin] = nil
-		elseif coin.Transparency < 1 and (coin.Position - camPos).Magnitude < 250 then
-			coin.CFrame = base * CFrame.Angles(0, spin, 0)
+			coinPhase[coin] = nil
+		elseif coin.Transparency < 1 and coin.LocalTransparencyModifier < 1 and (coin.Position - camPos).Magnitude < 250 then
+			local bob = math.sin(t * 2.2 + coinPhase[coin]) * 0.35
+			local cf = base * CFrame.new(0, bob, 0) * CFrame.Angles(0, spin, 0)
+			coin.CFrame = cf
+			for _, detail in coin:GetChildren() do
+				if detail:IsA("BasePart") then
+					detail.CFrame = cf
+				end
+			end
 		end
 	end
 end)

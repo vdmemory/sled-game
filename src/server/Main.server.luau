@@ -23,6 +23,7 @@ local function remote(className: string, name: string): any
 end
 local StartRun: RemoteEvent = remote("RemoteEvent", "StartRun")
 local Launch: RemoteEvent = remote("RemoteEvent", "Launch")
+local Crash: RemoteEvent = remote("RemoteEvent", "Crash")
 local Trick: RemoteEvent = remote("RemoteEvent", "Trick")
 local RunEnded: RemoteEvent = remote("RemoteEvent", "RunEnded")
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
@@ -161,6 +162,7 @@ type Run = {
 	slowTime: number,
 	startTime: number,
 	launchTime: number?,
+	crashed: boolean?,
 	ended: boolean?,
 }
 local runs: { [Player]: Run } = {}
@@ -367,6 +369,20 @@ Launch.OnServerEvent:Connect(function(player, power)
 	player:SetAttribute("Launched", true)
 end)
 
+-- Врезался: даём кувырку доиграть на экране, потом заканчиваем заезд
+Crash.OnServerEvent:Connect(function(player)
+	local run = runs[player]
+	if not run or not run.launched or run.crashed then
+		return
+	end
+	run.crashed = true
+	task.delay(1.6, function()
+		if runs[player] == run then
+			endRun(player, "crash")
+		end
+	end)
+end)
+
 Trick.OnServerEvent:Connect(function(player, flips)
 	local run = runs[player]
 	if not run or typeof(flips) ~= "number" then
@@ -451,6 +467,11 @@ local function setupCoin(coin: Instance)
 		coin:SetAttribute("Taken", true)
 		coin.Transparency = 1
 		coin.CanTouch = false
+		for _, detail in coin:GetChildren() do
+			if detail:IsA("BasePart") then
+				detail.Transparency = 1
+			end
+		end
 		run.bonusCoins += Config.COIN_PICKUP_VALUE
 		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.COIN_PICKUP_VALUE)
 	end)
@@ -482,7 +503,7 @@ RunService.Heartbeat:Connect(function(dt)
 		track:ensure(idx - Config.SEGMENTS_BEHIND, idx + Config.SEGMENTS_AHEAD)
 		track:cleanup(idx - Config.SEGMENTS_BEHIND)
 
-		if not run.launched then
+		if not run.launched or run.crashed then
 			continue
 		end
 		if run.distance >= track.length then

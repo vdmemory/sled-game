@@ -177,6 +177,50 @@ local OBSTACLES_BY_THEME = {
 	{ obstacleRock, obstacleCar, obstacleSign },
 }
 
+------------------------------------------------------------------ монета
+-- Золотая монета: ободок + утопленное поле + выпуклая серединка (детали — дочерние части,
+-- клиент вращает их вместе с монетой). Тег Coin только у основы: её касание и засчитывается.
+local GOLD = Color3.fromRGB(255, 196, 45)
+local GOLD_DARK = Color3.fromRGB(222, 150, 20)
+local GOLD_LIGHT = Color3.fromRGB(255, 225, 110)
+local function makeCoin(at: CFrame, parent: Instance)
+	-- Цилиндр в Roblox вытянут по X; разворачиваем монету лицом к игроку
+	local cf = at * CFrame.Angles(0, math.rad(90), 0)
+	local coin = part("Part", {
+		Name = "Coin",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.45, 3, 3),
+		CFrame = cf,
+		Material = Enum.Material.SmoothPlastic,
+		Color = GOLD,
+		Reflectance = 0.35,
+		CanCollide = false,
+		CanQuery = false,
+		CastShadow = false,
+	})
+	for _, spec in {
+		{ size = Vector3.new(0.5, 2.3, 2.3), color = GOLD_DARK, refl = 0.2 }, -- поле
+		{ size = Vector3.new(0.62, 1.1, 1.1), color = GOLD_LIGHT, refl = 0.45 }, -- выпуклая серединка
+	} do
+		part("Part", {
+			Name = "CoinDetail",
+			Shape = Enum.PartType.Cylinder,
+			Size = spec.size,
+			CFrame = cf,
+			Material = Enum.Material.SmoothPlastic,
+			Color = spec.color,
+			Reflectance = spec.refl,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+		}, coin)
+	end
+	CollectionService:AddTag(coin, "Coin")
+	coin.Parent = parent
+	return coin
+end
+
 ------------------------------------------------------------------ профиль уровня
 type Segment = {
 	kind: string,
@@ -390,7 +434,7 @@ function Track:buildSegment(i: number)
 		local function laneX(lane: number): number
 			return -W / 2 + laneW * (lane - 0.5)
 		end
-		local maxBlocked = math.clamp(1 + (self.level - 1) // 3 + i // 10, 1, Config.LANES - 2)
+		local maxBlocked = math.clamp(1 + (self.level - 1) // 2 + i // 8, 1, Config.LANES - 2)
 		local kinds = OBSTACLES_BY_THEME[self.theme]
 		for row = 1, Config.OBSTACLE_ROWS do
 			local z = len * (row - 0.5) / Config.OBSTACLE_ROWS
@@ -434,17 +478,7 @@ function Track:buildSegment(i: number)
 				local lane = free[rng:NextInteger(1, #free)]
 				local step = len / Config.OBSTACLE_ROWS
 				for k = 1, Config.COINS_PER_LINE do
-					local coin = part("Part", {
-						Name = "Coin",
-						Shape = Enum.PartType.Cylinder,
-						Size = Vector3.new(0.6, 3, 3),
-						CFrame = cf * CFrame.new(laneX(lane), 2.5, -(z + step * k / (Config.COINS_PER_LINE + 1))) * CFrame.Angles(0, math.rad(90), 0),
-						Material = Enum.Material.Neon,
-						Color = Color3.fromRGB(255, 200, 40),
-						CanCollide = false,
-						CanQuery = false,
-					}, m)
-					CollectionService:AddTag(coin, "Coin")
+					makeCoin(cf * CFrame.new(laneX(lane), 3, -(z + step * k / (Config.COINS_PER_LINE + 1))), m)
 				end
 			end
 		end

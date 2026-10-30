@@ -165,24 +165,38 @@ local function onRocket(_, inputState: Enum.UserInputState)
 end
 
 ------------------------------------------------------------------ столкновения
+-- Удар о препятствие: ватрушка кувыркается вперёд и останавливается, заезд окончен
+local crashed = false
+local crashTime = 0
+local function crash()
+	local s, a = sled, align
+	if not s or crashed then
+		return
+	end
+	crashed = true
+	crashTime = os.clock()
+	if a then
+		a.Enabled = false
+	end
+	local side = if math.random() < 0.5 then -1 else 1
+	s.AssemblyLinearVelocity = FWD * math.min(speed, 60) * 0.35 + Vector3.new(side * 6, 28, 0)
+	s.AssemblyAngularVelocity = Vector3.new(-9, side * 2, side * 5) -- кувырок через «нос»
+	speed = 0
+	rocketOn.Value = false
+	speedValue.Value = 0
+	trickPopup:Fire("💥 Врезался!")
+	sfx:Fire("hit")
+	Remotes.Crash:FireServer()
+end
+
 local function onTouched(hit: BasePart)
 	local now = os.clock()
 	if CollectionService:HasTag(hit, "Obstacle") then
-		if now - lastObstacle < 0.5 then
+		if crashed or not started or now - lastObstacle < 0.5 then
 			return
 		end
 		lastObstacle = now
-		speed *= Config.OBSTACLE_SLOWDOWN
-		-- Сбитое препятствие становится полупрозрачным (только у себя)
-		local model = hit:FindFirstAncestorOfClass("Model")
-		for _, p in (if model then model:GetDescendants() else { hit }) do
-			if p:IsA("BasePart") then
-				p.LocalTransparencyModifier = 0.7
-				p.CanTouch = false
-			end
-		end
-		trickPopup:Fire("💥 Бум!")
-		sfx:Fire("hit")
+		crash()
 	elseif CollectionService:HasTag(hit, "Boost") then
 		if now - lastBoost < 0.4 then
 			return
@@ -194,6 +208,13 @@ local function onTouched(hit: BasePart)
 	elseif CollectionService:HasTag(hit, "Coin") then
 		if hit.LocalTransparencyModifier < 1 then
 			hit.LocalTransparencyModifier = 1 -- мгновенно прячем, сервер засчитает
+			for _, detail in hit:GetDescendants() do
+				if detail:IsA("BasePart") then
+					detail.LocalTransparencyModifier = 1
+				elseif detail:IsA("ParticleEmitter") then
+					detail.Enabled = false
+				end
+			end
 			sfx:Fire("coin")
 		end
 	end
@@ -226,6 +247,7 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	speed = 0
 	lateral = 0
 	started = false
+	crashed = false
 	airborne, flipping, flipHeld, rocketHeld = false, false, false, false
 	flipAngle = 0
 	fuel = Config.rocketFuel(player:GetAttribute("RocketLevel") or 0)
@@ -330,6 +352,15 @@ RunService.Heartbeat:Connect(function(dt)
 	if not started then
 		started = true
 		speed = s:GetAttribute("LaunchSpeed") or 50
+	end
+	if crashed then
+		-- После кувырка гасим движение: ватрушка останавливается
+		if os.clock() - crashTime > 0.9 then
+			local k = 1 - math.min(1, dt * 4)
+			s.AssemblyLinearVelocity *= k
+			s.AssemblyAngularVelocity *= k
+		end
+		return
 	end
 
 	local sledLevel = player:GetAttribute("SledLevel") or 0
