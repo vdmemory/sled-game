@@ -42,6 +42,31 @@ local function addSnowTrail(sled: Instance)
 	pe.Rate = 0
 	pe.Parent = att
 
+	-- Ледяной след за ватрушкой (как в оригинале): лента между двумя точками у днища
+	local a0 = Instance.new("Attachment")
+	a0.Name = "TrailL"
+	a0.Position = Vector3.new(-2.6, -0.45, 1.5)
+	a0.Parent = sled
+	local a1 = Instance.new("Attachment")
+	a1.Name = "TrailR"
+	a1.Position = Vector3.new(2.6, -0.45, 1.5)
+	a1.Parent = sled
+	local trail = Instance.new("Trail")
+	trail.Name = "IceTrail"
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Color = ColorSequence.new(Color3.fromRGB(120, 175, 230), Color3.fromRGB(170, 210, 245))
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.25),
+		NumberSequenceKeypoint.new(0.7, 0.5),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	trail.Lifetime = 1.6
+	trail.MinLength = 0.2
+	trail.LightInfluence = 1
+	trail.Enabled = false
+	trail.Parent = sled
+
 	-- Ракетные сопла (горят, когда у этих санок включена ракета; видно только своему игроку)
 	if sled:GetAttribute("Owner") == player.UserId then
 		for _, side in { -1, 1 } do
@@ -187,6 +212,10 @@ RunService.RenderStepped:Connect(function(dt)
 			local v = s.AssemblyLinearVelocity.Magnitude
 			local grounded = workspace:Raycast(s.Position, -s.CFrame.UpVector * 3) ~= nil
 			pe.Rate = if grounded then math.clamp(v * 0.8, 0, 90) else 0
+			local trail = s:FindFirstChild("IceTrail")
+			if trail then
+				trail.Enabled = grounded and v > 5 and not s.Anchored
+			end
 		end
 		if s:GetAttribute("Owner") == player.UserId then
 			for _, nozzle in s:GetChildren() do
