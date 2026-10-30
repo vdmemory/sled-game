@@ -12,9 +12,22 @@ local DEFAULT = {
 	LaunchLevel = 0,
 	RocketLevel = 0,
 	SledLevel = 0,
+	Skin = "classic", -- надетый скин
+	OwnedSkins = { classic = true },
 }
 
-type Profile = { data: { [string]: number }, canSave: boolean }
+local function deepCopy(t: any): any
+	if type(t) ~= "table" then
+		return t
+	end
+	local c = {}
+	for k, v in t do
+		c[k] = deepCopy(v)
+	end
+	return c
+end
+
+type Profile = { data: { [string]: any }, canSave: boolean }
 
 local Data = {}
 local profiles: { [Player]: Profile } = {}
@@ -39,7 +52,7 @@ function Data.load(player: Player)
 	local ok, saved = retry(function()
 		return store:GetAsync(key(player))
 	end)
-	local data = table.clone(DEFAULT)
+	local data = deepCopy(DEFAULT)
 	if ok and type(saved) == "table" then
 		for k, v in saved do
 			data[k] = v

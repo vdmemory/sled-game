@@ -33,6 +33,11 @@ local meterValue = value("Meter") -- шкала силы рогатки 0..1
 local awaitingLaunch = value("AwaitingLaunch", "BoolValue")
 state.Parent = script
 
+-- Звуковые события для Sounds-скрипта: sfx:Fire("launch" | "land" | "hit" | "boost" | "coin" | "flip")
+local sfx = Instance.new("BindableEvent")
+sfx.Name = "Sfx"
+sfx.Parent = script
+
 -- HUD-кнопка «Запуск» дёргает это событие
 local requestLaunch = Instance.new("BindableEvent")
 requestLaunch.Name = "RequestLaunch"
@@ -51,6 +56,8 @@ local align: AlignOrientation? = nil
 local humanoid: Humanoid? = nil
 local connections: { RBXScriptConnection } = {}
 local speed = 0
+local lateral = 0 -- боковая скорость (с инерцией)
+local airTime = 0
 local started = false
 local fuel = 0
 local rocketHeld, flipHeld = false, false
@@ -66,6 +73,7 @@ local function tryLaunch()
 		awaitingLaunch.Value = false
 		ContextActionService:UnbindAction("LaunchTap")
 		Remotes.Launch:FireServer(meterValue.Value)
+		sfx:Fire("launch")
 	end
 end
 
@@ -114,6 +122,7 @@ local function onTouched(hit: BasePart)
 			end
 		end
 		trickPopup:Fire("💥 Бум!")
+		sfx:Fire("hit")
 	elseif CollectionService:HasTag(hit, "Boost") then
 		if now - lastBoost < 0.4 then
 			return
@@ -121,8 +130,12 @@ local function onTouched(hit: BasePart)
 		lastBoost = now
 		speed += Config.BOOST_ADD
 		trickPopup:Fire("⚡ Ускорение!")
+		sfx:Fire("boost")
 	elseif CollectionService:HasTag(hit, "Coin") then
-		hit.LocalTransparencyModifier = 1 -- мгновенно прячем, сервер засчитает
+		if hit.LocalTransparencyModifier < 1 then
+			hit.LocalTransparencyModifier = 1 -- мгновенно прячем, сервер засчитает
+			sfx:Fire("coin")
+		end
 	end
 end
 
@@ -151,6 +164,7 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	align = seat:FindFirstChildOfClass("AlignOrientation")
 	humanoid = hum
 	speed = 0
+	lateral = 0
 	started = false
 	airborne, flipping, flipHeld, rocketHeld = false, false, false, false
 	flipAngle = 0
@@ -294,17 +308,26 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 		speed = math.max(0, speed)
 
+		-- Руль с инерцией + борта скатывают к центру (right.Y > 0 — мы на наклонном борту)
+		lateral += (steer * Config.STEER_SPEED - lateral) * math.min(1, dt * Config.STEER_RESPONSE)
+		lateral -= Config.WALL_PULL * right.Y * dt
+
 		local vn = vel:Dot(n)
 		if onRamp then
 			vn = math.max(vn, speed * Config.RAMP_LIFT)
 		end
-		s.AssemblyLinearVelocity = d * speed + right * (steer * Config.STEER_SPEED) + n * vn
+		s.AssemblyLinearVelocity = d * speed + right * lateral + n * vn
 		a.Enabled = true
-		a.CFrame = CFrame.lookAt(Vector3.zero, d, n)
+		-- Наклон в поворот: ватрушка кренится и чуть разворачивается по направлению движения
+		local tilt = math.rad(Config.STEER_TILT) * math.clamp(lateral / Config.STEER_SPEED, -1, 1)
+		a.CFrame = CFrame.lookAt(Vector3.zero, d, n) * CFrame.Angles(0, -tilt * 0.5, -tilt)
 
 		-- Приземление
 		if airborne then
 			airborne = false
+			if airTime > 0.35 then
+				sfx:Fire("land")
+			end
 			if flipping then
 				local upright = s.CFrame.UpVector:Dot(n) > 0.5
 				local flips = math.floor((flipAngle + math.pi / 2) / (2 * math.pi))
@@ -314,17 +337,21 @@ RunService.Heartbeat:Connect(function(dt)
 				elseif flips >= 1 then
 					speed *= Config.FLIP_BOOST ^ flips
 					Remotes.Trick:FireServer(flips)
+					sfx:Fire("flip")
 					trickPopup:Fire((if flips > 1 then "Флип x" .. flips else "Флип") .. "! ⚡")
 				end
 			end
 			flipping = false
 			flipAngle = 0
 		end
+		airTime = 0
 	else
 		-- В воздухе: летим по физике, немного рулим, ракета толкает вперёд
 		airborne = true
+		airTime += dt
 		speed = math.max(0, vel:Dot(FWD))
-		local newVel = Vector3.new(steer * Config.STEER_SPEED * 0.6, vel.Y, vel.Z)
+		lateral += (steer * Config.STEER_SPEED * 0.6 - lateral) * math.min(1, dt * Config.STEER_RESPONSE * 0.5)
+		local newVel = Vector3.new(lateral, vel.Y, vel.Z)
 		if useRocket then
 			newVel += FWD * Config.ROCKET_THRUST * dt
 		end

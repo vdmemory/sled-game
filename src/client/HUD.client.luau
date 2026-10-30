@@ -138,6 +138,103 @@ for _, name in Config.UPGRADE_ORDER do
 	upgradeButtons[name] = b
 end
 
+-- Всплывашка определена ниже; магазин зовёт её через эту ссылку
+local showToastLater = function(_text: string) end
+
+------------------------------------------------------------------ магазин ватрушек
+local shopBtn = button("🎨 Ватрушки", Color3.fromRGB(170, 80, 220), {
+	Parent = lobby,
+	AnchorPoint = Vector2.new(0, 0),
+	Position = UDim2.new(0, 16, 0, 64),
+	Size = UDim2.new(0, 170, 0, 48),
+})
+
+local shop = frame({
+	Name = "Shop",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(0, 620, 0, 400),
+	BackgroundColor3 = Color3.fromRGB(25, 45, 80),
+	BackgroundTransparency = 0.05,
+	Visible = false,
+	ZIndex = 10,
+})
+corner(shop, 18)
+stroke(shop, 3)
+local shopScale = Instance.new("UIScale")
+shopScale.Parent = shop
+local function fitShop()
+	local vp = workspace.CurrentCamera.ViewportSize
+	shopScale.Scale = math.min(1, (vp.X - 32) / 620, (vp.Y - 40) / 400)
+end
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitShop)
+fitShop()
+
+label({ Parent = shop, Text = "🎨 Ватрушки", Position = UDim2.new(0, 20, 0, 12), Size = UDim2.new(0, 300, 0, 40), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 11 })
+local closeBtn = button("✕", Color3.fromRGB(200, 70, 70), {
+	Parent = shop,
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -12, 0, 12),
+	Size = UDim2.new(0, 44, 0, 44),
+	ZIndex = 11,
+})
+local grid = Instance.new("ScrollingFrame")
+grid.BackgroundTransparency = 1
+grid.BorderSizePixel = 0
+grid.Position = UDim2.new(0, 16, 0, 64)
+grid.Size = UDim2.new(1, -32, 1, -80)
+grid.ScrollBarThickness = 6
+grid.AutomaticCanvasSize = Enum.AutomaticSize.Y
+grid.CanvasSize = UDim2.new()
+grid.ZIndex = 11
+grid.Parent = shop
+local gridLayout = Instance.new("UIGridLayout")
+gridLayout.CellSize = UDim2.new(0, 136, 0, 150)
+gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
+gridLayout.Parent = grid
+
+local skinCards: { [string]: { card: TextButton, status: TextLabel } } = {}
+for _, skin in Config.SKINS do
+	local card = Instance.new("TextButton")
+	card.Text = ""
+	card.AutoButtonColor = true
+	card.BackgroundColor3 = Color3.fromRGB(45, 70, 115)
+	card.ZIndex = 12
+	card.Parent = grid
+	corner(card, 14)
+	-- Превью: круг-ватрушка с бортиком
+	local disc = frame({
+		Parent = card,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 10),
+		Size = UDim2.new(0, 64, 0, 64),
+		BackgroundColor3 = skin.tube,
+		ZIndex = 13,
+	})
+	corner(disc, 32)
+	local rim = Instance.new("UIStroke")
+	rim.Thickness = 7
+	rim.Color = skin.rim
+	rim.Parent = disc
+	label({ Parent = card, Text = skin.name, Position = UDim2.new(0, 6, 0, 84), Size = UDim2.new(1, -12, 0, 26), ZIndex = 13 })
+	local status = label({ Parent = card, Text = "", Position = UDim2.new(0, 6, 0, 114), Size = UDim2.new(1, -12, 0, 26), ZIndex = 13 })
+	skinCards[skin.id] = { card = card, status = status }
+
+	card.Activated:Connect(function()
+		local ok, msg = Remotes.SkinAction:InvokeServer(skin.id)
+		if not ok then
+			showToastLater(msg or "Ошибка")
+		end
+	end)
+end
+
+shopBtn.Activated:Connect(function()
+	shop.Visible = not shop.Visible
+end)
+closeBtn.Activated:Connect(function()
+	shop.Visible = false
+end)
+
 ------------------------------------------------------------------ заезд
 local runUi = frame({ Name = "Run", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false })
 
@@ -296,6 +393,9 @@ local function showToast(text: string, seconds: number)
 		end
 	end)
 end
+showToastLater = function(text: string)
+	showToast(text, 1.2)
+end
 
 ------------------------------------------------------------------ обновление
 local function refresh()
@@ -305,7 +405,6 @@ local function refresh()
 	local loaded = player:GetAttribute("Loaded") == true
 
 	coinsLabel.Text = "🪙 " .. coins
-	lobby.Visible = loaded and not inRun
 	runUi.Visible = inRun
 
 	levelTitle.Text = "Уровень " .. level .. " · " .. (player:GetAttribute("ThemeName") or "")
@@ -333,9 +432,32 @@ local function refresh()
 
 	bestMark.Visible = best > 0
 	bestMark.Position = UDim2.fromScale(0.5, 1 - best / 100)
+
+	-- Магазин ватрушек
+	local equipped = player:GetAttribute("Skin") or "classic"
+	local owned = {}
+	for id in string.gmatch(player:GetAttribute("OwnedSkins") or "classic", "[^,]+") do
+		owned[id] = true
+	end
+	for _, skin in Config.SKINS do
+		local c = skinCards[skin.id]
+		if skin.id == equipped then
+			c.status.Text = "✅ Надето"
+			c.card.BackgroundColor3 = Color3.fromRGB(40, 140, 90)
+		elseif owned[skin.id] then
+			c.status.Text = "Надеть"
+			c.card.BackgroundColor3 = Color3.fromRGB(45, 70, 115)
+		else
+			c.status.Text = "🪙 " .. skin.price
+			c.card.BackgroundColor3 = if coins >= skin.price then Color3.fromRGB(45, 70, 115) else Color3.fromRGB(55, 60, 80)
+		end
+	end
+	if inRun then
+		shop.Visible = false
+	end
 end
 
-for _, attr in { "Coins", "Level", "LevelBest", "InRun", "Loaded", "ThemeName", "LaunchLevel", "RocketLevel", "SledLevel" } do
+for _, attr in { "Coins", "Level", "LevelBest", "InRun", "Loaded", "ThemeName", "LaunchLevel", "RocketLevel", "SledLevel", "Skin", "OwnedSkins" } do
 	player:GetAttributeChangedSignal(attr):Connect(refresh)
 end
 refresh()
@@ -355,6 +477,19 @@ player:GetAttributeChangedSignal("InRun"):Connect(updateRun)
 
 -- Кадр: шкала рогатки, скорость, топливо
 RunService.RenderStepped:Connect(function()
+	-- Лобби показываем, только когда игрок уже не сидит в санках (после финиша есть пауза до респауна)
+	local seated = false
+	local sleds = workspace:FindFirstChild("Sleds")
+	if sleds then
+		for _, s in sleds:GetChildren() do
+			if s:GetAttribute("Owner") == player.UserId then
+				seated = true
+				break
+			end
+		end
+	end
+	lobby.Visible = player:GetAttribute("Loaded") == true and player:GetAttribute("InRun") ~= true and not seated
+
 	local awaiting = state.AwaitingLaunch.Value
 	meterBox.Visible = awaiting
 	controlsHint.Visible = not awaiting and player:GetAttribute("Launched") == true

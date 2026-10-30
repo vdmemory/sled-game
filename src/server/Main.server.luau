@@ -26,6 +26,7 @@ local Launch: RemoteEvent = remote("RemoteEvent", "Launch")
 local Trick: RemoteEvent = remote("RemoteEvent", "Trick")
 local RunEnded: RemoteEvent = remote("RemoteEvent", "RunEnded")
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
+local SkinAction: RemoteFunction = remote("RemoteFunction", "SkinAction")
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ Мир
@@ -85,6 +86,12 @@ local function syncPlayer(player: Player)
 		player:SetAttribute(key, d[key])
 	end
 	player:SetAttribute("LevelLength", Config.levelLength(d.Level))
+	player:SetAttribute("Skin", d.Skin)
+	local owned = {}
+	for id in d.OwnedSkins do
+		table.insert(owned, id)
+	end
+	player:SetAttribute("OwnedSkins", table.concat(owned, ","))
 	player:SetAttribute("ThemeName", Config.THEMES[((d.Level - 1) % #Config.THEMES) + 1].name)
 	local ls = player:FindFirstChild("leaderstats")
 	if ls then
@@ -226,16 +233,22 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	seat.CFrame = cf
 	seat.Anchored = true
 
+	local d = Data.get(player)
+	local skin = Config.skin(d and d.Skin)
 	for _, spec in {
-		{ name = "Tube", size = Vector3.new(1.4, 7, 7), color = Color3.fromRGB(240, 70, 120), y = -0.1 },
-		{ name = "Rim", size = Vector3.new(1.2, 7.8, 7.8), color = Color3.fromRGB(255, 130, 170), y = 0.5 },
+		{ name = "Tube", size = Vector3.new(1.4, 7, 7), color = skin.tube, y = -0.1, glow = false },
+		{ name = "Rim", size = Vector3.new(1.2, 7.8, 7.8), color = skin.rim, y = 0.5, glow = skin.neon },
 	} do
 		local p = Instance.new("Part")
 		p.Name = spec.name
 		p.Shape = Enum.PartType.Cylinder
 		p.Size = spec.size
 		p.Color = spec.color
-		p.Material = Enum.Material.SmoothPlastic
+		p.Material = if spec.glow
+			then Enum.Material.Neon
+			elseif skin.metal then Enum.Material.Foil
+			else Enum.Material.SmoothPlastic
+		p.Reflectance = if skin.metal then 0.25 else 0
 		p.CanCollide = false
 		p.CanQuery = false
 		p.Massless = true
@@ -386,6 +399,28 @@ BuyUpgrade.OnServerInvoke = function(player, name)
 	end
 	d.Coins -= cost
 	d[field] = level + 1
+	syncPlayer(player)
+	return true
+end
+
+-- Скины: купить (если не куплен) или надеть
+SkinAction.OnServerInvoke = function(player, id)
+	local d = Data.get(player)
+	if not d or typeof(id) ~= "string" or runs[player] then
+		return false, "Недоступно"
+	end
+	local skin = Config.skin(id)
+	if skin.id ~= id then
+		return false, "Нет такого скина"
+	end
+	if not d.OwnedSkins[id] then
+		if d.Coins < skin.price then
+			return false, "Не хватает монет"
+		end
+		d.Coins -= skin.price
+		d.OwnedSkins[id] = true
+	end
+	d.Skin = id
 	syncPlayer(player)
 	return true
 end

@@ -64,7 +64,10 @@ Config.GRAVITY_ALONG = 60 -- «игровая» гравитация вдоль 
 Config.DRAG = 0.0012 -- сопротивление воздуха (× v²)
 Config.STOP_SPEED = 3 -- ниже этой скорости...
 Config.STOP_TIME = 1.5 -- ...столько секунд = остановился
-Config.STEER_SPEED = 32
+Config.STEER_SPEED = 30 -- максимальная боковая скорость
+Config.STEER_RESPONSE = 6 -- как быстро боковая скорость догоняет руль (инерция)
+Config.WALL_PULL = 140 -- борта жёлоба скатывают обратно к центру
+Config.STEER_TILT = 18 -- наклон ватрушки в повороте (градусы)
 Config.OBSTACLE_SLOWDOWN = 0.6 -- скорость × это при ударе
 Config.BOOST_ADD = 18 -- ускоритель на льду
 Config.RAMP_MIN_SPEED = 30 -- на трамплине не медленнее этого (не застрянешь)
@@ -96,6 +99,27 @@ end
 function Config.upgradeCost(name: string, level: number): number
 	local u = Config.UPGRADES[name]
 	return math.floor(u.BaseCost * u.Growth ^ level)
+end
+
+------------------------------------------------------------------ СКИНЫ ВАТРУШЕК (за монеты)
+-- tube — основной цвет, rim — бортик, neon — светится
+Config.SKINS = {
+	{ id = "classic", name = "Классика", price = 0, tube = Color3.fromRGB(240, 70, 120), rim = Color3.fromRGB(255, 130, 170) },
+	{ id = "ice", name = "Льдинка", price = 150, tube = Color3.fromRGB(90, 170, 240), rim = Color3.fromRGB(200, 235, 255) },
+	{ id = "lime", name = "Лайм", price = 300, tube = Color3.fromRGB(120, 210, 60), rim = Color3.fromRGB(230, 255, 120) },
+	{ id = "melon", name = "Арбуз", price = 600, tube = Color3.fromRGB(235, 60, 70), rim = Color3.fromRGB(50, 150, 60) },
+	{ id = "night", name = "Ночь", price = 900, tube = Color3.fromRGB(35, 40, 70), rim = Color3.fromRGB(120, 140, 255), neon = true },
+	{ id = "lava", name = "Лава", price = 1500, tube = Color3.fromRGB(60, 20, 15), rim = Color3.fromRGB(255, 110, 20), neon = true },
+	{ id = "gold", name = "Золото", price = 3000, tube = Color3.fromRGB(240, 190, 50), rim = Color3.fromRGB(255, 240, 150), metal = true },
+	{ id = "galaxy", name = "Галактика", price = 6000, tube = Color3.fromRGB(80, 30, 140), rim = Color3.fromRGB(255, 120, 255), neon = true },
+}
+function Config.skin(id: string?)
+	for _, s in Config.SKINS do
+		if s.id == id then
+			return s
+		end
+	end
+	return Config.SKINS[1]
 end
 
 ------------------------------------------------------------------ ЭКОНОМИКА
