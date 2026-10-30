@@ -360,7 +360,7 @@ local meterHint = label({
 local controlsHint = label({
 	Parent = runUi,
 	Text = if game:GetService("UserInputService").TouchEnabled
-		then "Стик — руль · 🚀 — ракета · 🔄 в прыжке — флип"
+		then "Веди пальцем ←→ — руль · 🚀 — ракета · 🔄 в прыжке — флип"
 		else "A/D — руль · Shift — ракета · Пробел в прыжке — флип",
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -60),

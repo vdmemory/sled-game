@@ -13,8 +13,68 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
+local UserInputService = game:GetService("UserInputService")
+
 local player = Players.LocalPlayer
 local FWD = Vector3.new(0, 0, -1) -- все трассы идут по -Z
+
+------------------------------------------------------------------ руль: читаем ввод сами
+-- Не полагаемся на VehicleSeat.SteerFloat: он заполняется, только если клиент «увидел» посадку.
+-- Источники: клавиатура, стик/геймпад (через PlayerModule), свайп пальцем по экрану.
+local controls = nil
+task.spawn(function()
+	local ok, module = pcall(function()
+		return require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule", 10))
+	end)
+	if ok and module then
+		controls = module:GetControls()
+	end
+end)
+
+local SWIPE_FULL = 90 -- пикселей свайпа = руль до упора
+local swipeInput: InputObject? = nil
+local swipeStartX = 0
+UserInputService.InputBegan:Connect(function(input, processed)
+	if input.UserInputType == Enum.UserInputType.Touch and not processed and not swipeInput then
+		swipeInput = input
+		swipeStartX = input.Position.X
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input == swipeInput then
+		swipeInput = nil
+	end
+end)
+
+local function readSteer(seat: VehicleSeat): number
+	local steer = 0
+	-- Клавиатура
+	if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left) then
+		steer -= 1
+	end
+	if UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then
+		steer += 1
+	end
+	-- Стик на экране / геймпад
+	if controls then
+		local ok, mv = pcall(controls.GetMoveVector, controls)
+		if ok and typeof(mv) == "Vector3" and math.abs(mv.X) > math.abs(steer) then
+			steer = mv.X
+		end
+	end
+	-- Свайп: держишь палец и ведёшь влево/вправо
+	if swipeInput then
+		local s = math.clamp((swipeInput.Position.X - swipeStartX) / SWIPE_FULL, -1, 1)
+		if math.abs(s) > math.abs(steer) then
+			steer = s
+		end
+	end
+	-- И на всякий случай стандартный руль сиденья
+	if math.abs(seat.SteerFloat) > math.abs(steer) then
+		steer = seat.SteerFloat
+	end
+	return math.clamp(steer, -1, 1)
+end
 
 -- Состояние для HUD и эффектов (читают эти значения)
 local state = Instance.new("Folder")
@@ -283,7 +343,7 @@ RunService.Heartbeat:Connect(function(dt)
 
 	local hit = workspace:Raycast(s.Position, Vector3.new(0, -4, 0), rayParams)
 	local vel = s.AssemblyLinearVelocity
-	local steer = s.SteerFloat
+	local steer = readSteer(s)
 
 	if hit then
 		-- На земле: считаем скорость сами
