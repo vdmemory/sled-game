@@ -219,10 +219,16 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	end
 
 	add("start", 7, 110)
+	local nextForced = 1
 	while h < L do
+		local forcedAt = Config.FORCED_KICKERS[nextForced]
 		if forceNext == "landing" then
 			add("landing", 18, 90)
 			forceNext = nil
+		elseif forcedAt and h >= L * forcedAt then
+			add("kicker", 6, 100)
+			forceNext = "landing"
+			nextForced += 1
 		else
 			local t = rng:NextNumber()
 			local steep = Config.steepChance(level)

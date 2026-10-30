@@ -32,7 +32,8 @@ Config.STEEP_ANGLE = { 12, 16 }
 
 -- Препятствия, ускорители, монеты
 Config.OBSTACLE_ROWS = 3 -- рядов на сегмент
-Config.BOOST_CHANCE = 0.3 -- ускоритель в ряду
+Config.BOOST_CHANCE = 0.1 -- ускоритель в ряду (≈ 1 на 3 сегмента)
+Config.FORCED_KICKERS = { 0.35, 0.7 } -- обязательные обрывы на этих долях уровня
 Config.COIN_LINE_CHANCE = 0.5
 Config.COINS_PER_LINE = 5
 
@@ -40,21 +41,21 @@ Config.COINS_PER_LINE = 5
 Config.THEMES = {
 	{
 		name = "Снежный лес",
-		floor = Color3.fromRGB(205, 232, 255),
-		wall = Color3.fromRGB(170, 215, 250),
-		ground = Color3.fromRGB(245, 248, 255),
+		floor = Color3.fromRGB(140, 195, 240),
+		wall = Color3.fromRGB(95, 160, 225),
+		ground = Color3.fromRGB(225, 235, 245),
 	},
 	{
 		name = "Ледяной город",
-		floor = Color3.fromRGB(180, 220, 250),
-		wall = Color3.fromRGB(150, 200, 245),
-		ground = Color3.fromRGB(230, 238, 248),
+		floor = Color3.fromRGB(120, 185, 235),
+		wall = Color3.fromRGB(80, 145, 215),
+		ground = Color3.fromRGB(215, 225, 238),
 	},
 	{
 		name = "Каньон",
-		floor = Color3.fromRGB(215, 235, 250),
-		wall = Color3.fromRGB(190, 220, 245),
-		ground = Color3.fromRGB(240, 225, 200),
+		floor = Color3.fromRGB(150, 200, 240),
+		wall = Color3.fromRGB(110, 170, 230),
+		ground = Color3.fromRGB(225, 195, 155),
 	},
 }
 
@@ -65,7 +66,7 @@ Config.STOP_SPEED = 3 -- ниже этой скорости...
 Config.STOP_TIME = 1.5 -- ...столько секунд = остановился
 Config.STEER_SPEED = 32
 Config.OBSTACLE_SLOWDOWN = 0.6 -- скорость × это при ударе
-Config.BOOST_ADD = 25 -- ускоритель на льду
+Config.BOOST_ADD = 18 -- ускоритель на льду
 Config.ROCKET_THRUST = 40
 Config.FLIP_SPEED = 9 -- рад/с
 Config.FLIP_BOOST = 1.12 -- × скорость за чистый флип
@@ -79,7 +80,7 @@ Config.UPGRADES = {
 Config.UPGRADE_ORDER = { "Launch", "Rocket", "Sled" }
 
 function Config.launchSpeed(level: number): number
-	return 55 + 6 * level
+	return 48 + 6 * level
 end
 function Config.rocketFuel(level: number): number
 	return 0.6 + 0.3 * level -- секунд

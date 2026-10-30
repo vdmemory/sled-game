@@ -43,10 +43,11 @@ sledsFolder.Name = "Sleds"
 sledsFolder.Parent = workspace
 
 -- Солнечный зимний день
-Lighting.ClockTime = 13.5
-Lighting.Brightness = 3
-Lighting.Ambient = Color3.fromRGB(120, 135, 160)
-Lighting.OutdoorAmbient = Color3.fromRGB(150, 170, 200)
+Lighting.ClockTime = 14.5
+Lighting.Brightness = 2
+Lighting.ExposureCompensation = -0.35 -- снег не пересвечивается
+Lighting.Ambient = Color3.fromRGB(100, 115, 140)
+Lighting.OutdoorAmbient = Color3.fromRGB(120, 140, 170)
 Lighting.EnvironmentDiffuseScale = 1
 Lighting.EnvironmentSpecularScale = 1
 Lighting.GlobalShadows = true
@@ -60,15 +61,15 @@ do
 	atmosphere.Haze = 1.1
 	atmosphere.Parent = Lighting
 	local cc = Instance.new("ColorCorrectionEffect")
-	cc.Brightness = 0.03
-	cc.Contrast = 0.12
-	cc.Saturation = 0.2
+	cc.Brightness = -0.02
+	cc.Contrast = 0.18
+	cc.Saturation = 0.25
 	cc.TintColor = Color3.fromRGB(240, 248, 255)
 	cc.Parent = Lighting
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.6
-	bloom.Size = 20
-	bloom.Threshold = 1.4
+	bloom.Intensity = 0.4
+	bloom.Size = 18
+	bloom.Threshold = 2
 	bloom.Parent = Lighting
 end
 
