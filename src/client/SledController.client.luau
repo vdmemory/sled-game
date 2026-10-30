@@ -199,21 +199,35 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	table.insert(connections, seat.Touched:Connect(onTouched))
 end
 
-local function onCharacter(character: Model)
-	stopRiding()
-	local hum = character:WaitForChild("Humanoid") :: Humanoid
-	hum.Seated:Connect(function(active, seatPart)
-		if active and seatPart and seatPart.Name == "Sled" and seatPart:GetAttribute("Owner") == player.UserId then
-			startRiding(seatPart :: VehicleSeat, hum)
-		else
-			stopRiding()
-		end
-	end)
+-- Свои санки находим по папке workspace.Sleds (атрибут Owner), а не по событию Seated:
+-- пока санки закреплены у рогатки, Seated на клиенте может не прийти.
+local sledsFolder = workspace:WaitForChild("Sleds")
+
+local function onSledAdded(s: Instance)
+	if not s:IsA("VehicleSeat") or s:GetAttribute("Owner") ~= player.UserId then
+		return
+	end
+	local character = player.Character or player.CharacterAdded:Wait()
+	local hum = character:WaitForChild("Humanoid", 5) :: Humanoid?
+	if hum and s.Parent then
+		startRiding(s, hum)
+	end
 end
-player.CharacterAdded:Connect(onCharacter)
-if player.Character then
-	task.spawn(onCharacter, player.Character)
+
+sledsFolder.ChildAdded:Connect(onSledAdded)
+sledsFolder.ChildRemoved:Connect(function(s)
+	if s == sled then
+		stopRiding()
+	end
+end)
+for _, s in sledsFolder:GetChildren() do
+	task.spawn(onSledAdded, s)
 end
+player.CharacterAdded:Connect(function()
+	if sled and not sled.Parent then
+		stopRiding()
+	end
+end)
 
 ------------------------------------------------------------------ кадр физики
 RunService.Heartbeat:Connect(function(dt)
