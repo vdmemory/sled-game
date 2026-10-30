@@ -343,7 +343,11 @@ Launch.OnServerEvent:Connect(function(player, power)
 	local sled = run.sled
 	sled:SetAttribute("LaunchSpeed", Config.launchSpeed(d.LaunchLevel) * power)
 	sled.Anchored = false
-	sled:SetNetworkOwner(player) -- дальше физику считает клиент: мгновенный отклик
+	-- дальше физику считает клиент: мгновенный отклик
+	local ok, err = pcall(sled.SetNetworkOwner, sled, player)
+	if not ok then
+		warn("[Launch] SetNetworkOwner: " .. tostring(err))
+	end
 	player:SetAttribute("Launched", true)
 end)
 

@@ -206,13 +206,18 @@ local fuelBox = frame({
 corner(fuelBox, 11)
 local fuelFill = frame({ Parent = fuelBox, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 140, 50) })
 corner(fuelFill, 11)
-label({ Parent = fuelBox, Text = "🚀 Shift / E", Size = UDim2.fromScale(1, 1), ZIndex = 2 })
+label({
+	Parent = fuelBox,
+	Text = if game:GetService("UserInputService").TouchEnabled then "🚀 топливо" else "🚀 Shift / E",
+	Size = UDim2.fromScale(1, 1),
+	ZIndex = 2,
+})
 
 -- Шкала рогатки
 local meterBox = frame({
 	Parent = runUi,
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -110),
+	Position = UDim2.new(0.5, 0, 1, -130),
 	Size = UDim2.new(0, 420, 0, 34),
 	BackgroundColor3 = Color3.fromRGB(230, 90, 80),
 	Visible = false,
@@ -236,9 +241,19 @@ local needle = frame({
 })
 corner(needle, 4)
 stroke(needle)
+local launchBtn = button("🚀 ЗАПУСК!", Color3.fromRGB(255, 120, 40), {
+	Parent = meterBox,
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 1, 14),
+	Size = UDim2.new(0, 240, 0, 64),
+	ZIndex = 3,
+})
+launchBtn.Activated:Connect(function()
+	controller.RequestLaunch:Fire()
+end)
 local meterHint = label({
 	Parent = meterBox,
-	Text = "Жми ПРОБЕЛ или кликни, когда стрелка в зелёной зоне!",
+	Text = "Жми ЗАПУСК (или пробел), когда стрелка в зелёной зоне!",
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 0, -8),
 	Size = UDim2.new(1.3, 0, 0, 30),
@@ -247,7 +262,9 @@ local meterHint = label({
 -- Подсказка управления
 local controlsHint = label({
 	Parent = runUi,
-	Text = "A/D — руль · Shift — ракета · Пробел в прыжке — флип",
+	Text = if game:GetService("UserInputService").TouchEnabled
+		then "Стик — руль · 🚀 — ракета · 🔄 в прыжке — флип"
+		else "A/D — руль · Shift — ракета · Пробел в прыжке — флип",
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -60),
 	Size = UDim2.new(0, 520, 0, 26),

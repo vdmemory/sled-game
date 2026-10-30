@@ -33,6 +33,11 @@ local meterValue = value("Meter") -- шкала силы рогатки 0..1
 local awaitingLaunch = value("AwaitingLaunch", "BoolValue")
 state.Parent = script
 
+-- HUD-кнопка «Запуск» дёргает это событие
+local requestLaunch = Instance.new("BindableEvent")
+requestLaunch.Name = "RequestLaunch"
+requestLaunch.Parent = script
+
 local trickPopup = Instance.new("BindableEvent")
 trickPopup.Name = "TrickPopup" -- (текст) — HUD показывает всплывашку
 trickPopup.Parent = script
@@ -78,6 +83,14 @@ local function onLaunchTap(_, inputState: Enum.UserInputState)
 	end
 	return Enum.ContextActionResult.Pass
 end
+requestLaunch.Event:Connect(tryLaunch)
+
+-- Запасной путь: любой тап / клик по экрану во время прицеливания
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		tryLaunch()
+	end
+end)
 local function onRocket(_, inputState: Enum.UserInputState)
 	rocketHeld = inputState == Enum.UserInputState.Begin
 	return Enum.ContextActionResult.Sink
@@ -149,7 +162,9 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	hum.JumpPower = 0
 	hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
 
-	ContextActionService:BindActionAtPriority("Flip", onFlip, false, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
+	ContextActionService:BindActionAtPriority("Flip", onFlip, true, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
+	ContextActionService:SetTitle("Flip", "🔄")
+	ContextActionService:SetPosition("Flip", UDim2.new(1, -230, 1, -100))
 	ContextActionService:BindActionAtPriority(
 		"Rocket",
 		onRocket,
