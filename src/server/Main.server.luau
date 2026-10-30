@@ -42,6 +42,39 @@ local sledsFolder = Instance.new("Folder")
 sledsFolder.Name = "Sleds"
 sledsFolder.Parent = workspace
 
+-- Освещение: солнечный зимний день вместо серой стандартной сцены
+local Lighting = game:GetService("Lighting")
+Lighting.ClockTime = 13.5
+Lighting.Brightness = 3
+Lighting.Ambient = Color3.fromRGB(120, 135, 160)
+Lighting.OutdoorAmbient = Color3.fromRGB(150, 170, 200)
+Lighting.EnvironmentDiffuseScale = 1
+Lighting.EnvironmentSpecularScale = 1
+Lighting.GlobalShadows = true
+do
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Density = 0.35
+	atmosphere.Offset = 0.1
+	atmosphere.Color = Color3.fromRGB(200, 225, 255)
+	atmosphere.Decay = Color3.fromRGB(120, 160, 210)
+	atmosphere.Glare = 0.4
+	atmosphere.Haze = 1.2
+	atmosphere.Parent = Lighting
+
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Brightness = 0.03
+	cc.Contrast = 0.12
+	cc.Saturation = 0.15
+	cc.TintColor = Color3.fromRGB(240, 248, 255)
+	cc.Parent = Lighting
+
+	local bloom = Instance.new("BloomEffect")
+	bloom.Intensity = 0.6
+	bloom.Size = 20
+	bloom.Threshold = 1.4
+	bloom.Parent = Lighting
+end
+
 Track.buildLobby()
 Track.reset()
 
@@ -208,6 +241,7 @@ StartRun.OnServerEvent:Connect(function(player)
 	runs[player] = run
 	player:SetAttribute("InRun", true)
 	player:SetAttribute("RunDistance", 0)
+	player:SetAttribute("RunCoins", 0)
 
 	sled.Touched:Connect(function(hit)
 		if CollectionService:HasTag(hit, "Obstacle") then
@@ -220,6 +254,41 @@ StartRun.OnServerEvent:Connect(function(player)
 		end
 	end)
 end)
+
+-- Монетки на трассе: засчитываются тому, чьи санки или персонаж их коснулись
+local function playerFromHit(hit: BasePart): Player?
+	local owner = hit:GetAttribute("Owner")
+	if owner then
+		return Players:GetPlayerByUserId(owner)
+	end
+	local model = hit:FindFirstAncestorOfClass("Model")
+	return model and Players:GetPlayerFromCharacter(model)
+end
+
+local function setupCoin(coin: Instance)
+	if not coin:IsA("BasePart") then
+		return
+	end
+	coin.Touched:Connect(function(hit)
+		if coin:GetAttribute("Taken") then
+			return
+		end
+		local player = playerFromHit(hit)
+		local run = player and runs[player]
+		if not run or run.ended then
+			return
+		end
+		coin:SetAttribute("Taken", true)
+		coin.Transparency = 1
+		coin.CanTouch = false
+		run.trickCoins += Config.COIN_PICKUP_VALUE
+		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.COIN_PICKUP_VALUE)
+	end)
+end
+CollectionService:GetInstanceAddedSignal("Coin"):Connect(setupCoin)
+for _, coin in CollectionService:GetTagged("Coin") do
+	setupCoin(coin)
+end
 
 Crash.OnServerEvent:Connect(function(player)
 	endRun(player, "crash")

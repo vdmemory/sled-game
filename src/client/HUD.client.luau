@@ -76,7 +76,7 @@ local distLabel = label({
 	Text = "0 м",
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 12),
-	Size = UDim2.new(0, 260, 0, 56),
+	Size = UDim2.new(0, 360, 0, 56),
 	Visible = false,
 })
 
@@ -168,9 +168,12 @@ end
 for _, attr in { "Coins", "Best", "InRun", "Loaded", "SpeedLevel", "ControlLevel" } do
 	player:GetAttributeChangedSignal(attr):Connect(refresh)
 end
-player:GetAttributeChangedSignal("RunDistance"):Connect(function()
-	distLabel.Text = (player:GetAttribute("RunDistance") or 0) .. " м"
-end)
+local function updateRun()
+	local coins = player:GetAttribute("RunCoins") or 0
+	distLabel.Text = (player:GetAttribute("RunDistance") or 0) .. " м" .. (if coins > 0 then "  🪙" .. coins else "")
+end
+player:GetAttributeChangedSignal("RunDistance"):Connect(updateRun)
+player:GetAttributeChangedSignal("RunCoins"):Connect(updateRun)
 refresh()
 
 ------------------------------------------------------------------ Действия

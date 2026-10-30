@@ -81,6 +81,52 @@ local function addRamp(segCF: CFrame, x: number, z: number, parent: Instance)
 	ramp.Parent = parent
 end
 
+local function addDecorTree(rng: Random, segCF: CFrame, x: number, z: number, parent: Instance)
+	local h = rng:NextNumber(10, 22)
+	local base = segCF * CFrame.new(x, 0, -z)
+	makePart("Part", {
+		Name = "DecorTrunk",
+		Size = Vector3.new(2, h * 0.4, 2),
+		CFrame = base * CFrame.new(0, h * 0.2, 0),
+		Material = Enum.Material.Wood,
+		Color = Color3.fromRGB(95, 65, 40),
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+	}).Parent = parent
+	-- Ёлка из трёх ярусов, верхний с «снежной шапкой»
+	local green = Color3.fromRGB(35, 95 + rng:NextInteger(0, 25), 60)
+	for tier = 0, 2 do
+		local w = h * (0.6 - tier * 0.17)
+		makePart("Part", {
+			Name = "DecorCrown",
+			Size = Vector3.new(w, h * 0.22, w),
+			CFrame = base * CFrame.new(0, h * (0.45 + tier * 0.2), 0) * CFrame.Angles(0, math.rad(tier * 30), 0),
+			Material = if tier == 2 then Enum.Material.Snow else Enum.Material.Grass,
+			Color = if tier == 2 then Color3.fromRGB(245, 250, 255) else green,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+		}).Parent = parent
+	end
+end
+
+local function addCoin(segCF: CFrame, x: number, z: number, parent: Instance)
+	local coin = makePart("Part", {
+		Name = "Coin",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.6, 3, 3),
+		-- Цилиндр в Roblox вытянут по X; поворачиваем ребром к игроку
+		CFrame = segCF * CFrame.new(x, 2.5, -z) * CFrame.Angles(0, math.rad(90), 0),
+		Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(255, 200, 40),
+		CanCollide = false,
+		CanQuery = false,
+	})
+	CollectionService:AddTag(coin, "Coin")
+	coin.Parent = parent
+end
+
 local function buildSegment(i: number)
 	local rng = Random.new(seed + i * 7919)
 	local L, W = Config.SEGMENT_LENGTH, Config.TRACK_WIDTH
@@ -108,19 +154,59 @@ local function buildSegment(i: number)
 		}).Parent = model
 	end
 
-	if i >= Config.SAFE_SEGMENTS then
-		local count = math.min(2 + i // 4, 9)
-		for _ = 1, count do
-			local x = rng:NextNumber(-W / 2 + 5, W / 2 - 5)
-			local z = rng:NextNumber(6, L - 6)
-			if rng:NextNumber() < 0.5 then
-				addRock(rng, segCF, x, z, model)
-			else
-				addTree(segCF, x, z, model)
+	-- Декор за бортиками: ёлки по краям, чтобы чувствовалась скорость
+	for z = 10, L, 30 do
+		for _, side in { -1, 1 } do
+			addDecorTree(rng, segCF, side * (W / 2 + rng:NextNumber(8, 30)), z + rng:NextNumber(-8, 8), model)
+		end
+	end
+
+	-- Препятствия рядами по полосам: в каждом ряду гарантированно остаются свободные полосы
+	local lanes = Config.LANES
+	local laneW = W / lanes
+	local function laneX(lane: number): number
+		return -W / 2 + laneW * (lane - 0.5)
+	end
+
+	local rowStep = L / Config.ROWS_PER_SEGMENT
+	for row = 1, Config.ROWS_PER_SEGMENT do
+		local z = rowStep * (row - 0.5)
+		local free = {}
+		for lane = 1, lanes do
+			table.insert(free, lane)
+		end
+
+		local isSafe = i < Config.SAFE_SEGMENTS
+		if not isSafe then
+			-- Сложность растёт с дистанцией, но максимум lanes - 2 занятых полос
+			local maxBlocked = math.clamp(1 + i // Config.SEGMENTS_PER_DIFFICULTY, 1, lanes - 2)
+			local blocked = rng:NextInteger(1, maxBlocked)
+
+			if rng:NextNumber() < Config.RAMP_CHANCE / Config.ROWS_PER_SEGMENT then
+				local idx = rng:NextInteger(1, #free)
+				addRamp(segCF, laneX(free[idx]), z, model)
+				table.remove(free, idx)
+				blocked -= 1
+			end
+
+			for _ = 1, blocked do
+				local idx = rng:NextInteger(1, #free)
+				local x = laneX(free[idx]) + rng:NextNumber(-2, 2)
+				if rng:NextNumber() < 0.5 then
+					addRock(rng, segCF, x, z, model)
+				else
+					addTree(segCF, x, z, model)
+				end
+				table.remove(free, idx)
 			end
 		end
-		if rng:NextNumber() < Config.RAMP_CHANCE then
-			addRamp(segCF, rng:NextNumber(-W / 2 + 10, W / 2 - 10), rng:NextNumber(20, L - 30), model)
+
+		-- Линия монет в одной из свободных полос, между рядами
+		if rng:NextNumber() < Config.COIN_LINE_CHANCE then
+			local lane = free[rng:NextInteger(1, #free)]
+			for k = 1, Config.COINS_PER_LINE do
+				addCoin(segCF, laneX(lane), z + rowStep * 0.5 * (k / (Config.COINS_PER_LINE + 1)) - rowStep * 0.25, model)
+			end
 		end
 	end
 

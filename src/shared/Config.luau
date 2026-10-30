@@ -10,7 +10,12 @@ Config.TRACK_WIDTH = 60
 Config.SEGMENTS_AHEAD = 8 -- сколько сегментов строить впереди самого быстрого игрока
 Config.SEGMENTS_BEHIND = 3 -- сколько оставлять позади самого медленного
 Config.SAFE_SEGMENTS = 2 -- первые сегменты без препятствий
-Config.RAMP_CHANCE = 0.35 -- шанс трамплина на сегменте
+Config.RAMP_CHANCE = 0.5 -- шанс трамплина на сегменте
+Config.LANES = 5 -- трасса делится на полосы; в ряду всегда свободно минимум 2
+Config.ROWS_PER_SEGMENT = 4 -- рядов препятствий на сегмент
+Config.SEGMENTS_PER_DIFFICULTY = 5 -- каждые N сегментов в ряду может быть на 1 препятствие больше
+Config.COIN_LINE_CHANCE = 0.6 -- шанс линии монет в ряду
+Config.COINS_PER_LINE = 4
 
 -- САНКИ
 Config.BASE_SPEED = 70 -- макс. скорость без апгрейдов (studs/с)
@@ -25,6 +30,7 @@ Config.FLIP_BOOST_TIME = 1.5 -- секунд
 -- ЭКОНОМИКА
 Config.STUDS_PER_COIN = 10 -- 1 монета за каждые N studs
 Config.COINS_PER_FLIP = 25
+Config.COIN_PICKUP_VALUE = 3 -- за одну монетку на трассе
 Config.UPGRADES = {
 	Speed = { BaseCost = 50, Growth = 1.6, MaxLevel = 30 },
 	Control = { BaseCost = 40, Growth = 1.55, MaxLevel = 20 },
