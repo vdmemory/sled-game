@@ -395,14 +395,14 @@ local function makeCoin(at: CFrame, parent: Instance)
 		CFrame = cf,
 		Material = Enum.Material.SmoothPlastic,
 		Color = GOLD,
-		Reflectance = 0.35,
+		Reflectance = 0.08,
 		CanCollide = false,
 		CanQuery = false,
 		CastShadow = false,
 	})
 	for _, spec in {
-		{ size = Vector3.new(0.5, 2.3, 2.3), color = GOLD_DARK, refl = 0.2 }, -- поле
-		{ size = Vector3.new(0.62, 1.1, 1.1), color = GOLD_LIGHT, refl = 0.45 }, -- выпуклая серединка
+		{ size = Vector3.new(0.5, 2.3, 2.3), color = GOLD_DARK, refl = 0 }, -- поле
+		{ size = Vector3.new(0.62, 1.1, 1.1), color = GOLD_LIGHT, refl = 0.05 }, -- выпуклая серединка
 	} do
 		part("Part", {
 			Name = "CoinDetail",
