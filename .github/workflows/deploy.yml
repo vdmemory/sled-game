@@ -1,11 +1,16 @@
 name: Deploy to Roblox
+
+# push в main      → staging (тестовый опыт)
+# тег v* (v1.2.0)  → production (боевой опыт)
 on:
   push:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+
 env:
   ROJO_VERSION: "7.4.4"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -13,16 +18,34 @@ jobs:
     concurrency: deploy-${{ github.ref_type }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rojo
+
+      - name: Install Rojo and build place
         run: |
-          curl -sSfL -o rojo.zip "https://github.com/rojo-rbx/rojo/releases/download/v${ROJO_VERSION}/rojo-${ROJO_VERSION}-linux-x86_64.zip"
-          unzip -q rojo.zip -d "$HOME/.local/bin" && chmod +x "$HOME/.local/bin/rojo"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Build place
-        run: rojo build default.project.json -o game.rbxl
+          set -euo pipefail
+          DIR="$RUNNER_TEMP/rojo"
+          mkdir -p "$DIR"
+          curl -sSfL -o "$DIR/rojo.zip" \
+            "https://github.com/rojo-rbx/rojo/releases/download/v${ROJO_VERSION}/rojo-${ROJO_VERSION}-linux-x86_64.zip"
+          if command -v unzip >/dev/null; then
+            unzip -o -q "$DIR/rojo.zip" -d "$DIR"
+          else
+            python3 -m zipfile -e "$DIR/rojo.zip" "$DIR"
+          fi
+          ROJO="$(find "$DIR" -type f -name rojo | head -n 1)"
+          chmod +x "$ROJO"
+          "$ROJO" --version
+          "$ROJO" build default.project.json -o game.rbxl
+          ls -la game.rbxl
+
       - name: Publish via Open Cloud
         env:
           ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
           UNIVERSE_ID: ${{ vars.UNIVERSE_ID }}
           PLACE_ID: ${{ vars.PLACE_ID }}
-        run: ./scripts/publish.sh game.rbxl
+        run: bash ./scripts/publish.sh game.rbxl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: game-${{ github.sha }}
+          path: game.rbxl
+          retention-days: 14
