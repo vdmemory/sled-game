@@ -42,7 +42,7 @@ Config.GENTLE_ANGLE = { 2.5, 5 } -- пологие участки: тут тре
 Config.STEEP_ANGLE = { 12, 16 }
 
 -- Препятствия, ускорители, монеты
-Config.OBSTACLE_ROWS = 3 -- рядов на сегмент
+Config.OBSTACLE_ROWS = 2 -- рядов препятствий на прямой участок
 Config.SAFE_START = 220 -- первые N studs после старта без препятствий
 Config.BOOST_CHANCE = 0.1 -- ускоритель в ряду (≈ 1 на 3 сегмента)
 Config.FORCED_KICKERS = { 0.35, 0.7 } -- обязательные обрывы на этих долях уровня

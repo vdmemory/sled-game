@@ -464,7 +464,10 @@ function Track:buildSegment(i: number)
 
 	-- Препятствия и ускорители — на прямых снежных участках
 	if seg.kind == "gentle" or seg.kind == "steep" then
-		local maxBlocked = math.clamp(1 + (self.level - 1) // 2 + i // 12, 1, Config.LANES - 2)
+		local maxBlocked = math.clamp(1 + (self.level - 1) // 3 + i // 16, 1, 3)
+		-- После приземления с обрыва даём место выровняться
+		local prev = self.segments[i]
+		local safeUntil = if prev and prev.kind == "landing" then 60 else 0
 		for row = 1, Config.OBSTACLE_ROWS do
 			local z = len * (row - 0.5) / Config.OBSTACLE_ROWS
 			local free = {}
@@ -472,7 +475,7 @@ function Track:buildSegment(i: number)
 				table.insert(free, lane)
 			end
 			local h = seg.hStart + z * math.cos(math.rad(seg.angle))
-			local count = if h < Config.SAFE_START then 0 else rng:NextInteger(0, maxBlocked)
+			local count = if h < Config.SAFE_START or z < safeUntil then 0 else rng:NextInteger(0, maxBlocked)
 			for _ = 1, count do
 				local idx = rng:NextInteger(1, #free)
 				local base = cf * CFrame.new(laneX(free[idx]) + rng:NextNumber(-1.5, 1.5), 0, -z)
