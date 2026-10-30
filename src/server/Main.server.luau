@@ -1,4 +1,4 @@
--- Главный серверный скрипт: игроки, заезды, монеты, апгрейды, трасса.
+-- Главный серверный скрипт: игроки, уровни, рогатка, заезды, монеты, апгрейды.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6,9 +6,10 @@ local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
 local CollectionService = game:GetService("CollectionService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local Lighting = game:GetService("Lighting")
 
 local Config = require(ReplicatedStorage.Shared.Config)
-local Track = require(script.Parent.TrackGenerator)
+local Track = require(script.Parent.Track)
 local Data = require(script.Parent.DataService)
 
 ------------------------------------------------------------------ Remotes
@@ -21,20 +22,19 @@ local function remote(className: string, name: string): any
 	return r
 end
 local StartRun: RemoteEvent = remote("RemoteEvent", "StartRun")
-local Crash: RemoteEvent = remote("RemoteEvent", "Crash")
+local Launch: RemoteEvent = remote("RemoteEvent", "Launch")
 local Trick: RemoteEvent = remote("RemoteEvent", "Trick")
 local RunEnded: RemoteEvent = remote("RemoteEvent", "RunEnded")
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ Мир
--- Санки и персонажи разных игроков проходят сквозь друг друга
 PhysicsService:RegisterCollisionGroup("Riders")
 PhysicsService:CollisionGroupSetCollidable("Riders", "Riders", false)
 
-local function setRider(part: Instance)
-	if part:IsA("BasePart") then
-		part.CollisionGroup = "Riders"
+local function setRider(p: Instance)
+	if p:IsA("BasePart") then
+		p.CollisionGroup = "Riders"
 	end
 end
 
@@ -42,8 +42,7 @@ local sledsFolder = Instance.new("Folder")
 sledsFolder.Name = "Sleds"
 sledsFolder.Parent = workspace
 
--- Освещение: солнечный зимний день вместо серой стандартной сцены
-local Lighting = game:GetService("Lighting")
+-- Солнечный зимний день
 Lighting.ClockTime = 13.5
 Lighting.Brightness = 3
 Lighting.Ambient = Color3.fromRGB(120, 135, 160)
@@ -53,21 +52,19 @@ Lighting.EnvironmentSpecularScale = 1
 Lighting.GlobalShadows = true
 do
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.35
+	atmosphere.Density = 0.3
 	atmosphere.Offset = 0.1
 	atmosphere.Color = Color3.fromRGB(200, 225, 255)
 	atmosphere.Decay = Color3.fromRGB(120, 160, 210)
 	atmosphere.Glare = 0.4
-	atmosphere.Haze = 1.2
+	atmosphere.Haze = 1.1
 	atmosphere.Parent = Lighting
-
 	local cc = Instance.new("ColorCorrectionEffect")
 	cc.Brightness = 0.03
 	cc.Contrast = 0.12
-	cc.Saturation = 0.15
+	cc.Saturation = 0.2
 	cc.TintColor = Color3.fromRGB(240, 248, 255)
 	cc.Parent = Lighting
-
 	local bloom = Instance.new("BloomEffect")
 	bloom.Intensity = 0.6
 	bloom.Size = 20
@@ -76,7 +73,6 @@ do
 end
 
 Track.buildLobby()
-Track.reset()
 
 ------------------------------------------------------------------ Игроки
 local function syncPlayer(player: Player)
@@ -84,13 +80,14 @@ local function syncPlayer(player: Player)
 	if not d then
 		return
 	end
-	player:SetAttribute("Coins", d.Coins)
-	player:SetAttribute("Best", d.Best)
-	player:SetAttribute("SpeedLevel", d.SpeedLevel)
-	player:SetAttribute("ControlLevel", d.ControlLevel)
+	for _, key in { "Coins", "Level", "LevelBest", "LaunchLevel", "RocketLevel", "SledLevel" } do
+		player:SetAttribute(key, d[key])
+	end
+	player:SetAttribute("LevelLength", Config.levelLength(d.Level))
+	player:SetAttribute("ThemeName", Config.THEMES[((d.Level - 1) % #Config.THEMES) + 1].name)
 	local ls = player:FindFirstChild("leaderstats")
 	if ls then
-		(ls :: any)["Рекорд"].Value = math.floor(d.Best);
+		(ls :: any)["Уровень"].Value = d.Level;
 		(ls :: any)["Монеты"].Value = d.Coins
 	end
 end
@@ -105,12 +102,11 @@ end
 local function onPlayerAdded(player: Player)
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
-	local rec = Instance.new("IntValue")
-	rec.Name = "Рекорд"
-	rec.Parent = ls
-	local coins = Instance.new("IntValue")
-	coins.Name = "Монеты"
-	coins.Parent = ls
+	for _, name in { "Уровень", "Монеты" } do
+		local v = Instance.new("IntValue")
+		v.Name = name
+		v.Parent = ls
+	end
 	ls.Parent = player
 
 	player.CharacterAdded:Connect(onCharacter)
@@ -119,17 +115,10 @@ local function onPlayerAdded(player: Player)
 	end
 
 	Data.load(player)
-
 	if Config.GAMEPASS_X2_COINS ~= 0 then
-		local ok, owns = pcall(
-			MarketplaceService.UserOwnsGamePassAsync,
-			MarketplaceService,
-			player.UserId,
-			Config.GAMEPASS_X2_COINS
-		)
+		local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, Config.GAMEPASS_X2_COINS)
 		player:SetAttribute("X2Coins", ok and owns or false)
 	end
-
 	syncPlayer(player)
 	player:SetAttribute("Loaded", true)
 end
@@ -140,12 +129,29 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passI
 	end
 end)
 
+------------------------------------------------------------------ Слоты трасс (у каждого игрока своя)
+local slots: { [number]: Player } = {}
+local function takeSlot(player: Player): number
+	local i = 0
+	while slots[i] do
+		i += 1
+	end
+	slots[i] = player
+	return i
+end
+
 ------------------------------------------------------------------ Заезды
 type Run = {
+	track: any,
+	slot: number,
 	sled: VehicleSeat,
+	ropes: { Instance },
+	launched: boolean,
 	distance: number,
-	trickCoins: number,
+	bonusCoins: number,
 	lastTrick: number,
+	slowTime: number,
+	startTime: number,
 	ended: boolean?,
 }
 local runs: { [Player]: Run } = {}
@@ -158,64 +164,105 @@ local function endRun(player: Player, reason: string)
 	run.ended = true
 	runs[player] = nil
 
-	local dist = math.floor(run.distance)
-	local mult = if player:GetAttribute("X2Coins") then 2 else 1
-	local earned = (dist // Config.STUDS_PER_COIN + run.trickCoins) * mult
-	local newRecord = false
-
 	local d = Data.get(player)
+	local level = d and d.Level or 1
+	local L = run.track.length
+	local finished = reason == "finish"
+	local dist = math.min(run.distance, L)
+	local pct = math.floor(dist / L * 100)
+	local mult = if player:GetAttribute("X2Coins") then 2 else 1
+	local earned = (math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + (if finished then Config.finishBonus(level) else 0)) * mult
+	local newBest = false
+
 	if d then
 		d.Coins += earned
-		if dist > d.Best then
-			d.Best = dist
-			newRecord = true
+		if finished then
+			d.Level += 1
+			d.LevelBest = 0
+		elseif pct > d.LevelBest then
+			d.LevelBest = pct
+			newBest = true
 		end
 		syncPlayer(player)
 	end
 
 	player:SetAttribute("InRun", false)
+	player:SetAttribute("Launched", false)
 	RunEnded:FireClient(player, {
-		distance = dist,
-		coins = earned,
-		newRecord = newRecord,
 		reason = reason,
+		percent = if finished then 100 else pct,
+		coins = earned,
+		level = level,
+		newBest = newBest,
 	})
 
-	if run.sled then
+	task.delay(if finished then 2.5 else 1.5, function()
 		run.sled:Destroy()
-	end
-	task.delay(1.5, function()
+		run.track:destroy()
+		if slots[run.slot] == player then
+			slots[run.slot] = nil
+		end
 		if player.Parent then
 			player:LoadCharacter()
 		end
 	end)
 end
 
-local function makeSled(player: Player): VehicleSeat
+local function makeSled(player: Player, cf: CFrame): VehicleSeat
+	-- Сиденье — плоская невидимая плита (на ней сидит персонаж и она скользит по льду),
+	-- а «ватрушка» — два приваренных декоративных цилиндра
 	local seat = Instance.new("VehicleSeat")
 	seat.Name = "Sled"
-	seat.Size = Vector3.new(4, 1, 7)
-	seat.Color = Color3.fromRGB(210, 45, 45)
-	seat.Material = Enum.Material.SmoothPlastic
-	-- VehicleSeat нужен только ради SteerFloat (ввод с клавиатуры/геймпада/тача).
-	-- Сам он ничего не двигает — движением управляет SledController на клиенте.
+	seat.Size = Vector3.new(5, 1, 5)
+	seat.Transparency = 1
 	seat.MaxSpeed = 0
 	seat.Torque = 0
 	seat.TurnSpeed = 0
 	seat.HeadsUpDisplay = false
 	seat.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0, 0, 100, 100)
 	seat.CollisionGroup = "Riders"
-	seat.CFrame = Track.ORIGIN * CFrame.new(math.random(-10, 10), 1.5, -15)
+	seat.CFrame = cf
+	seat.Anchored = true
 
+	for _, spec in {
+		{ name = "Tube", size = Vector3.new(1.4, 7, 7), color = Color3.fromRGB(240, 70, 120), y = -0.1 },
+		{ name = "Rim", size = Vector3.new(1.2, 7.8, 7.8), color = Color3.fromRGB(255, 130, 170), y = 0.5 },
+	} do
+		local p = Instance.new("Part")
+		p.Name = spec.name
+		p.Shape = Enum.PartType.Cylinder
+		p.Size = spec.size
+		p.Color = spec.color
+		p.Material = Enum.Material.SmoothPlastic
+		p.CanCollide = false
+		p.CanQuery = false
+		p.Massless = true
+		p.CollisionGroup = "Riders"
+		-- Цилиндр в Roblox вытянут по X; кладём его «блином»
+		p.CFrame = seat.CFrame * CFrame.new(0, spec.y, 0) * CFrame.Angles(0, 0, math.rad(90))
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = seat
+		weld.Part1 = p
+		weld.Parent = p
+		p.Parent = seat
+	end
+
+	-- Ориентация задаётся с клиента (по нормали склона)
 	local att = Instance.new("Attachment")
+	att.Name = "AlignAttachment"
 	att.Parent = seat
 	local align = Instance.new("AlignOrientation")
 	align.Mode = Enum.OrientationAlignmentMode.OneAttachment
 	align.Attachment0 = att
-	align.Responsiveness = 25
+	align.Responsiveness = 30
 	align.MaxTorque = 1e7
-	align.CFrame = Track.ORIGIN.Rotation
+	align.CFrame = cf.Rotation
 	align.Parent = seat
+
+	local ropeAtt = Instance.new("Attachment")
+	ropeAtt.Name = "RopeAttachment"
+	ropeAtt.Position = Vector3.new(0, 0, 0)
+	ropeAtt.Parent = seat
 
 	seat:SetAttribute("Owner", player.UserId)
 	seat.Parent = sledsFolder
@@ -226,28 +273,54 @@ StartRun.OnServerEvent:Connect(function(player)
 	if runs[player] or not player:GetAttribute("Loaded") then
 		return
 	end
+	local d = Data.get(player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if not character or not humanoid or humanoid.Health <= 0 then
+	if not d or not character or not humanoid or humanoid.Health <= 0 then
 		return
 	end
 
-	local sled = makeSled(player)
-	character:PivotTo(sled.CFrame * CFrame.new(0, 3, 0))
-	sled:Sit(humanoid)
-	sled:SetNetworkOwner(player) -- физику считает клиент: управление без задержки
+	local slot = takeSlot(player)
+	local track = Track.new(slot, d.Level)
+	local startCF = track:startCFrame()
+	local sled = makeSled(player, startCF)
 
-	local run: Run = { sled = sled, distance = 0, trickCoins = 0, lastTrick = 0 }
+	-- Резинка рогатки
+	local ropes = {}
+	for _, post in track.posts do
+		local beam = Instance.new("Beam")
+		beam.Attachment0 = post.RopeAttachment
+		beam.Attachment1 = sled.RopeAttachment
+		beam.Width0 = 0.5
+		beam.Width1 = 0.5
+		beam.Color = ColorSequence.new(Color3.fromRGB(200, 160, 110))
+		beam.FaceCamera = true
+		beam.Segments = 1
+		beam.Parent = sled
+		table.insert(ropes, beam)
+	end
+
+	character:PivotTo(startCF * CFrame.new(0, 3, 0))
+	sled:Sit(humanoid)
+
+	local run: Run = {
+		track = track,
+		slot = slot,
+		sled = sled,
+		ropes = ropes,
+		launched = false,
+		distance = 0,
+		bonusCoins = 0,
+		lastTrick = 0,
+		slowTime = 0,
+		startTime = os.clock(),
+	}
 	runs[player] = run
 	player:SetAttribute("InRun", true)
+	player:SetAttribute("Launched", false)
 	player:SetAttribute("RunDistance", 0)
 	player:SetAttribute("RunCoins", 0)
 
-	sled.Touched:Connect(function(hit)
-		if CollectionService:HasTag(hit, "Obstacle") then
-			endRun(player, "crash")
-		end
-	end)
 	sled:GetPropertyChangedSignal("Occupant"):Connect(function()
 		if not sled.Occupant then
 			endRun(player, "left")
@@ -255,43 +328,23 @@ StartRun.OnServerEvent:Connect(function(player)
 	end)
 end)
 
--- Монетки на трассе: засчитываются тому, чьи санки или персонаж их коснулись
-local function playerFromHit(hit: BasePart): Player?
-	local owner = hit:GetAttribute("Owner")
-	if owner then
-		return Players:GetPlayerByUserId(owner)
-	end
-	local model = hit:FindFirstAncestorOfClass("Model")
-	return model and Players:GetPlayerFromCharacter(model)
-end
-
-local function setupCoin(coin: Instance)
-	if not coin:IsA("BasePart") then
+-- Игрок отпустил рогатку: power 0..1 — насколько точно попал в шкалу
+Launch.OnServerEvent:Connect(function(player, power)
+	local run = runs[player]
+	local d = Data.get(player)
+	if not run or run.launched or not d or typeof(power) ~= "number" then
 		return
 	end
-	coin.Touched:Connect(function(hit)
-		if coin:GetAttribute("Taken") then
-			return
-		end
-		local player = playerFromHit(hit)
-		local run = player and runs[player]
-		if not run or run.ended then
-			return
-		end
-		coin:SetAttribute("Taken", true)
-		coin.Transparency = 1
-		coin.CanTouch = false
-		run.trickCoins += Config.COIN_PICKUP_VALUE
-		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.COIN_PICKUP_VALUE)
-	end)
-end
-CollectionService:GetInstanceAddedSignal("Coin"):Connect(setupCoin)
-for _, coin in CollectionService:GetTagged("Coin") do
-	setupCoin(coin)
-end
-
-Crash.OnServerEvent:Connect(function(player)
-	endRun(player, "crash")
+	power = math.clamp(power, 0.4, 1)
+	run.launched = true
+	for _, r in run.ropes do
+		r:Destroy()
+	end
+	local sled = run.sled
+	sled:SetAttribute("LaunchSpeed", Config.launchSpeed(d.LaunchLevel) * power)
+	sled.Anchored = false
+	sled:SetNetworkOwner(player) -- дальше физику считает клиент: мгновенный отклик
+	player:SetAttribute("Launched", true)
 end)
 
 Trick.OnServerEvent:Connect(function(player, flips)
@@ -300,11 +353,13 @@ Trick.OnServerEvent:Connect(function(player, flips)
 		return
 	end
 	local now = os.clock()
-	if now - run.lastTrick < 1 then -- антиспам
+	if now - run.lastTrick < 1 then
 		return
 	end
 	run.lastTrick = now
-	run.trickCoins += math.clamp(math.floor(flips), 0, 3) * Config.COINS_PER_FLIP
+	local add = math.clamp(math.floor(flips), 0, 3) * Config.COINS_PER_FLIP
+	run.bonusCoins += add
+	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 end)
 
 BuyUpgrade.OnServerInvoke = function(player, name)
@@ -328,39 +383,80 @@ BuyUpgrade.OnServerInvoke = function(player, name)
 	return true
 end
 
------------------------------------------------------------------- Цикл
+------------------------------------------------------------------ Монетки на трассе
+local function playerFromHit(hit: BasePart): Player?
+	local owner = hit:GetAttribute("Owner") or (hit.Parent and hit.Parent:GetAttribute("Owner"))
+	if owner then
+		return Players:GetPlayerByUserId(owner)
+	end
+	local model = hit:FindFirstAncestorOfClass("Model")
+	return model and Players:GetPlayerFromCharacter(model)
+end
+
+local function setupCoin(coin: Instance)
+	if not coin:IsA("BasePart") then
+		return
+	end
+	coin.Touched:Connect(function(hit)
+		if coin:GetAttribute("Taken") then
+			return
+		end
+		local player = playerFromHit(hit)
+		local run = player and runs[player]
+		if not run or run.ended then
+			return
+		end
+		coin:SetAttribute("Taken", true)
+		coin.Transparency = 1
+		coin.CanTouch = false
+		run.bonusCoins += Config.COIN_PICKUP_VALUE
+		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.COIN_PICKUP_VALUE)
+	end)
+end
+CollectionService:GetInstanceAddedSignal("Coin"):Connect(setupCoin)
+
+------------------------------------------------------------------ Цикл: прогресс, остановка, финиш
 local acc = 0
 RunService.Heartbeat:Connect(function(dt)
 	acc += dt
-	if acc < 0.25 then
+	if acc < 0.2 then
 		return
 	end
+	local step = acc
 	acc = 0
 
-	local minIdx, maxIdx = math.huge, -1
 	for player, run in runs do
 		local sled = run.sled
 		if not sled.Parent then
 			endRun(player, "left")
 			continue
 		end
-		local dist, x, y = Track.progressOf(sled.Position)
-		run.distance = math.max(run.distance, dist)
-		player:SetAttribute("RunDistance", math.floor(run.distance))
-		if y < -40 or math.abs(x) > Config.TRACK_WIDTH then
-			endRun(player, "fell")
+		local track = run.track
+		local h, x, y = track:progressOf(sled.Position)
+		run.distance = math.max(run.distance, h)
+		player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
+
+		local idx = track:segmentIndexAt(math.max(0, h))
+		track:ensure(idx - Config.SEGMENTS_BEHIND, idx + Config.SEGMENTS_AHEAD)
+		track:cleanup(idx - Config.SEGMENTS_BEHIND)
+
+		if not run.launched then
 			continue
 		end
-		local idx = Track.segmentIndexAt(dist)
-		minIdx = math.min(minIdx, idx)
-		maxIdx = math.max(maxIdx, idx)
-	end
-
-	if maxIdx >= 0 then
-		Track.ensure(minIdx - Config.SEGMENTS_BEHIND, maxIdx + Config.SEGMENTS_AHEAD)
-		Track.cleanup(minIdx - Config.SEGMENTS_BEHIND)
-	elseif next(runs) == nil and Track.needsReset() then
-		Track.reset()
+		if run.distance >= track.length then
+			endRun(player, "finish")
+		elseif y < -60 or math.abs(x) > Config.TRACK_WIDTH * 2 then
+			endRun(player, "fell")
+		else
+			if sled.AssemblyLinearVelocity.Magnitude < Config.STOP_SPEED then
+				run.slowTime += step
+			else
+				run.slowTime = 0
+			end
+			if run.slowTime >= Config.STOP_TIME or os.clock() - run.startTime > 240 then
+				endRun(player, "stopped")
+			end
+		end
 	end
 end)
 
@@ -375,6 +471,8 @@ Players.PlayerRemoving:Connect(function(player)
 	if run then
 		runs[player] = nil
 		run.sled:Destroy()
+		run.track:destroy()
+		slots[run.slot] = nil
 	end
 	Data.release(player)
 end)

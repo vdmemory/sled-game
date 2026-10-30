@@ -1,59 +1,107 @@
 -- Все настройки игры в одном месте. Меняй числа здесь — код трогать не нужно.
+-- Баланс подобран симуляцией: уровень 1 без апгрейдов ≈ 40%, с ~6–8 покупками каждого ≈ финиш.
 
 local Config = {}
 
--- ТРАССА
-Config.SLOPE_DEG = 18 -- уклон склона в градусах
-Config.START_POS = Vector3.new(0, 2000, 0) -- верхняя точка трассы (лобби рядом)
-Config.SEGMENT_LENGTH = 120 -- длина одного куска трассы
-Config.TRACK_WIDTH = 60
-Config.SEGMENTS_AHEAD = 8 -- сколько сегментов строить впереди самого быстрого игрока
-Config.SEGMENTS_BEHIND = 3 -- сколько оставлять позади самого медленного
-Config.SAFE_SEGMENTS = 2 -- первые сегменты без препятствий
-Config.RAMP_CHANCE = 0.5 -- шанс трамплина на сегменте
-Config.LANES = 5 -- трасса делится на полосы; в ряду всегда свободно минимум 2
-Config.ROWS_PER_SEGMENT = 4 -- рядов препятствий на сегмент
-Config.SEGMENTS_PER_DIFFICULTY = 5 -- каждые N сегментов в ряду может быть на 1 препятствие больше
-Config.COIN_LINE_CHANCE = 0.6 -- шанс линии монет в ряду
-Config.COINS_PER_LINE = 4
+------------------------------------------------------------------ МИР
+Config.LOBBY_POS = Vector3.new(0, 3000, 400) -- лобби
+Config.TRACKS_ORIGIN = Vector3.new(0, 3000, 0) -- старт трассы игрока в слоте 0
+Config.SLOT_SPACING = 320 -- расстояние между трассами разных игроков (по X)
 
--- САНКИ
-Config.BASE_SPEED = 70 -- макс. скорость без апгрейдов (studs/с)
-Config.SPEED_PER_LEVEL = 6
-Config.ACCELERATION = 25
-Config.BASE_STEER = 28 -- боковая скорость
-Config.STEER_PER_LEVEL = 3
-Config.FLIP_SPEED = 9 -- скорость вращения во флипе (рад/с)
-Config.FLIP_BOOST = 1.3 -- множитель скорости после чистого флипа
-Config.FLIP_BOOST_TIME = 1.5 -- секунд
+------------------------------------------------------------------ ТРАССА (жёлоб)
+Config.TRACK_WIDTH = 36 -- ширина дна жёлоба
+Config.WALL_WIDTH = 14 -- ширина наклонных бортов
+Config.WALL_ANGLE = 40 -- наклон бортов (градусы)
+Config.LANES = 4 -- полосы для препятствий; в ряду всегда свободно минимум 2
+Config.SEGMENTS_AHEAD = 7
+Config.SEGMENTS_BEHIND = 2
 
--- ЭКОНОМИКА
-Config.STUDS_PER_COIN = 10 -- 1 монета за каждые N studs
-Config.COINS_PER_FLIP = 25
-Config.COIN_PICKUP_VALUE = 3 -- за одну монетку на трассе
-Config.UPGRADES = {
-	Speed = { BaseCost = 50, Growth = 1.6, MaxLevel = 30 },
-	Control = { BaseCost = 40, Growth = 1.55, MaxLevel = 20 },
-}
--- ID геймпасса «x2 монеты» из Creator Hub. 0 = выключено.
-Config.GAMEPASS_X2_COINS = 0
-
-function Config.trackOrigin(): CFrame
-	-- Поворот вокруг X на -уклон: «вперёд» (-Z) смотрит вниз по склону
-	return CFrame.new(Config.START_POS) * CFrame.Angles(math.rad(-Config.SLOPE_DEG), 0, 0)
+-- Длина уровня по горизонтали (studs)
+function Config.levelLength(level: number): number
+	return 1200 + (level - 1) * 450
 end
 
+-- Доля крутых участков (они разгоняют), уменьшается с уровнем
+function Config.steepChance(level: number): number
+	return math.max(0.14, 0.28 - 0.02 * (level - 1))
+end
+Config.KICKER_CHANCE = 0.12 -- обрыв с трамплином
+Config.KICKER_DROP = 22 -- высота обрыва
+Config.GENTLE_ANGLE = { 2.5, 5 } -- пологие участки: тут трение побеждает гравитацию
+Config.STEEP_ANGLE = { 12, 16 }
+
+-- Препятствия, ускорители, монеты
+Config.OBSTACLE_ROWS = 3 -- рядов на сегмент
+Config.BOOST_CHANCE = 0.3 -- ускоритель в ряду
+Config.COIN_LINE_CHANCE = 0.5
+Config.COINS_PER_LINE = 5
+
+-- Миры по уровням (по кругу)
+Config.THEMES = {
+	{
+		name = "Снежный лес",
+		floor = Color3.fromRGB(205, 232, 255),
+		wall = Color3.fromRGB(170, 215, 250),
+		ground = Color3.fromRGB(245, 248, 255),
+	},
+	{
+		name = "Ледяной город",
+		floor = Color3.fromRGB(180, 220, 250),
+		wall = Color3.fromRGB(150, 200, 245),
+		ground = Color3.fromRGB(230, 238, 248),
+	},
+	{
+		name = "Каньон",
+		floor = Color3.fromRGB(215, 235, 250),
+		wall = Color3.fromRGB(190, 220, 245),
+		ground = Color3.fromRGB(240, 225, 200),
+	},
+}
+
+------------------------------------------------------------------ ФИЗИКА САНОК
+Config.GRAVITY_ALONG = 60 -- «игровая» гравитация вдоль склона
+Config.DRAG = 0.0012 -- сопротивление воздуха (× v²)
+Config.STOP_SPEED = 3 -- ниже этой скорости...
+Config.STOP_TIME = 1.5 -- ...столько секунд = остановился
+Config.STEER_SPEED = 32
+Config.OBSTACLE_SLOWDOWN = 0.6 -- скорость × это при ударе
+Config.BOOST_ADD = 25 -- ускоритель на льду
+Config.ROCKET_THRUST = 40
+Config.FLIP_SPEED = 9 -- рад/с
+Config.FLIP_BOOST = 1.12 -- × скорость за чистый флип
+
+------------------------------------------------------------------ АПГРЕЙДЫ
+Config.UPGRADES = {
+	Launch = { title = "Рогатка", BaseCost = 25, Growth = 1.22, MaxLevel = 40 },
+	Rocket = { title = "Ракета", BaseCost = 30, Growth = 1.22, MaxLevel = 40 },
+	Sled = { title = "Санки", BaseCost = 35, Growth = 1.22, MaxLevel = 40 },
+}
+Config.UPGRADE_ORDER = { "Launch", "Rocket", "Sled" }
+
+function Config.launchSpeed(level: number): number
+	return 55 + 6 * level
+end
+function Config.rocketFuel(level: number): number
+	return 0.6 + 0.3 * level -- секунд
+end
+function Config.friction(level: number): number
+	return 9.5 * 0.965 ^ level
+end
+function Config.maxSpeed(level: number): number
+	return 100 + 5 * level
+end
 function Config.upgradeCost(name: string, level: number): number
 	local u = Config.UPGRADES[name]
 	return math.floor(u.BaseCost * u.Growth ^ level)
 end
 
-function Config.maxSpeed(level: number): number
-	return Config.BASE_SPEED + level * Config.SPEED_PER_LEVEL
+------------------------------------------------------------------ ЭКОНОМИКА
+Config.STUDS_PER_COIN = 4
+Config.COIN_PICKUP_VALUE = 3
+Config.COINS_PER_FLIP = 15
+function Config.finishBonus(level: number): number
+	return 100 * level
 end
-
-function Config.steerSpeed(level: number): number
-	return Config.BASE_STEER + level * Config.STEER_PER_LEVEL
-end
+Config.GAMEPASS_X2_COINS = 0 -- ID геймпасса «x2 монеты» (0 = выкл)
 
 return Config

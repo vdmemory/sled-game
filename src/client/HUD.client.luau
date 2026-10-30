@@ -1,36 +1,53 @@
--- Интерфейс: кнопка старта, дистанция, монеты, апгрейды, итоги заезда.
--- Весь UI создаётся кодом — потом можно заменить на свой ScreenGui из Studio.
+-- Интерфейс: лобби (старт уровня, апгрейды), шкала рогатки, прогресс до финиша,
+-- топливо ракеты, всплывашки и итоги заезда. Всё создаётся кодом.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local player = Players.LocalPlayer
 local controller = script.Parent:WaitForChild("SledController")
+local state = controller:WaitForChild("State")
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "HUD"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = false
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local FONT = Enum.Font.FredokaOne
+local WHITE = Color3.new(1, 1, 1)
 
-local function round(inst: GuiObject, radius: number)
+local function corner(inst: GuiObject, r: number)
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, radius)
+	c.CornerRadius = UDim.new(0, r)
 	c.Parent = inst
 end
-
+local function stroke(inst: GuiObject, t: number?)
+	local s = Instance.new("UIStroke")
+	s.Thickness = t or 2
+	s.Color = Color3.fromRGB(20, 40, 70)
+	s.Transparency = 0.2
+	s.Parent = inst
+end
+local function frame(props: { [string]: any }): Frame
+	local f = Instance.new("Frame")
+	f.BorderSizePixel = 0
+	for k, v in props do
+		(f :: any)[k] = v
+	end
+	f.Parent = props.Parent or gui
+	return f
+end
 local function label(props: { [string]: any }): TextLabel
 	local l = Instance.new("TextLabel")
 	l.BackgroundTransparency = 1
 	l.Font = FONT
-	l.TextColor3 = Color3.new(1, 1, 1)
-	l.TextStrokeTransparency = 0.4
+	l.TextColor3 = WHITE
+	l.TextStrokeTransparency = 0.5
 	l.TextScaled = true
 	for k, v in props do
 		(l :: any)[k] = v
@@ -38,91 +55,215 @@ local function label(props: { [string]: any }): TextLabel
 	l.Parent = props.Parent or gui
 	return l
 end
-
 local function button(text: string, color: Color3, props: { [string]: any }): TextButton
 	local b = Instance.new("TextButton")
 	b.Text = text
 	b.Font = FONT
 	b.TextScaled = true
-	b.TextColor3 = Color3.new(1, 1, 1)
+	b.TextColor3 = WHITE
 	b.BackgroundColor3 = color
 	b.AutoButtonColor = true
 	for k, v in props do
 		(b :: any)[k] = v
 	end
-	round(b, 12)
+	corner(b, 14)
+	stroke(b, 3)
 	local pad = Instance.new("UIPadding")
 	pad.PaddingTop = UDim.new(0, 6)
 	pad.PaddingBottom = UDim.new(0, 6)
-	pad.PaddingLeft = UDim.new(0, 10)
-	pad.PaddingRight = UDim.new(0, 10)
+	pad.PaddingLeft = UDim.new(0, 12)
+	pad.PaddingRight = UDim.new(0, 12)
 	pad.Parent = b
 	b.Parent = props.Parent or gui
 	return b
 end
 
--- Монеты (всегда видны)
+------------------------------------------------------------------ всегда видно
 local coinsLabel = label({
-	Name = "Coins",
 	Text = "🪙 0",
 	TextXAlignment = Enum.TextXAlignment.Left,
 	Position = UDim2.new(0, 16, 0, 12),
-	Size = UDim2.new(0, 220, 0, 40),
+	Size = UDim2.new(0, 220, 0, 42),
 })
 
--- Дистанция (во время заезда)
-local distLabel = label({
-	Name = "Distance",
-	Text = "0 м",
+------------------------------------------------------------------ лобби
+local lobby = frame({ Name = "Lobby", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) })
+
+local levelTitle = label({
+	Parent = lobby,
+	Text = "Уровень 1",
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 12),
-	Size = UDim2.new(0, 360, 0, 56),
-	Visible = false,
+	Position = UDim2.new(0.5, 0, 0, 14),
+	Size = UDim2.new(0, 420, 0, 52),
+})
+local levelSub = label({
+	Parent = lobby,
+	Text = "",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 64),
+	Size = UDim2.new(0, 420, 0, 28),
+	TextColor3 = Color3.fromRGB(220, 235, 255),
 })
 
--- Кнопка старта
-local startBtn = button("▶ Поехали!", Color3.fromRGB(40, 170, 90), {
-	Name = "Start",
+local startBtn = button("▶ Поехали!", Color3.fromRGB(40, 175, 90), {
+	Parent = lobby,
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -24),
-	Size = UDim2.new(0, 260, 0, 64),
+	Size = UDim2.new(0, 280, 0, 70),
 })
 
--- Панель апгрейдов
-local panel = Instance.new("Frame")
-panel.Name = "Upgrades"
-panel.AnchorPoint = Vector2.new(1, 0.5)
-panel.Position = UDim2.new(1, -12, 0.5, 0)
-panel.Size = UDim2.new(0, 230, 0, 150)
-panel.BackgroundColor3 = Color3.fromRGB(20, 40, 70)
-panel.BackgroundTransparency = 0.25
-round(panel, 14)
-panel.Parent = gui
-local list = Instance.new("UIListLayout")
-list.Padding = UDim.new(0, 8)
-list.HorizontalAlignment = Enum.HorizontalAlignment.Center
-list.VerticalAlignment = Enum.VerticalAlignment.Center
-list.Parent = panel
+local upgradesRow = frame({
+	Parent = lobby,
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -106),
+	Size = UDim2.new(0, 560, 0, 110),
+})
+local rowLayout = Instance.new("UIListLayout")
+rowLayout.FillDirection = Enum.FillDirection.Horizontal
+rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+rowLayout.Padding = UDim.new(0, 10)
+rowLayout.Parent = upgradesRow
 
+local ICONS = { Launch = "🎯", Rocket = "🚀", Sled = "🛷" }
 local upgradeButtons: { [string]: TextButton } = {}
-local UPGRADE_NAMES = { Speed = "Скорость", Control = "Управление" }
-for _, name in { "Speed", "Control" } do
-	upgradeButtons[name] = button("", Color3.fromRGB(60, 120, 220), {
-		Name = name,
-		Size = UDim2.new(1, -16, 0, 60),
-		Parent = panel,
+for _, name in Config.UPGRADE_ORDER do
+	local b = button("", Color3.fromRGB(60, 120, 220), {
+		Parent = upgradesRow,
+		Size = UDim2.new(0, 170, 1, 0),
+		TextScaled = false,
+		TextSize = 20,
+		TextWrapped = true,
 	})
+	upgradeButtons[name] = b
 end
 
--- Всплывающее сообщение (итоги, трюки, ошибки)
+------------------------------------------------------------------ заезд
+local runUi = frame({ Name = "Run", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false })
+
+local runCoins = label({
+	Parent = runUi,
+	Text = "",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 14),
+	Size = UDim2.new(0, 300, 0, 40),
+	TextColor3 = Color3.fromRGB(255, 220, 90),
+})
+local speedLabel = label({
+	Parent = runUi,
+	Text = "",
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 20, 1, -20),
+	Size = UDim2.new(0, 200, 0, 46),
+	TextXAlignment = Enum.TextXAlignment.Left,
+})
+
+-- Прогресс до финиша (вертикальная шкала справа)
+local progress = frame({
+	Parent = runUi,
+	AnchorPoint = Vector2.new(1, 0.5),
+	Position = UDim2.new(1, -24, 0.5, 0),
+	Size = UDim2.new(0, 26, 0, 320),
+	BackgroundColor3 = Color3.fromRGB(230, 240, 255),
+	BackgroundTransparency = 0.2,
+})
+corner(progress, 13)
+stroke(progress)
+local progressFill = frame({
+	Parent = progress,
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.fromScale(0, 1),
+	Size = UDim2.fromScale(1, 0),
+	BackgroundColor3 = Color3.fromRGB(70, 170, 255),
+})
+corner(progressFill, 13)
+local bestMark = frame({
+	Parent = progress,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Size = UDim2.new(1, 12, 0, 4),
+	BackgroundColor3 = Color3.fromRGB(255, 200, 40),
+	Visible = false,
+})
+label({ Parent = progress, Text = "🏁", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -4), Size = UDim2.new(0, 36, 0, 36) })
+local pctBubble = label({
+	Parent = progress,
+	Text = "0%",
+	AnchorPoint = Vector2.new(1, 0.5),
+	Position = UDim2.new(0, -8, 1, 0),
+	Size = UDim2.new(0, 70, 0, 30),
+	TextXAlignment = Enum.TextXAlignment.Right,
+})
+
+-- Топливо ракеты
+local fuelBox = frame({
+	Parent = runUi,
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -70, 1, -24),
+	Size = UDim2.new(0, 220, 0, 22),
+	BackgroundColor3 = Color3.fromRGB(40, 50, 70),
+	BackgroundTransparency = 0.3,
+})
+corner(fuelBox, 11)
+local fuelFill = frame({ Parent = fuelBox, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 140, 50) })
+corner(fuelFill, 11)
+label({ Parent = fuelBox, Text = "🚀 Shift / E", Size = UDim2.fromScale(1, 1), ZIndex = 2 })
+
+-- Шкала рогатки
+local meterBox = frame({
+	Parent = runUi,
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -110),
+	Size = UDim2.new(0, 420, 0, 34),
+	BackgroundColor3 = Color3.fromRGB(230, 90, 80),
+	Visible = false,
+})
+corner(meterBox, 17)
+stroke(meterBox, 3)
+local meterGrad = Instance.new("UIGradient")
+meterGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(230, 80, 70)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(250, 200, 60)),
+	ColorSequenceKeypoint.new(0.85, Color3.fromRGB(80, 210, 90)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 230, 90)),
+})
+meterGrad.Parent = meterBox
+local needle = frame({
+	Parent = meterBox,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0, 0.5),
+	Size = UDim2.new(0, 8, 1, 16),
+	BackgroundColor3 = WHITE,
+})
+corner(needle, 4)
+stroke(needle)
+local meterHint = label({
+	Parent = meterBox,
+	Text = "Жми ПРОБЕЛ или кликни, когда стрелка в зелёной зоне!",
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 0, -8),
+	Size = UDim2.new(1.3, 0, 0, 30),
+})
+
+-- Подсказка управления
+local controlsHint = label({
+	Parent = runUi,
+	Text = "A/D — руль · Shift — ракета · Пробел в прыжке — флип",
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -60),
+	Size = UDim2.new(0, 520, 0, 26),
+	TextTransparency = 0.15,
+	Visible = false,
+})
+
+------------------------------------------------------------------ всплывашки
 local toast = label({
-	Name = "Toast",
 	Text = "",
 	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.new(0.5, 0, 0.35, 0),
-	Size = UDim2.new(0, 420, 0, 120),
+	Position = UDim2.new(0.5, 0, 0.32, 0),
+	Size = UDim2.new(0, 520, 0, 130),
 	TextColor3 = Color3.fromRGB(255, 230, 90),
 	Visible = false,
+	ZIndex = 5,
 })
 local toastToken = 0
 local function showToast(text: string, seconds: number)
@@ -130,9 +271,8 @@ local function showToast(text: string, seconds: number)
 	local my = toastToken
 	toast.Text = text
 	toast.Visible = true
-	toast.Size = UDim2.new(0, 300, 0, 86)
-	TweenService:Create(toast, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Size = UDim2.new(0, 420, 0, 120) })
-		:Play()
+	toast.Size = UDim2.new(0, 360, 0, 90)
+	TweenService:Create(toast, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Size = UDim2.new(0, 520, 0, 130) }):Play()
 	task.delay(seconds, function()
 		if toastToken == my then
 			toast.Visible = false
@@ -140,43 +280,74 @@ local function showToast(text: string, seconds: number)
 	end)
 end
 
------------------------------------------------------------------- Обновление
+------------------------------------------------------------------ обновление
 local function refresh()
 	local coins = player:GetAttribute("Coins") or 0
+	local level = player:GetAttribute("Level") or 1
 	local inRun = player:GetAttribute("InRun") == true
 	local loaded = player:GetAttribute("Loaded") == true
 
-	coinsLabel.Text = "🪙 " .. coins .. "   🏆 " .. (player:GetAttribute("Best") or 0) .. " м"
-	distLabel.Visible = inRun
-	startBtn.Visible = loaded and not inRun
-	panel.Visible = loaded and not inRun
+	coinsLabel.Text = "🪙 " .. coins
+	lobby.Visible = loaded and not inRun
+	runUi.Visible = inRun
 
-	for name, btn in upgradeButtons do
-		local level = player:GetAttribute(name .. "Level") or 0
-		local max = Config.UPGRADES[name].MaxLevel
-		if level >= max then
-			btn.Text = UPGRADE_NAMES[name] .. " MAX"
-			btn.BackgroundColor3 = Color3.fromRGB(90, 90, 110)
+	levelTitle.Text = "Уровень " .. level .. " · " .. (player:GetAttribute("ThemeName") or "")
+	local best = player:GetAttribute("LevelBest") or 0
+	levelSub.Text = if best > 0 then "Лучший результат: " .. best .. "% — качайся и доедь до финиша!" else "Доедь до финиша 🏁"
+	startBtn.Text = "▶ Поехали!"
+
+	for _, name in Config.UPGRADE_ORDER do
+		local b = upgradeButtons[name]
+		local u = Config.UPGRADES[name]
+		local lvl = player:GetAttribute(name .. "Level") or 0
+		local effect = if name == "Launch"
+			then string.format("сила %d", Config.launchSpeed(lvl))
+			elseif name == "Rocket" then string.format("топливо %.1fс", Config.rocketFuel(lvl))
+			else string.format("скольжение %d%%", math.floor((1 - Config.friction(lvl) / Config.friction(0)) * 100 + 0.5))
+		if lvl >= u.MaxLevel then
+			b.Text = ICONS[name] .. " " .. u.title .. "\nур. " .. lvl .. " · MAX\n" .. effect
+			b.BackgroundColor3 = Color3.fromRGB(90, 90, 110)
 		else
-			local cost = Config.upgradeCost(name, level)
-			btn.Text = UPGRADE_NAMES[name] .. " " .. (level + 1) .. " · " .. cost .. "🪙"
-			btn.BackgroundColor3 = if coins >= cost then Color3.fromRGB(60, 120, 220) else Color3.fromRGB(70, 80, 110)
+			local cost = Config.upgradeCost(name, lvl)
+			b.Text = ICONS[name] .. " " .. u.title .. "\nур. " .. lvl .. " · " .. effect .. "\n🪙 " .. cost
+			b.BackgroundColor3 = if coins >= cost then Color3.fromRGB(60, 120, 220) else Color3.fromRGB(75, 85, 115)
 		end
 	end
+
+	bestMark.Visible = best > 0
+	bestMark.Position = UDim2.fromScale(0.5, 1 - best / 100)
 end
 
-for _, attr in { "Coins", "Best", "InRun", "Loaded", "SpeedLevel", "ControlLevel" } do
+for _, attr in { "Coins", "Level", "LevelBest", "InRun", "Loaded", "ThemeName", "LaunchLevel", "RocketLevel", "SledLevel" } do
 	player:GetAttributeChangedSignal(attr):Connect(refresh)
 end
+refresh()
+
 local function updateRun()
-	local coins = player:GetAttribute("RunCoins") or 0
-	distLabel.Text = (player:GetAttribute("RunDistance") or 0) .. " м" .. (if coins > 0 then "  🪙" .. coins else "")
+	local L = player:GetAttribute("LevelLength") or 1
+	local p = math.clamp((player:GetAttribute("RunDistance") or 0) / L, 0, 1)
+	progressFill.Size = UDim2.fromScale(1, p)
+	pctBubble.Text = math.floor(p * 100) .. "%"
+	pctBubble.Position = UDim2.new(0, -8, 1 - p, 0)
+	local c = player:GetAttribute("RunCoins") or 0
+	runCoins.Text = if c > 0 then "🪙 +" .. c else ""
 end
 player:GetAttributeChangedSignal("RunDistance"):Connect(updateRun)
 player:GetAttributeChangedSignal("RunCoins"):Connect(updateRun)
-refresh()
+player:GetAttributeChangedSignal("InRun"):Connect(updateRun)
 
------------------------------------------------------------------- Действия
+-- Кадр: шкала рогатки, скорость, топливо
+RunService.RenderStepped:Connect(function()
+	local awaiting = state.AwaitingLaunch.Value
+	meterBox.Visible = awaiting
+	controlsHint.Visible = not awaiting and player:GetAttribute("Launched") == true
+	needle.Position = UDim2.fromScale(state.Meter.Value, 0.5)
+	speedLabel.Text = math.floor(state.Speed.Value * 1.1) .. " км/ч"
+	local maxFuel = state.FuelMax.Value
+	fuelFill.Size = UDim2.fromScale(if maxFuel > 0 then state.Fuel.Value / maxFuel else 0, 1)
+end)
+
+------------------------------------------------------------------ действия
 local starting = false
 startBtn.Activated:Connect(function()
 	if starting then
@@ -189,8 +360,8 @@ startBtn.Activated:Connect(function()
 	end)
 end)
 
-for name, btn in upgradeButtons do
-	btn.Activated:Connect(function()
+for name, b in upgradeButtons do
+	b.Activated:Connect(function()
 		local ok, msg = Remotes.BuyUpgrade:InvokeServer(name)
 		if not ok then
 			showToast(msg or "Ошибка", 1.2)
@@ -198,20 +369,17 @@ for name, btn in upgradeButtons do
 	end)
 end
 
-Remotes.RunEnded.OnClientEvent:Connect(function(result)
-	local lines = {}
-	if result.reason == "crash" then
-		table.insert(lines, "💥 Врезался!")
-	elseif result.reason == "fell" then
-		table.insert(lines, "Улетел с трассы!")
+Remotes.RunEnded.OnClientEvent:Connect(function(r)
+	local text
+	if r.reason == "finish" then
+		text = "🏁 Уровень " .. r.level .. " пройден!\n+" .. r.coins .. " 🪙"
+	else
+		local head = if r.reason == "fell" then "Улетел с трассы!" elseif r.reason == "stopped" then "Остановился" else "Заезд окончен"
+		text = head .. " на " .. r.percent .. "%\n+" .. r.coins .. " 🪙" .. (if r.newBest then "  · 🏆 рекорд!" else "")
 	end
-	table.insert(lines, result.distance .. " м  ·  +" .. result.coins .. "🪙")
-	if result.newRecord then
-		table.insert(lines, "🏆 Новый рекорд!")
-	end
-	showToast(table.concat(lines, "\n"), 3)
+	showToast(text, 3.5)
 end)
 
-controller:WaitForChild("TrickPopup").Event:Connect(function(flips)
-	showToast((if flips > 1 then "Флип x" .. flips else "Флип") .. "! Буст ⚡", 1.2)
+controller:WaitForChild("TrickPopup").Event:Connect(function(text)
+	showToast(text, 1)
 end)

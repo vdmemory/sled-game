@@ -41,7 +41,36 @@ local function addSnowTrail(sled: Instance)
 	pe.EmissionDirection = Enum.NormalId.Back
 	pe.Rate = 0
 	pe.Parent = att
+
+	-- Ракетные сопла (горят, когда у этих санок включена ракета; видно только своему игроку)
+	if sled:GetAttribute("Owner") == player.UserId then
+		for _, side in { -1, 1 } do
+			local nozzle = Instance.new("Attachment")
+			nozzle.Name = "RocketNozzle"
+			nozzle.Position = Vector3.new(side * 2.2, 0.6, 3.6)
+			nozzle.Parent = sled
+			local fire = Instance.new("ParticleEmitter")
+			fire.Name = "RocketFire"
+			fire.Texture = "rbxasset://textures/particles/fire_main.dds"
+			fire.Color = ColorSequence.new(Color3.fromRGB(255, 220, 120), Color3.fromRGB(255, 90, 30))
+			fire.LightEmission = 1
+			fire.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1.6),
+				NumberSequenceKeypoint.new(1, 0.2),
+			})
+			fire.Transparency = NumberSequence.new(0.1, 1)
+			fire.Lifetime = NumberRange.new(0.15, 0.3)
+			fire.Speed = NumberRange.new(25, 35)
+			fire.EmissionDirection = Enum.NormalId.Back
+			fire.SpreadAngle = Vector2.new(8, 8)
+			fire.Rate = 0
+			fire.Parent = nozzle
+		end
+	end
 end
+
+local controller = script.Parent:WaitForChild("SledController")
+local rocketOn = controller:WaitForChild("State"):WaitForChild("RocketOn")
 
 local sleds = workspace:WaitForChild("Sleds")
 sleds.ChildAdded:Connect(addSnowTrail)
@@ -82,6 +111,14 @@ RunService.RenderStepped:Connect(function(dt)
 			local v = s.AssemblyLinearVelocity.Magnitude
 			local grounded = workspace:Raycast(s.Position, -s.CFrame.UpVector * 3) ~= nil
 			pe.Rate = if grounded then math.clamp(v * 0.8, 0, 90) else 0
+		end
+		if s:GetAttribute("Owner") == player.UserId then
+			for _, nozzle in s:GetChildren() do
+				local fire = nozzle.Name == "RocketNozzle" and nozzle:FindFirstChild("RocketFire")
+				if fire then
+					fire.Rate = if rocketOn.Value then 120 else 0
+				end
+			end
 		end
 	end
 

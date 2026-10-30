@@ -7,9 +7,11 @@ local store = DataStoreService:GetDataStore("SledData_v1")
 
 local DEFAULT = {
 	Coins = 0,
-	Best = 0,
-	SpeedLevel = 0,
-	ControlLevel = 0,
+	Level = 1, -- текущий уровень (мир)
+	LevelBest = 0, -- лучший % на текущем уровне
+	LaunchLevel = 0,
+	RocketLevel = 0,
+	SledLevel = 0,
 }
 
 type Profile = { data: { [string]: number }, canSave: boolean }
