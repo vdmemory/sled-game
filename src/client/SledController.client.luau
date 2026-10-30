@@ -191,11 +191,15 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 		)
 	end
 
-	for _, p in seat:GetDescendants() do
+	local function hook(p: Instance)
 		if p:IsA("BasePart") then
 			table.insert(connections, p.Touched:Connect(onTouched))
 		end
 	end
+	for _, p in seat:GetDescendants() do
+		hook(p)
+	end
+	table.insert(connections, seat.DescendantAdded:Connect(hook))
 	table.insert(connections, seat.Touched:Connect(onTouched))
 end
 
@@ -231,14 +235,23 @@ end)
 
 ------------------------------------------------------------------ кадр физики
 RunService.Heartbeat:Connect(function(dt)
-	local s, a = sled, align
-	if not s or not a or not s.Parent then
+	local s = sled
+	if not s or not s.Parent then
 		return
 	end
 	if s.Anchored then
 		-- Ждём рогатку: шкала силы бегает туда-сюда
 		meterValue.Value = 0.5 + 0.5 * math.sin(os.clock() * 3.4)
 		return
+	end
+	-- Детали санок (стабилизатор) могут прийти по сети позже самих санок
+	local a = align
+	if not a then
+		a = s:FindFirstChildOfClass("AlignOrientation")
+		align = a
+		if not a then
+			return
+		end
 	end
 	if not started then
 		started = true

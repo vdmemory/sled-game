@@ -152,6 +152,7 @@ type Run = {
 	lastTrick: number,
 	slowTime: number,
 	startTime: number,
+	launchTime: number?,
 	ended: boolean?,
 }
 local runs: { [Player]: Run } = {}
@@ -337,6 +338,7 @@ Launch.OnServerEvent:Connect(function(player, power)
 	end
 	power = math.clamp(power, 0.4, 1)
 	run.launched = true
+	run.launchTime = os.clock()
 	for _, r in run.ropes do
 		r:Destroy()
 	end
@@ -452,7 +454,8 @@ RunService.Heartbeat:Connect(function(dt)
 		elseif y < -60 or math.abs(x) > Config.TRACK_WIDTH * 2 then
 			endRun(player, "fell")
 		else
-			if sled.AssemblyLinearVelocity.Magnitude < Config.STOP_SPEED then
+			-- Первые 2 секунды после выстрела не считаем (передача управления по сети)
+			if os.clock() - (run.launchTime or 0) > 2 and sled.AssemblyLinearVelocity.Magnitude < Config.STOP_SPEED then
 				run.slowTime += step
 			else
 				run.slowTime = 0
