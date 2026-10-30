@@ -67,6 +67,8 @@ Config.STOP_TIME = 1.5 -- ...столько секунд = остановилс�
 Config.STEER_SPEED = 32
 Config.OBSTACLE_SLOWDOWN = 0.6 -- скорость × это при ударе
 Config.BOOST_ADD = 18 -- ускоритель на льду
+Config.RAMP_MIN_SPEED = 30 -- на трамплине не медленнее этого (не застрянешь)
+Config.RAMP_LIFT = 0.45 -- подброс с трамплина (доля скорости вверх)
 Config.ROCKET_THRUST = 40
 Config.FLIP_SPEED = 9 -- рад/с
 Config.FLIP_BOOST = 1.12 -- × скорость за чистый флип

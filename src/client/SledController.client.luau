@@ -277,9 +277,16 @@ RunService.Heartbeat:Connect(function(dt)
 		local d = (FWD - n * FWD:Dot(n)).Unit
 		local right = d:Cross(n)
 
-		local acc = -Config.GRAVITY_ALONG * d.Y - Config.friction(sledLevel) - Config.DRAG * speed * speed
+		-- Трамплин — пусковая площадка: скорость на нём не теряется, и он подбрасывает вверх
+		local onRamp = hit.Instance.Name == "Ramp"
+		local acc = if onRamp
+			then 0
+			else -Config.GRAVITY_ALONG * d.Y - Config.friction(sledLevel) - Config.DRAG * speed * speed
 		if useRocket then
 			acc += Config.ROCKET_THRUST
+		end
+		if onRamp then
+			speed = math.max(speed, Config.RAMP_MIN_SPEED)
 		end
 		speed += acc * dt
 		if speed > maxSpeed and not useRocket then
@@ -288,6 +295,9 @@ RunService.Heartbeat:Connect(function(dt)
 		speed = math.max(0, speed)
 
 		local vn = vel:Dot(n)
+		if onRamp then
+			vn = math.max(vn, speed * Config.RAMP_LIFT)
+		end
 		s.AssemblyLinearVelocity = d * speed + right * (steer * Config.STEER_SPEED) + n * vn
 		a.Enabled = true
 		a.CFrame = CFrame.lookAt(Vector3.zero, d, n)
