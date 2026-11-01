@@ -12,6 +12,8 @@ local DEFAULT = {
 	LaunchLevel = 0,
 	RocketLevel = 0,
 	SledLevel = 0,
+	IncomeLevel = 0,
+	Gems = 0,
 	Skin = "classic", -- надетый скин
 	OwnedSkins = { classic = true },
 }

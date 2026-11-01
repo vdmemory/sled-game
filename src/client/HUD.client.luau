@@ -79,12 +79,20 @@ local function button(text: string, color: Color3, props: { [string]: any }): Te
 end
 
 ------------------------------------------------------------------ всегда видно
-local coinsLabel = label({
-	Text = "💰 0",
-	TextXAlignment = Enum.TextXAlignment.Left,
-	Position = UDim2.new(0, 16, 0, 12),
-	Size = UDim2.new(0, 220, 0, 42),
+-- Валюты слева сверху (сразу правее кнопок Roblox)
+local currencyBar = frame({
+	BackgroundTransparency = 1,
+	Position = UDim2.new(0, 16, 0, 60),
+	Size = UDim2.new(0, 380, 0, 40),
 })
+local function pill(x: number, color: Color3): TextLabel
+	local f = frame({ Parent = currencyBar, Position = UDim2.new(0, x, 0, 0), Size = UDim2.new(0, 170, 1, 0), BackgroundColor3 = color, BackgroundTransparency = 0.15 })
+	corner(f, 20)
+	stroke(f, 2)
+	return label({ Parent = f, Text = "", Position = UDim2.new(0, 12, 0, 4), Size = UDim2.new(1, -24, 1, -8), TextXAlignment = Enum.TextXAlignment.Left })
+end
+local coinsLabel = pill(0, Color3.fromRGB(220, 160, 30))
+local gemsLabel = pill(180, Color3.fromRGB(70, 140, 235))
 
 ------------------------------------------------------------------ лобби
 local lobby = frame({ Name = "Lobby", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) })
@@ -117,7 +125,7 @@ local upgradesRow = frame({
 	BackgroundTransparency = 1,
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -106),
-	Size = UDim2.new(0, 560, 0, 110),
+	Size = UDim2.new(0, 600, 0, 168),
 })
 local rowLayout = Instance.new("UIListLayout")
 rowLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -125,17 +133,46 @@ rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 rowLayout.Padding = UDim.new(0, 10)
 rowLayout.Parent = upgradesRow
 
-local ICONS = { Launch = "🎯", Rocket = "🚀", Sled = "🛷" }
+-- Карточки апгрейдов как в оригинале/референсе: шапка, иконка, бейдж уровня, деления тира, цена
+type Card = { root: TextButton, badge: TextLabel, pips: { Frame }, price: TextLabel, priceBox: Frame, effect: TextLabel }
 local upgradeButtons: { [string]: TextButton } = {}
+local cards: { [string]: Card } = {}
 for _, name in Config.UPGRADE_ORDER do
-	local b = button("", Color3.fromRGB(60, 120, 220), {
-		Parent = upgradesRow,
-		Size = UDim2.new(0, 170, 1, 0),
-		TextScaled = false,
-		TextSize = 20,
-		TextWrapped = true,
-	})
-	upgradeButtons[name] = b
+	local u = Config.UPGRADES[name]
+	local root = Instance.new("TextButton")
+	root.Text = ""
+	root.AutoButtonColor = true
+	root.Size = UDim2.new(0, 140, 1, 0)
+	root.BackgroundColor3 = u.color
+	root.Parent = upgradesRow
+	corner(root, 16)
+	stroke(root, 3)
+	label({ Parent = root, Text = u.title, Position = UDim2.new(0, 8, 0, 4), Size = UDim2.new(1, -40, 0, 24), TextXAlignment = Enum.TextXAlignment.Left })
+	local body = frame({ Parent = root, Position = UDim2.new(0, 6, 0, 30), Size = UDim2.new(1, -12, 0, 76), BackgroundColor3 = Color3.fromRGB(250, 245, 240) })
+	corner(body, 12)
+	label({ Parent = body, Text = u.icon, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.new(0, 50, 0, 44) })
+	local effect = label({ Parent = body, Text = "", Position = UDim2.new(0, 4, 0, 50), Size = UDim2.new(1, -8, 0, 20), TextColor3 = Color3.fromRGB(70, 80, 100), TextStrokeTransparency = 1 })
+	local badgeBg = frame({ Parent = root, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 4, 0, -6), Size = UDim2.new(0, 34, 0, 34), BackgroundColor3 = WHITE })
+	corner(badgeBg, 17)
+	stroke(badgeBg, 2)
+	local badge = label({ Parent = badgeBg, Text = "0", Size = UDim2.fromScale(1, 1), TextColor3 = Color3.fromRGB(30, 40, 60), TextStrokeTransparency = 1 })
+	local pips = {}
+	for i = 1, Config.TIER_SIZE do
+		local pip = frame({
+			Parent = root,
+			Position = UDim2.new((i - 1) / Config.TIER_SIZE, 8 - (i - 1) * 16 / Config.TIER_SIZE, 0, 110),
+			Size = UDim2.new(1 / Config.TIER_SIZE, -4, 0, 8),
+			BackgroundColor3 = WHITE,
+		})
+		corner(pip, 3)
+		pips[i] = pip
+	end
+	local priceBox = frame({ Parent = root, Position = UDim2.new(0, 6, 1, -46), Size = UDim2.new(1, -12, 0, 40), BackgroundColor3 = Color3.fromRGB(70, 190, 90) })
+	corner(priceBox, 12)
+	stroke(priceBox, 2)
+	local price = label({ Parent = priceBox, Text = "", Position = UDim2.new(0, 6, 0, 4), Size = UDim2.new(1, -12, 1, -8) })
+	upgradeButtons[name] = root
+	cards[name] = { root = root, badge = badge, pips = pips, price = price, priceBox = priceBox, effect = effect }
 end
 
 -- Всплывашка определена ниже; магазин зовёт её через эту ссылку
@@ -145,7 +182,7 @@ local showToastLater = function(_text: string) end
 local shopBtn = button("🎨 Ватрушки", Color3.fromRGB(170, 80, 220), {
 	Parent = lobby,
 	AnchorPoint = Vector2.new(0, 0),
-	Position = UDim2.new(0, 16, 0, 64),
+	Position = UDim2.new(0, 16, 0, 112),
 	Size = UDim2.new(0, 170, 0, 48),
 })
 
@@ -524,8 +561,11 @@ local function refresh()
 	local inRun = player:GetAttribute("InRun") == true
 	local loaded = player:GetAttribute("Loaded") == true
 
+	local gems = player:GetAttribute("Gems") or 0
 	coinsLabel.Text = "💰 " .. coins
+	gemsLabel.Text = "💎 " .. gems
 	runUi.Visible = inRun
+	currencyBar.Visible = not inRun
 
 	levelTitle.Text = "Уровень " .. level .. " · " .. (player:GetAttribute("ThemeName") or "")
 	local best = player:GetAttribute("LevelBest") or 0
@@ -533,20 +573,32 @@ local function refresh()
 	startBtn.Text = "▶ Поехали!"
 
 	for _, name in Config.UPGRADE_ORDER do
-		local b = upgradeButtons[name]
+		local c = cards[name]
 		local u = Config.UPGRADES[name]
 		local lvl = player:GetAttribute(name .. "Level") or 0
-		local effect = if name == "Launch"
+		c.effect.Text = if name == "Launch"
 			then string.format("сила %d", Config.launchSpeed(lvl))
 			elseif name == "Rocket" then string.format("топливо %.1fс", Config.rocketFuel(lvl))
+			elseif name == "Income" then string.format("x%.2f", Config.incomeMult(lvl))
 			else string.format("скольжение %d%%", math.floor((1 - Config.friction(lvl) / Config.friction(0)) * 100 + 0.5))
+		c.badge.Text = tostring(lvl)
+		-- деления: сколько уровней набрано в текущем тире
+		local inTier = if lvl > 0 and lvl % Config.TIER_SIZE == 0 then Config.TIER_SIZE else lvl % Config.TIER_SIZE
+		for i, pip in c.pips do
+			pip.BackgroundColor3 = if i <= inTier then WHITE else Color3.fromRGB(40, 40, 60)
+			pip.BackgroundTransparency = if i <= inTier then 0 else 0.5
+		end
 		if lvl >= u.MaxLevel then
-			b.Text = ICONS[name] .. " " .. u.title .. "\nур. " .. lvl .. " · MAX\n" .. effect
-			b.BackgroundColor3 = Color3.fromRGB(90, 90, 110)
+			c.price.Text = "MAX"
+			c.priceBox.BackgroundColor3 = Color3.fromRGB(110, 110, 130)
 		else
-			local cost = Config.upgradeCost(name, lvl)
-			b.Text = ICONS[name] .. " " .. u.title .. "\nур. " .. lvl .. " · " .. effect .. "\n💰 " .. cost
-			b.BackgroundColor3 = if coins >= cost then Color3.fromRGB(60, 120, 220) else Color3.fromRGB(75, 85, 115)
+			local cost, currency = Config.upgradePrice(name, lvl)
+			local have = if currency == "Gems" then gems else coins
+			c.price.Text = (if currency == "Gems" then "💎 " else "💰 ") .. cost
+			c.priceBox.BackgroundColor3 = if have < cost
+				then Color3.fromRGB(120, 125, 140)
+				elseif currency == "Gems" then Color3.fromRGB(80, 150, 240)
+				else Color3.fromRGB(70, 190, 90)
 		end
 	end
 
@@ -577,7 +629,7 @@ local function refresh()
 	end
 end
 
-for _, attr in { "Coins", "Level", "LevelBest", "InRun", "Loaded", "ThemeName", "LaunchLevel", "RocketLevel", "SledLevel", "Skin", "OwnedSkins" } do
+for _, attr in { "Coins", "Gems", "Level", "LevelBest", "InRun", "Loaded", "ThemeName", "LaunchLevel", "RocketLevel", "SledLevel", "IncomeLevel", "Skin", "OwnedSkins" } do
 	player:GetAttributeChangedSignal(attr):Connect(refresh)
 end
 refresh()
@@ -668,6 +720,8 @@ for name, b in upgradeButtons do
 		local ok, msg = Remotes.BuyUpgrade:InvokeServer(name)
 		if not ok then
 			showToast(msg or "Ошибка", 1.2)
+		elseif msg then
+			showToast("✨ ПОЛУЧЕНО:\n" .. string.upper(msg) .. "!", 2.5)
 		end
 	end)
 end
@@ -734,7 +788,7 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 	cardDist.Text = (r.distance or 0) .. " м  ·  " .. r.percent .. "%"
 	cardBarFill.Size = UDim2.fromScale(0, 1)
 	TweenService:Create(cardBarFill, TweenInfo.new(0.8, Enum.EasingStyle.Quad), { Size = UDim2.fromScale(r.percent / 100, 1) }):Play()
-	cardCoinsText.Text = "💰 +" .. r.coins .. (if (r.mult or 1) > 1 then "  (x" .. r.mult .. ")" else "")
+	cardCoinsText.Text = "💰 +" .. r.coins .. (if (r.mult or 1) > 1 then "  (x" .. r.mult .. ")" else "") .. (if (r.gems or 0) > 0 then "   💎 +" .. r.gems else "")
 	cardBonus.Text = if (r.bonus or 0) > 0 then "из них за монеты, полёт и трюки: +" .. r.bonus else ""
 	bestBanner.Visible = r.newBest == true or finished
 	bestBanner.Text = if finished then "🎉 ФИНИШ!" else "🏆 НОВЫЙ РЕКОРД!"

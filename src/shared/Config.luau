@@ -89,12 +89,31 @@ Config.FLIP_SPEED = 9 -- рад/с
 Config.FLIP_BOOST = 1.12 -- × скорость за чистый флип
 
 ------------------------------------------------------------------ АПГРЕЙДЫ
+-- 4 апгрейда как в оригинале. Ракета качается за гемы, остальные — за монеты.
+-- Каждые TIER_SIZE уровней — новый «тир»: меняется вид рогатки/санок, а переход на него стоит гемы.
+Config.TIER_SIZE = 5
 Config.UPGRADES = {
-	Launch = { title = "Рогатка", BaseCost = 25, Growth = 1.22, MaxLevel = 40 },
-	Rocket = { title = "Ракета", BaseCost = 30, Growth = 1.22, MaxLevel = 40 },
-	Sled = { title = "Санки", BaseCost = 35, Growth = 1.22, MaxLevel = 40 },
+	Launch = { title = "Рогатка", icon = "🎯", color = Color3.fromRGB(225, 80, 70), BaseCost = 25, Growth = 1.18, MaxLevel = 50 },
+	Sled = { title = "Сани", icon = "🛷", color = Color3.fromRGB(60, 130, 230), BaseCost = 35, Growth = 1.18, MaxLevel = 50 },
+	Income = { title = "Доход", icon = "💰", color = Color3.fromRGB(235, 165, 35), BaseCost = 60, Growth = 1.2, MaxLevel = 50 },
+	Rocket = { title = "Ракета", icon = "🚀", color = Color3.fromRGB(240, 115, 45), MaxLevel = 30, gems = true },
 }
-Config.UPGRADE_ORDER = { "Launch", "Rocket", "Sled" }
+Config.UPGRADE_ORDER = { "Launch", "Sled", "Income", "Rocket" }
+
+-- Названия тиров (показываются при получении: «ПОЛУЧЕНА СТАЛЬНАЯ РОГАТКА!»)
+Config.TIERS = {
+	Launch = { "Деревянная рогатка", "Стальная рогатка", "Мега-рогатка", "Силовая рогатка", "Золотая рогатка", "Неоновая рогатка" },
+	Sled = { "Обычные санки", "Боковые ускорители", "Аэро-хвост", "Обтекатель", "Золотая отделка", "Неоновые санки" },
+	Income = { "Копилка", "Мешок монет", "Сундук", "Сейф", "Банк", "Золотой банк" },
+	Rocket = { "Петарда", "Ракета", "Турбо-ракета", "Мега-двигатель", "Бласт-двигатель", "Гиперджет" },
+}
+function Config.tierOf(level: number): number
+	return level // Config.TIER_SIZE
+end
+function Config.tierName(name: string, level: number): string
+	local list = Config.TIERS[name]
+	return list[math.min(Config.tierOf(level) + 1, #list)]
+end
 
 function Config.launchSpeed(level: number): number
 	return 48 + 6 * level
@@ -108,10 +127,29 @@ end
 function Config.maxSpeed(level: number): number
 	return 100 + 5 * level
 end
-function Config.upgradeCost(name: string, level: number): number
-	local u = Config.UPGRADES[name]
-	return math.floor(u.BaseCost * u.Growth ^ level)
+function Config.incomeMult(level: number): number
+	return 1 + 0.15 * level
 end
+
+-- Цена следующего уровня: (сколько, валюта "Coins" | "Gems")
+function Config.upgradePrice(name: string, level: number): (number, string)
+	local u = Config.UPGRADES[name]
+	if u.gems then
+		return 1 + level // 3, "Gems"
+	end
+	if level > 0 and level % Config.TIER_SIZE == 0 then
+		return 1 + level // (Config.TIER_SIZE * 2), "Gems" -- переход на новый тир
+	end
+	return math.floor(u.BaseCost * u.Growth ^ level), "Coins"
+end
+-- совместимость со старым кодом
+function Config.upgradeCost(name: string, level: number): number
+	return (Config.upgradePrice(name, level))
+end
+
+------------------------------------------------------------------ ГЕМЫ
+Config.GEMS_FINISH = 3 -- за пройденный уровень
+Config.GEMS_NEW_BEST = 1 -- за новый рекорд на уровне
 
 ------------------------------------------------------------------ СКИНЫ ВАТРУШЕК (за монеты)
 -- tube — основной цвет, rim — бортик, neon — светится

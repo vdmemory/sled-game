@@ -93,7 +93,7 @@ local function syncPlayer(player: Player)
 	if not d then
 		return
 	end
-	for _, key in { "Coins", "Level", "LevelBest", "LaunchLevel", "RocketLevel", "SledLevel" } do
+	for _, key in { "Coins", "Gems", "Level", "LevelBest", "LaunchLevel", "RocketLevel", "SledLevel", "IncomeLevel" } do
 		player:SetAttribute(key, d[key])
 	end
 	player:SetAttribute("LevelLength", Config.levelLength(d.Level))
@@ -194,19 +194,23 @@ local function endRun(player: Player, reason: string)
 	local finished = reason == "finish"
 	local dist = math.min(run.distance, L)
 	local pct = math.floor(dist / L * 100)
-	local mult = if player:GetAttribute("X2Coins") then 2 else 1
-	local earned = (math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + (if finished then Config.finishBonus(level) else 0)) * mult
+	local mult = (if player:GetAttribute("X2Coins") then 2 else 1) * Config.incomeMult(d and d.IncomeLevel or 0)
+	local earned = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + (if finished then Config.finishBonus(level) else 0)) * mult)
 	local newBest = false
+	local gems = 0
 
 	if d then
 		d.Coins += earned
 		if finished then
 			d.Level += 1
 			d.LevelBest = 0
-		elseif pct > d.LevelBest then
+			gems += Config.GEMS_FINISH
+		elseif pct > d.LevelBest and reason ~= "restart" and reason ~= "back" then
 			d.LevelBest = pct
 			newBest = true
+			gems += Config.GEMS_NEW_BEST
 		end
+		d.Gems += gems
 		syncPlayer(player)
 	end
 
@@ -223,7 +227,8 @@ local function endRun(player: Player, reason: string)
 			length = L,
 			level = level,
 			newBest = newBest,
-			mult = mult,
+			mult = math.floor(mult * 100 + 0.5) / 100,
+			gems = gems,
 		})
 	end
 
@@ -288,6 +293,55 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 		p.Parent = seat
 	end
 
+	-- Тиры апгрейда «Сани»: санки обрастают деталями (как MEGA THRUSTER / AERO TAIL в оригинале)
+	local tier = Config.tierOf(d and d.SledLevel or 0)
+	local function deco(name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Shape = shape or Enum.PartType.Block
+		p.Color = color
+		p.Material = material or Enum.Material.SmoothPlastic
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Massless = true
+		p.CollisionGroup = "Riders"
+		p.CFrame = seat.CFrame * offset
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = seat
+		w.Part1 = p
+		w.Parent = p
+		p.Parent = seat
+		return p
+	end
+	local metal = Color3.fromRGB(70, 75, 90)
+	if tier >= 1 then -- боковые ускорители
+		for _, sx in { -1, 1 } do
+			deco("Booster", Vector3.new(3, 1.1, 1.1), CFrame.new(sx * 4.1, 0.4, 1) * CFrame.Angles(0, math.rad(90), 0), metal, Enum.Material.Metal, Enum.PartType.Cylinder)
+			deco("Nozzle", Vector3.new(0.4, 0.8, 0.8), CFrame.new(sx * 4.1, 0.4, 2.6) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 140, 40), Enum.Material.Neon, Enum.PartType.Cylinder)
+		end
+	end
+	if tier >= 2 then -- аэро-хвост
+		local fin = deco("Fin", Vector3.new(0.3, 2, 2.2), CFrame.new(0, 1.6, 3.4), skin.rim)
+		local wedge = Instance.new("SpecialMesh")
+		wedge.MeshType = Enum.MeshType.Wedge
+		wedge.Parent = fin
+	end
+	if tier >= 3 then -- обтекатель спереди
+		deco("Shield", Vector3.new(4, 1.6, 0.25), CFrame.new(0, 1.4, -3.4) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(170, 220, 255), Enum.Material.Glass).Transparency = 0.35
+	end
+	if tier >= 4 then -- золотая отделка
+		deco("Trim", Vector3.new(0.35, 8.1, 8.1), CFrame.new(0, 0.95, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(240, 195, 60), Enum.Material.Foil, Enum.PartType.Cylinder)
+	end
+	if tier >= 5 then -- неон
+		local glow = Instance.new("PointLight")
+		glow.Color = skin.rim
+		glow.Range = 12
+		glow.Brightness = 2
+		glow.Parent = seat
+	end
+
 	-- Ориентация задаётся с клиента (по нормали склона)
 	local att = Instance.new("Attachment")
 	att.Name = "AlignAttachment"
@@ -326,6 +380,22 @@ startRun = function(player: Player)
 	local startCF = track:startCFrame()
 	local sled = makeSled(player, startCF)
 
+	-- Тиры рогатки: столбы меняют материал (дерево → сталь → красная → сила → золото → неон)
+	local POST_STYLES = {
+		{ Color3.fromRGB(140, 95, 55), Enum.Material.Wood },
+		{ Color3.fromRGB(150, 155, 165), Enum.Material.DiamondPlate },
+		{ Color3.fromRGB(210, 60, 60), Enum.Material.SmoothPlastic },
+		{ Color3.fromRGB(70, 90, 200), Enum.Material.Metal },
+		{ Color3.fromRGB(240, 195, 60), Enum.Material.Foil },
+		{ Color3.fromRGB(90, 220, 255), Enum.Material.Neon },
+	}
+	local ltier = math.min(Config.tierOf(d.LaunchLevel) + 1, #POST_STYLES)
+	for _, post in track.posts do
+		post.Color = POST_STYLES[ltier][1]
+		post.Material = POST_STYLES[ltier][2]
+	end
+	local ropeColor = if ltier >= 5 then Color3.fromRGB(255, 220, 90) elseif ltier >= 2 then Color3.fromRGB(70, 70, 80) else Color3.fromRGB(200, 160, 110)
+
 	-- Резинка рогатки
 	local ropes = {}
 	for _, post in track.posts do
@@ -334,7 +404,7 @@ startRun = function(player: Player)
 		beam.Attachment1 = sled.RopeAttachment
 		beam.Width0 = 0.5
 		beam.Width1 = 0.5
-		beam.Color = ColorSequence.new(Color3.fromRGB(200, 160, 110))
+		beam.Color = ColorSequence.new(ropeColor)
 		beam.FaceCamera = true
 		beam.Segments = 1
 		beam.Parent = sled
@@ -501,13 +571,17 @@ BuyUpgrade.OnServerInvoke = function(player, name)
 	if level >= u.MaxLevel then
 		return false, "Максимум"
 	end
-	local cost = Config.upgradeCost(name, level)
-	if d.Coins < cost then
-		return false, "Не хватает монет"
+	local cost, currency = Config.upgradePrice(name, level)
+	if d[currency] < cost then
+		return false, if currency == "Gems" then "Не хватает гемов 💎" else "Не хватает монет"
 	end
-	d.Coins -= cost
+	d[currency] -= cost
 	d[field] = level + 1
 	syncPlayer(player)
+	-- новый тир → клиент покажет «ПОЛУЧЕНО: …»
+	if (level + 1) % Config.TIER_SIZE == 0 then
+		return true, Config.tierName(name, level + 1)
+	end
 	return true
 end
 
