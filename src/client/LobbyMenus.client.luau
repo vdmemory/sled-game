@@ -1,6 +1,6 @@
 -- Меню лобби в стиле мобильного оригинала:
 --  • слева колонка «ледяных» плиток-иконок (Миры, Задания, Сани, Следы, Подарки);
---  • справа шестерёнка, Билет дня, Цвета ватрушки;
+--  • справа шестерёнка и Цвета ватрушки;
 --  • под заголовком — жёлтая плашка сундука с таймером;
 --  • окна — голубые, с лентой-заголовком и круглым красным крестиком (Shared/UIKit).
 
@@ -118,10 +118,7 @@ UI.corner(gearBg, 1000)
 UI.stroke(gearBg, 2.5, C.white, 0.3)
 UI.text({ Text = "⚙", Position = UDim2.fromScale(0.16, 0.12), Size = UDim2.fromScale(0.68, 0.72), Parent = gearBg })
 UI.bounce(gear)
-local ticketBtn = tile(right, 1, "🎟")
-local ticketBadge = UI.badge(ticketBtn, "!")
-ticketBadge.Visible = false
-local colorsBtn = tile(right, 2, "🎨")
+local colorsBtn = tile(right, 1, "🎨")
 
 -- Жёлтая плашка сундука под заголовком
 local chestPill = UI.new("TextButton", {
@@ -241,9 +238,8 @@ end)
 
 ------------------------------------------------------------------ Задания дня
 local tasksWin, tasksBody = panel("ЗАДАНИЯ ДНЯ", 540, 540)
-UI.text({ Text = "🐧", Position = UDim2.fromOffset(0, 18), Size = UDim2.fromOffset(84, 84), Outline = 0, ZIndex = 33, Parent = tasksBody })
-UI.text({ Text = "ВЫПОЛНИ ВСЕ ЗАДАНИЯ,\nЧТОБЫ ПОЛУЧИТЬ СУНДУК!", Position = UDim2.fromOffset(90, 22), Size = UDim2.new(1, -170, 0, 46), ZIndex = 33, Parent = tasksBody })
-local _, setTasksBar = UI.progress(tasksBody, { Position = UDim2.fromOffset(92, 74), Size = UDim2.new(1, -170, 0, 24), ZIndex = 33 })
+UI.text({ Text = "ВЫПОЛНИ ВСЕ ЗАДАНИЯ,\nЧТОБЫ ПОЛУЧИТЬ СУНДУК!", Position = UDim2.fromOffset(10, 22), Size = UDim2.new(1, -100, 0, 46), ZIndex = 33, Parent = tasksBody })
+local _, setTasksBar = UI.progress(tasksBody, { Position = UDim2.fromOffset(12, 74), Size = UDim2.new(1, -100, 0, 24), ZIndex = 33 })
 local chestClaim = UI.new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 34), Size = UDim2.fromOffset(72, 72), BackgroundTransparency = 1, ZIndex = 34, Parent = tasksBody })
 local chestIcon = UI.text({ Text = "🧰", Size = UDim2.fromScale(1, 1), Outline = 0, ZIndex = 35, Parent = chestClaim })
 UI.bounce(chestClaim)
@@ -340,59 +336,6 @@ for i, g in Config.PLAYTIME_GIFTS do
 end
 giftBtn.Activated:Connect(function()
 	open(giftsWin)
-end)
-
------------------------------------------------------------------- Билет дня
-local ticketWin, ticketBody = panel("БИЛЕТ ДНЯ", 600, 420)
-UI.ink({ Text = "Сотри 3 карточки — награды твои!", Position = UDim2.fromOffset(0, 18), Size = UDim2.new(1, 0, 0, 30), ZIndex = 33, Parent = ticketBody })
-local ticketResult: any = nil
-local ticketCards: { TextButton } = {}
-for i = 1, 3 do
-	local c = UI.new("TextButton", {
-		Text = "",
-		AutoButtonColor = false,
-		Position = UDim2.new((i - 1) / 3, 6, 0, 58),
-		Size = UDim2.new(1 / 3, -12, 0, 220),
-		BackgroundTransparency = 0,
-		ZIndex = 33,
-		Parent = ticketBody,
-	})
-	UI.grad(c, Color3.fromRGB(255, 220, 110), Color3.fromRGB(235, 165, 45))
-	UI.corner(c, 16)
-	UI.stroke(c, 3)
-	UI.bounce(c)
-	local face = UI.text({ Text = "❄", Position = UDim2.fromOffset(10, 20), Size = UDim2.new(1, -20, 1, -40), ZIndex = 34, Parent = c })
-	ticketCards[i] = c
-	c.Activated:Connect(function()
-		if not ticketResult then
-			local ok, res = act("scratch")
-			if not ok then
-				return
-			end
-			ticketResult = res
-		end
-		local r = ticketResult[i]
-		if r and not c:GetAttribute("Open") then
-			c:SetAttribute("Open", true)
-			face.Text = r.rarity .. "\n" .. r.text
-			local g = c:FindFirstChildOfClass("UIGradient") :: UIGradient
-			g.Color = if r.gem then ColorSequence.new(Color3.fromRGB(190, 230, 255), Color3.fromRGB(110, 180, 250)) else ColorSequence.new(Color3.fromRGB(255, 248, 220), Color3.fromRGB(250, 220, 150))
-			UI.pop(c)
-		end
-	end)
-	Instance.new("UIScale").Parent = c
-end
-UI.ink({
-	Text = "Шансы: обычная 60% · необычная 25% · редкая 10% · эпическая 4% · легенда 1%",
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -4),
-	Size = UDim2.new(1, 0, 0, 24),
-	TextColor3 = Color3.fromRGB(70, 90, 130),
-	ZIndex = 33,
-	Parent = ticketBody,
-})
-ticketBtn.Activated:Connect(function()
-	open(ticketWin)
 end)
 
 ------------------------------------------------------------------ Сани: модели × редкости
@@ -644,7 +587,6 @@ for _, attr in { "Coins", "Level", "OwnedSleds", "Sled", "SledRarity", "OwnedTra
 	end)
 end
 
-local ticketShown = false
 local function refreshRewards()
 	readRewards()
 	if not rewards then
@@ -656,13 +598,6 @@ local function refreshRewards()
 			.. (if g.gems then (if g.coins then "\n" else "") .. "💎 " .. g.gems else "")
 	end
 	drawTasks()
-	ticketBadge.Visible = rewards.ticketReady
-	if rewards.ticketReady and not ticketShown and player:GetAttribute("InRun") ~= true then
-		ticketShown = true
-		task.delay(2, function()
-			open(ticketWin)
-		end)
-	end
 end
 player:GetAttributeChangedSignal("Rewards"):Connect(refreshRewards)
 refreshRewards()

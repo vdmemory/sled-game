@@ -4,7 +4,7 @@
 local Config = {}
 
 ------------------------------------------------------------------ МИР
-Config.LOBBY_POS = Vector3.new(0, 3000, 400) -- лобби
+Config.LOBBY_POS = Vector3.new(-2000, 3000, 400) -- лобби (в стороне от трасс игроков: за мостиком видна своя «витринная» трасса)
 Config.TRACKS_ORIGIN = Vector3.new(0, 3000, 0) -- старт трассы игрока в слоте 0
 Config.SLOT_SPACING = 1000 -- расстояние между трассами разных игроков (по X); трассы петляют
 
@@ -139,14 +139,6 @@ Config.TASK_POOL = {
 Config.TASKS_PER_DAY = 3
 Config.TASK_CHEST_COINS = 300 -- сундук за все задания (× rewardCoins) + гемы
 Config.TASK_CHEST_GEMS = 8
--- Скретч-билет раз в сутки: 3 карточки, шансы как в Roblox-референсе
-Config.TICKET_REWARDS = {
-	{ chance = 60, coins = 200, label = "+%d 💰", rarity = "Обычная" },
-	{ chance = 25, coins = 400, label = "+%d 💰", rarity = "Необычная" },
-	{ chance = 10, gems = 5, label = "+%d 💎", rarity = "Редкая" },
-	{ chance = 4, coins = 1200, label = "+%d 💰", rarity = "Эпическая" },
-	{ chance = 1, coins = 3200, gems = 25, label = "+%d 💰 +25 💎", rarity = "Легенда" },
-}
 -- Подарки за время в игре (минуты с захода), как сетка «Подарки» в референсе
 Config.PLAYTIME_GIFTS = {
 	{ min = 1, coins = 60 },

@@ -1,4 +1,4 @@
--- Удержание: ежедневные задания, скретч-билет, подарки за время в игре, сундук в лобби.
+-- Удержание: ежедневные задания, подарки за время в игре, сундук в лобби.
 -- Все таймеры серверные (os.time), состояние лежит в профиле игрока (DataService).
 -- Клиенту состояние уходит JSON-строкой в атрибут "Rewards" (меню в LobbyMenus).
 
@@ -35,7 +35,6 @@ local function ensure(d)
 	if d.Daily.day ~= day then
 		d.Daily = { day = day, progress = {}, claimed = {}, chest = false }
 	end
-	d.TicketDay = d.TicketDay or 0
 	d.ChestAt = d.ChestAt or 0
 end
 
@@ -65,7 +64,6 @@ function Rewards.sync(player: Player)
 		tasks = list,
 		chestClaimed = d.Daily.chest,
 		resetAt = (d.Daily.day + 1) * 86400,
-		ticketReady = d.TicketDay ~= today(),
 		chestAt = d.ChestAt,
 		sessionStart = sessionStart[player] or os.time(),
 		gifts = gifts,
@@ -158,43 +156,6 @@ function Rewards.claimTaskChest(player: Player): (boolean, any)
 	grant(player, d, Config.TASK_CHEST_COINS, Config.TASK_CHEST_GEMS)
 	Rewards.sync(player)
 	return true, "+" .. Config.rewardCoins(Config.TASK_CHEST_COINS, d.Level) .. " 💰  +" .. Config.TASK_CHEST_GEMS .. " 💎"
-end
-
--- Скретч-билет: сервер сразу разыгрывает 3 награды и начисляет их, клиент только «стирает»
-function Rewards.scratch(player: Player): (boolean, any)
-	local d = Data.get(player)
-	if not d then
-		return false, "Недоступно"
-	end
-	ensure(d)
-	if d.TicketDay == today() then
-		return false, "Билет уже использован сегодня"
-	end
-	d.TicketDay = today()
-	local total = 0
-	for _, r in Config.TICKET_REWARDS do
-		total += r.chance
-	end
-	local out = {}
-	for _ = 1, 3 do
-		local roll = math.random() * total
-		for _, r in Config.TICKET_REWARDS do
-			roll -= r.chance
-			if roll <= 0 then
-				local coins = if r.coins then Config.rewardCoins(r.coins, d.Level) else nil
-				if coins then
-					d.Coins += coins
-				end
-				if r.gems then
-					d.Gems += r.gems
-				end
-				table.insert(out, { text = string.format(r.label, coins or r.gems), rarity = r.rarity, gem = r.coins == nil })
-				break
-			end
-		end
-	end
-	Rewards.sync(player)
-	return true, out
 end
 
 function Rewards.claimGift(player: Player, index: number): (boolean, any)

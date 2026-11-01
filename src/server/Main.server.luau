@@ -12,6 +12,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Track = require(script.Parent.Track)
 local Data = require(script.Parent.DataService)
 local Rewards = require(script.Parent.Rewards)
+local SledModels = require(ReplicatedStorage.Shared.SledModels)
 
 ------------------------------------------------------------------ Remotes
 local remotes = Instance.new("Folder")
@@ -378,37 +379,13 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	local rarity = Config.RARITIES[rarityIdx]
 	local main = rarity.color or skin.tube
 	local accent = if rarityIdx > 1 then Color3.new(1, 1, 1):Lerp(rarity.color :: Color3, 0.35) else skin.rim
-	local mainMat = rarity.material or (if skin.metal then Enum.Material.Foil elseif skin.neon and rarityIdx == 1 then Enum.Material.SmoothPlastic else Enum.Material.SmoothPlastic)
-	local cyl = Enum.PartType.Cylinder
-	local flat = CFrame.Angles(0, 0, math.rad(90)) -- цилиндр «блином»
-	if model.id == "board" then
-		deco("Body", Vector3.new(4.2, 0.6, 8.6), CFrame.new(0, -0.2, 0), main, mainMat)
-		deco("Nose", Vector3.new(0.6, 4.2, 4.2), CFrame.new(0, -0.2, -4.3) * flat, main, mainMat, cyl)
-		deco("Tail", Vector3.new(0.6, 4.2, 4.2), CFrame.new(0, -0.2, 4.3) * flat, main, mainMat, cyl)
-		deco("Stripe", Vector3.new(1, 0.65, 8.6), CFrame.new(0, -0.15, 0), accent, if skin.neon then Enum.Material.Neon else nil)
-	elseif model.id == "classic" then
-		local wood = if rarityIdx > 1 then main else Color3.fromRGB(170, 115, 65)
-		for _, sx in { -1, 1 } do
-			deco("Runner", Vector3.new(0.4, 0.4, 8.4), CFrame.new(sx * 2.1, -0.4, 0.3), metal, Enum.Material.Metal)
-			deco("RunnerTip", Vector3.new(0.4, 0.4, 2.2), CFrame.new(sx * 2.1, 0.3, -4.3) * CFrame.Angles(math.rad(50), 0, 0), metal, Enum.Material.Metal)
-			deco("Rail", Vector3.new(0.35, 0.8, 6.5), CFrame.new(sx * 2.3, 0.6, 0.6), wood, mainMat)
-		end
-		for z = -2.8, 3.6, 1.6 do
-			deco("Slat", Vector3.new(4.8, 0.3, 1.1), CFrame.new(0, 0.15, z), wood, if rarityIdx > 1 then mainMat else Enum.Material.Wood)
-		end
-		deco("Rope", Vector3.new(4, 0.25, 0.25), CFrame.new(0, 0.9, -3.6), accent)
-	elseif model.id == "plane" then
-		deco("Body", Vector3.new(3.4, 1.6, 7.4), CFrame.new(0, 0.1, 0.2), main, mainMat)
-		deco("Nose", Vector3.new(1.6, 3.2, 3.2), CFrame.new(0, 0.1, -3.7) * CFrame.Angles(0, math.rad(90), 0), main, mainMat, cyl)
-		deco("Wing", Vector3.new(10, 0.3, 2.2), CFrame.new(0, 0.5, 0), accent)
-		deco("Tail", Vector3.new(0.3, 2, 1.8), CFrame.new(0, 1.6, 3.6), accent)
-		deco("Hub", Vector3.new(0.6, 0.9, 0.9), CFrame.new(0, 0.1, -4.6) * CFrame.Angles(0, math.rad(90), 0), metal, Enum.Material.Metal, cyl)
-		deco("Blade", Vector3.new(0.25, 4.2, 0.5), CFrame.new(0, 0.1, -4.75), Color3.fromRGB(40, 40, 50))
-		deco("Blade2", Vector3.new(4.2, 0.25, 0.5), CFrame.new(0, 0.1, -4.75), Color3.fromRGB(40, 40, 50))
-	else -- ватрушка
-		deco("Tube", Vector3.new(1.4, 7, 7), CFrame.new(0, -0.1, 0) * flat, main, mainMat, cyl)
-		deco("Rim", Vector3.new(1.2, 7.8, 7.8), CFrame.new(0, 0.5, 0) * flat, accent, if skin.neon or rarityIdx == 5 then Enum.Material.Neon else mainMat, cyl)
-	end
+	-- Детализированная модель (Shared/SledModels): тор-ватрушка, деревянные санки, доска, самолёт
+	SledModels.build(seat, seat.CFrame, model.id, {
+		main = main,
+		accent = accent,
+		material = if rarityIdx > 1 then rarity.material else (if skin.metal then Enum.Material.Foil else nil),
+		glow = skin.neon or rarityIdx == 5,
+	}, seat, rarityIdx > 1)
 	if rarityIdx == 5 then
 		local glow = Instance.new("PointLight")
 		glow.Color = main
@@ -424,20 +401,21 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	end
 	if tier >= 1 then -- боковые ускорители
 		for _, sx in { -1, 1 } do
-			deco("Booster", Vector3.new(3, 1.1, 1.1), CFrame.new(sx * 4.1, 0.4, 1) * CFrame.Angles(0, math.rad(90), 0), metal, Enum.Material.Metal, Enum.PartType.Cylinder)
-			deco("Nozzle", Vector3.new(0.4, 0.8, 0.8), CFrame.new(sx * 4.1, 0.4, 2.6) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 140, 40), Enum.Material.Neon, Enum.PartType.Cylinder)
+			local bx = sx * (if model.id == "tube" then 4.7 else 2.9)
+			deco("Booster", Vector3.new(3, 1.1, 1.1), CFrame.new(bx, 0.3, 1) * CFrame.Angles(0, math.rad(90), 0), metal, Enum.Material.Metal, Enum.PartType.Cylinder)
+			deco("Nozzle", Vector3.new(0.4, 0.8, 0.8), CFrame.new(bx, 0.3, 2.6) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 140, 40), Enum.Material.Neon, Enum.PartType.Cylinder)
 		end
 	end
-	if tier >= 2 then -- аэро-хвост
+	if tier >= 2 and model.id ~= "plane" then -- аэро-хвост
 		local fin = deco("Fin", Vector3.new(0.3, 2, 2.2), CFrame.new(0, 1.6, 3.4), skin.rim)
 		local wedge = Instance.new("SpecialMesh")
 		wedge.MeshType = Enum.MeshType.Wedge
 		wedge.Parent = fin
 	end
-	if tier >= 3 then -- обтекатель спереди
+	if tier >= 3 and model.id ~= "plane" then -- обтекатель спереди
 		deco("Shield", Vector3.new(4, 1.6, 0.25), CFrame.new(0, 1.4, -3.4) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(170, 220, 255), Enum.Material.Glass).Transparency = 0.35
 	end
-	if tier >= 4 then -- золотая отделка
+	if tier >= 4 and model.id == "tube" then -- золотая отделка
 		deco("Trim", Vector3.new(0.35, 8.1, 8.1), CFrame.new(0, 0.95, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(240, 195, 60), Enum.Material.Foil, Enum.PartType.Cylinder)
 	end
 	if tier >= 5 then -- неон
@@ -550,6 +528,46 @@ startRun = function(player: Player)
 end
 StartRun.OnServerEvent:Connect(startRun)
 
+-- Мостик лобби ведёт к старту трассы: впереди видна «витринная» трасса, а на краю мостика —
+-- зона посадки. Шагнул в неё — садишься в свои санки у рогатки (как в Roblox-референсе).
+do
+	local previewOrigin = CFrame.new(Config.LOBBY_POS + Vector3.new(0, 0, -70))
+	Track.new(-1, 1, 0, previewOrigin)
+	local pad = Instance.new("Part")
+	pad.Name = "LaunchPad"
+	pad.Anchored = true
+	pad.CanCollide = false
+	pad.CanQuery = false
+	pad.Transparency = 1
+	pad.Size = Vector3.new(60, 8, 12)
+	pad.CFrame = previewOrigin * CFrame.new(0, 4, 6)
+	pad.Parent = workspace
+	-- светящееся кольцо на снегу, куда шагать
+	local ring = Instance.new("Part")
+	ring.Name = "LaunchRing"
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanQuery = false
+	ring.CanTouch = false
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Size = Vector3.new(0.2, 12, 12)
+	ring.Material = Enum.Material.Neon
+	ring.Color = Color3.fromRGB(90, 220, 255)
+	ring.Transparency = 0.35
+	ring.CFrame = previewOrigin * CFrame.new(0, 0.6, 7) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Parent = workspace
+	local cooldown: { [Player]: number } = {}
+	pad.Touched:Connect(function(hit)
+		local character = hit:FindFirstAncestorOfClass("Model")
+		local player = character and Players:GetPlayerFromCharacter(character)
+		if not player or runs[player] or (cooldown[player] and os.clock() - cooldown[player] < 3) then
+			return
+		end
+		cooldown[player] = os.clock()
+		startRun(player)
+	end)
+end
+
 SetSetting.OnServerEvent:Connect(function(player, key, value)
 	local d = Data.get(player)
 	if not d or typeof(key) ~= "string" or typeof(value) ~= "boolean" or d.Settings[key] == nil then
@@ -617,8 +635,6 @@ RewardAction.OnServerInvoke = function(player, action, arg)
 		ok, res = Rewards.claimTask(player, arg)
 	elseif action == "taskChest" then
 		ok, res = Rewards.claimTaskChest(player)
-	elseif action == "scratch" then
-		ok, res = Rewards.scratch(player)
 	elseif action == "gift" then
 		ok, res = Rewards.claimGift(player, arg)
 	elseif action == "chest" then

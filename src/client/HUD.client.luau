@@ -40,8 +40,8 @@ fitRoot()
 ------------------------------------------------------------------ лобби
 local lobby = UI.new("Frame", { Name = "Lobby", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = root })
 
--- Тап по экрану = старт (как TAP TO PLAY в оригинале). Кнопка-подложка под всем интерфейсом.
-local tapArea = UI.new("TextButton", { Name = "TapArea", Text = "", Size = UDim2.fromScale(1, 1), ZIndex = 0, Parent = lobby })
+-- Старт: дойти по мостику до края (сервер сажает в сани) или нажать «НАЖМИ, ЧТОБЫ ИГРАТЬ».
+-- Тап по всему экрану не используем — иначе на телефоне нельзя ходить по лобби.
 
 -- Валюты сверху по центру
 local currencyRow = UI.new("Frame", {
@@ -80,7 +80,7 @@ local tapText = UI.new("TextButton", {
 	Size = UDim2.fromOffset(520, 44),
 	Parent = lobby,
 })
-local tapLabel = UI.text({ Text = if TOUCH then "НАЖМИ, ЧТОБЫ ИГРАТЬ" else "НАЖМИ, ЧТОБЫ ИГРАТЬ  ▶", Size = UDim2.fromScale(1, 1), Outline = 3, Parent = tapText })
+local tapLabel = UI.text({ Text = "НАЖМИ, ЧТОБЫ ИГРАТЬ  ▶", Size = UDim2.fromScale(1, 1), Outline = 3, Parent = tapText })
 local tapScale = Instance.new("UIScale")
 tapScale.Parent = tapText
 TweenService:Create(tapScale, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.08 }):Play()
@@ -615,7 +615,6 @@ local function start()
 		starting = false
 	end)
 end
-tapArea.Activated:Connect(start)
 tapText.Activated:Connect(start)
 
 ------------------------------------------------------------------ итог заезда («Ты получил»)

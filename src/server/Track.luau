@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Props = require(script.Parent.Props)
+local SledModels = require(ReplicatedStorage.Shared.SledModels)
 
 local part, deco = Props.part, Props.deco
 
@@ -370,17 +371,17 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 end
 
 ------------------------------------------------------------------ класс
-function Track.new(slot: number, level: number, bestH: number?)
+function Track.new(slot: number, level: number, bestH: number?, origin: CFrame?)
 	local self = setmetatable({}, Track)
 	self.level = level
 	self.bestH = bestH or 0
 	self.theme = Config.themeOf(level)
-	self.origin = CFrame.new(Config.TRACKS_ORIGIN + Vector3.new(slot * Config.SLOT_SPACING, 0, 0))
+	self.origin = origin or CFrame.new(Config.TRACKS_ORIGIN + Vector3.new(slot * Config.SLOT_SPACING, 0, 0))
 	self.segments, self.length = buildProfile(self.origin, level)
 	self.built = {} :: { [number]: Model }
 	self.hint = 1
 	self.folder = Instance.new("Folder")
-	self.folder.Name = "Track_" .. slot
+	self.folder.Name = if origin then "TrackPreview" else "Track_" .. slot
 	self.folder.Parent = workspace
 	self:buildStart()
 	self:ensureAround(0)
@@ -900,21 +901,29 @@ local function board(name: string, at: CFrame, title: string, parent: Instance):
 	return body
 end
 
-local function showcaseSled(at: CFrame, skinId: string, caption: string, parent: Instance)
-	local skin = Config.skin(skinId)
-	part("Part", { Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 12, 12), CFrame = at * CFrame.new(0, 1, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(235, 240, 250) }, parent)
-	local ring = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 12.6, 12.6), CFrame = at * CFrame.new(0, 1.9, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = skin.rim }, parent)
-	local tilt = at * CFrame.new(0, 4.5, 0) * CFrame.Angles(math.rad(-20), math.rad(25), 0)
-	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.4, 7, 7), CFrame = tilt * CFrame.Angles(0, 0, math.rad(90)), Color = skin.tube, Material = if skin.neon then Enum.Material.Neon elseif skin.metal then Enum.Material.Foil else Enum.Material.SmoothPlastic }, parent)
-	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.2, 7.8, 7.8), CFrame = tilt * CFrame.new(0, 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = skin.rim, Material = if skin.neon then Enum.Material.Neon else Enum.Material.SmoothPlastic }, parent)
+-- Витрина: подиум с подсветкой и настоящей моделью саней (как подиумы в Roblox-референсе)
+local function showcaseSled(at: CFrame, sledId: string, rarityIdx: number, caption: string, parent: Instance)
+	local rarity = Config.RARITIES[rarityIdx]
+	local col = rarity.color or Color3.fromRGB(240, 70, 120)
+	part("Part", { Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 13, 13), CFrame = at * CFrame.new(0, 1, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(235, 240, 250) }, parent)
+	local ring = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 13.6, 13.6), CFrame = at * CFrame.new(0, 1.9, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = col }, parent)
+	local holder = Instance.new("Model")
+	holder.Name = "Showcase"
+	SledModels.build(holder, at * CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-10), math.rad(30), 0), sledId, {
+		main = col,
+		accent = Color3.new(1, 1, 1):Lerp(col, 0.35),
+		material = rarity.material,
+		glow = rarityIdx == 5,
+	}, nil, true)
+	holder.Parent = parent
 	local glow = Instance.new("PointLight")
-	glow.Color = skin.rim
-	glow.Range = 14
+	glow.Color = col
+	glow.Range = 16
 	glow.Brightness = 1.5
 	glow.Parent = ring
 	local anchor = deco({ Size = Vector3.new(1, 1, 1), CFrame = at * CFrame.new(0, 10, 0), Transparency = 1 }, parent)
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(200, 50)
+	bb.Size = UDim2.fromOffset(220, 50)
 	bb.MaxDistance = 90
 	bb.Parent = anchor
 	local t = Instance.new("TextLabel")
@@ -933,42 +942,53 @@ function Track.buildLobby()
 	local base = CFrame.new(p)
 	local lobby = Instance.new("Model")
 	lobby.Name = "Lobby"
+	-- Площадка лобби заканчивается обрывом: дальше вниз уходит трасса (её видно с мостика)
 	part("Part", {
-		Size = Vector3.new(150, 4, 150),
-		CFrame = base * CFrame.new(0, -2, -20),
+		Size = Vector3.new(150, 4, 90),
+		CFrame = base * CFrame.new(0, -2, 5),
 		Material = Enum.Material.Snow,
 		Color = SNOW,
 	}, lobby)
 	local rng = Random.new(7)
 	for x = -70, 70, 18 do
-		for _, z in { -90, 50 } do
-			Props.pine(rng, base * CFrame.new(x + rng:NextNumber(-4, 4), 0, z), lobby)
-		end
+		Props.pine(rng, base * CFrame.new(x + rng:NextNumber(-4, 4), 0, 48), lobby)
 	end
-	for z = -80, 40, 18 do
+	for z = -36, 40, 18 do
 		for _, x in { -70, 70 } do
 			Props.pine(rng, base * CFrame.new(x, 0, z + rng:NextNumber(-4, 4)), lobby)
 		end
 	end
 	Props.snowman(rng, base * CFrame.new(-16, 0, 14) * CFrame.Angles(0, math.rad(160), 0), lobby)
 
-	-- Деревянный мостик к рогатке
-	for z = -6, -54, -3 do
+	-- Деревянный мостик к старту трассы (как в Roblox-референсе): дойди до края — сядешь в сани
+	for z = -6, -60, -3 do
 		part("Part", { Size = Vector3.new(14, 0.6, 2.6), CFrame = base * CFrame.new(0, 0.3, z), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(150, 105, 65) }, lobby)
 	end
 	for _, sx in { -1, 1 } do
-		deco({ Size = Vector3.new(0.8, 1, 50), CFrame = base * CFrame.new(sx * 7.4, 1.2, -30), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
-		for z = -6, -54, -8 do
+		deco({ Size = Vector3.new(0.8, 1, 56), CFrame = base * CFrame.new(sx * 7.4, 1.2, -33), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
+		for z = -6, -60, -8 do
 			deco({ Size = Vector3.new(0.6, 2, 0.6), CFrame = base * CFrame.new(sx * 7.4, 1, z), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
 		end
-		-- рогатка в конце мостика
-		part("Part", { Size = Vector3.new(2, 12, 2), CFrame = base * CFrame.new(sx * 9, 6, -58) * CFrame.Angles(0, 0, sx * math.rad(-10)), Material = Enum.Material.Wood, Color = Color3.fromRGB(140, 95, 55) }, lobby)
 	end
-	deco({ Size = Vector3.new(16, 0.5, 0.5), CFrame = base * CFrame.new(0, 9, -57), Color = Color3.fromRGB(200, 160, 110) }, lobby)
+	-- Светящаяся стрелка-указатель у края мостика
+	local sign = deco({ Size = Vector3.new(1, 1, 1), CFrame = base * CFrame.new(0, 6, -62), Transparency = 1 }, lobby)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(240, 60)
+	bb.MaxDistance = 120
+	bb.Parent = sign
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.Font = Enum.Font.FredokaOne
+	t.TextScaled = true
+	t.TextColor3 = Color3.fromRGB(255, 225, 80)
+	t.TextStrokeTransparency = 0.2
+	t.Text = "▼ САДИСЬ В САНИ ▼"
+	t.Parent = bb
 
 	-- Подиумы с витринными санками
-	showcaseSled(base * CFrame.new(-22, 0, -24), "gold", "Золотые · 3000 💰", lobby)
-	showcaseSled(base * CFrame.new(22, 0, -24), "galaxy", "Галактика · 6000 💰", lobby)
+	showcaseSled(base * CFrame.new(-24, 0, -24), "board", 2, "Доска · Gold", lobby)
+	showcaseSled(base * CFrame.new(24, 0, -24), "plane", 5, "Сани-самолёт · Galaxy", lobby)
 
 	-- Доска лидеров и табло обновления (лицом к точке появления)
 	local lbAt = CFrame.lookAt((base * CFrame.new(34, 0, -10)).Position, p)
