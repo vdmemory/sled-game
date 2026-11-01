@@ -304,7 +304,7 @@ local function endRun(player: Player, reason: string)
 			reason = reason,
 			percent = if finished then 100 else pct,
 			coins = earned,
-			bonus = run.bonusCoins * mult,
+			bonus = math.floor(run.bonusCoins * mult),
 			distance = math.floor(dist),
 			length = L,
 			level = level,

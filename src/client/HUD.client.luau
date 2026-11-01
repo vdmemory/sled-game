@@ -539,6 +539,7 @@ controller:WaitForChild("TrickPopup").Event:Connect(function(text)
 end)
 
 ------------------------------------------------------------------ кадр
+local result: Frame -- карточка итога (создаётся ниже)
 RunService.RenderStepped:Connect(function()
 	-- лобби видно, только когда игрок не в санках (после финиша есть пауза до респауна)
 	local seated = false
@@ -551,11 +552,15 @@ RunService.RenderStepped:Connect(function()
 			end
 		end
 	end
-	lobby.Visible = player:GetAttribute("Loaded") == true and player:GetAttribute("InRun") ~= true and not seated
+	-- и пока открыт итог заезда («Ты получил») — как в оригинале, сначала CONTINUE
+	lobby.Visible = player:GetAttribute("Loaded") == true and player:GetAttribute("InRun") ~= true and not seated and not result.Visible
+	currencyRow.Visible = lobby.Visible
 
 	local awaiting = state.AwaitingLaunch.Value
 	local launched = player:GetAttribute("Launched") == true
 	gauge.Visible = awaiting
+	distLabel.Visible = not awaiting
+	bestLabel.Visible = not awaiting
 	backBtn.Visible = awaiting
 	controlsHint.Visible = not awaiting and launched
 	local pull = state.Meter.Value
@@ -614,13 +619,13 @@ tapArea.Activated:Connect(start)
 tapText.Activated:Connect(start)
 
 ------------------------------------------------------------------ итог заезда («Ты получил»)
-local result = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(380, 300), BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
+result = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(380, 300), BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
 local resultScale = Instance.new("UIScale")
 resultScale.Parent = result
 local resultTitle = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.fromOffset(460, 52), Outline = 3, ZIndex = 22, Parent = result })
 local bestBanner = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -58), Size = UDim2.fromOffset(420, 40), TextColor3 = Color3.fromRGB(255, 215, 60), Rotation = -3, ZIndex = 22, Parent = result })
 UI.outline(bestBanner, 3)
-local sheet = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 220), BackgroundColor3 = Color3.fromRGB(110, 122, 140), BackgroundTransparency = 0.25, ZIndex = 20, Parent = result })
+local sheet = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 220), BackgroundColor3 = Color3.fromRGB(95, 106, 126), BackgroundTransparency = 0.12, ZIndex = 20, Parent = result })
 UI.corner(sheet, 20)
 UI.text({ Text = "Ты получил:", Position = UDim2.fromOffset(20, 12), Size = UDim2.new(1, -40, 0, 32), ZIndex = 21, Parent = sheet })
 local rCoins = UI.text({ Text = "", Position = UDim2.fromOffset(20, 52), Size = UDim2.new(1, -40, 0, 40), ZIndex = 21, Parent = sheet })
@@ -653,7 +658,7 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 		else "ЗАЕЗД ОКОНЧЕН"
 	bestBanner.Text = if finished then "🎉 ФИНИШ!" elseif r.newBest then "🏆 НОВЫЙ РЕКОРД!" else ""
 	rCoins.Text = UI.money(r.coins) .. " 💰" .. (if (r.mult or 1) > 1 then "  (x" .. r.mult .. ")" else "")
-	rBonus.Text = "Бонус за полёт и трюки: +" .. (r.bonus or 0) .. " 💰"
+	rBonus.Text = "Бонус за полёт и трюки: +" .. math.floor(r.bonus or 0) .. " 💰"
 	rGems.Text = "+" .. (r.gems or 0) .. " 💎"
 	rDist.Text = (r.distance or 0) .. " м  ·  " .. r.percent .. "% уровня"
 	result.Visible = true
