@@ -16,6 +16,7 @@ local DEFAULT = {
 	Gems = 0,
 	Skin = "classic", -- надетый скин
 	OwnedSkins = { classic = true },
+	Settings = { Sfx = true, Snow = true, Shadows = true },
 }
 
 local function deepCopy(t: any): any

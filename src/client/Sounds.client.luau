@@ -50,6 +50,9 @@ local function play(name: string)
 	if name == "coin" then
 		s.PlaybackSpeed = spec[3] + math.random() * 0.2
 	end
+	if player:GetAttribute("SetSfx") == false then
+		return
+	end
 	SoundService:PlayLocalSound(s)
 end
 
@@ -69,9 +72,10 @@ jet:Play()
 RunService.RenderStepped:Connect(function(dt)
 	local speed = state.Speed.Value
 	local riding = player:GetAttribute("Launched") == true
-	local targetWind = if riding then math.clamp(speed / 110, 0, 1) * 0.6 else 0
+	local muted = player:GetAttribute("SetSfx") == false
+	local targetWind = if muted then 0 elseif riding then math.clamp(speed / 110, 0, 1) * 0.6 else 0
 	wind.Volume += (targetWind - wind.Volume) * math.min(1, dt * 4)
 	wind.PlaybackSpeed = 0.8 + math.clamp(speed / 140, 0, 1) * 0.6
-	local targetJet = if state.RocketOn.Value then 0.5 else 0
+	local targetJet = if state.RocketOn.Value and not muted then 0.5 else 0
 	jet.Volume += (targetJet - jet.Volume) * math.min(1, dt * 10)
 end)

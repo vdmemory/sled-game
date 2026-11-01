@@ -269,7 +269,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		local roadAt = if nextRoad <= roads then Config.ROAD_AT[nextRoad] else nil
 		if forceNext ~= "landing" and roadAt and h >= L * roadAt then
 			-- в городе одна из дорог — железнодорожный переезд
-			local theme = ((level - 1) % #Config.THEMES) + 1
+			local theme = Config.themeOf(level)
 			if theme == 2 and not railDone and nextRoad == 2 then
 				add("rail", 3, 60)
 				railDone = true
@@ -311,7 +311,7 @@ function Track.new(slot: number, level: number, bestH: number?)
 	local self = setmetatable({}, Track)
 	self.level = level
 	self.bestH = bestH or 0
-	self.theme = ((level - 1) % #Config.THEMES) + 1
+	self.theme = Config.themeOf(level)
 	self.origin = CFrame.new(Config.TRACKS_ORIGIN + Vector3.new(slot * Config.SLOT_SPACING, 0, 0))
 	self.segments, self.length = buildProfile(self.origin, level)
 	self.built = {} :: { [number]: Model }
@@ -776,23 +776,131 @@ function Track:destroy()
 end
 
 ------------------------------------------------------------------ лобби
+-- Лобби как в Roblox-референсе: деревянный мостик к рогатке, подиумы с витринными санками,
+-- доска лидеров и табло «Следующее обновление».
+local function board(name: string, at: CFrame, title: string, parent: Instance): TextLabel
+	local m = Instance.new("Model")
+	m.Name = name
+	for _, sx in { -1, 1 } do
+		part("Part", { Size = Vector3.new(1, 16, 1), CFrame = at * CFrame.new(sx * 9, 8, 0.6), Material = Enum.Material.Wood, Color = Color3.fromRGB(120, 80, 45) }, m)
+	end
+	local panel = part("Part", { Size = Vector3.new(18, 12, 0.6), CFrame = at * CFrame.new(0, 10, 0), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, m)
+	deco({ Size = Vector3.new(18.6, 0.8, 1.4), CFrame = at * CFrame.new(0, 16.3, 0), Material = Enum.Material.Snow, Color = SNOW }, m)
+	local sg = Instance.new("SurfaceGui")
+	sg.Face = Enum.NormalId.Front
+	sg.CanvasSize = Vector2.new(600, 400)
+	sg.LightInfluence = 0.3
+	sg.Parent = panel
+	local head = Instance.new("TextLabel")
+	head.BackgroundTransparency = 1
+	head.Size = UDim2.new(1, 0, 0, 80)
+	head.Font = Enum.Font.FredokaOne
+	head.TextScaled = true
+	head.TextColor3 = Color3.fromRGB(255, 220, 90)
+	head.Text = title
+	head.Parent = sg
+	local body = Instance.new("TextLabel")
+	body.Name = "List"
+	body.BackgroundTransparency = 1
+	body.Position = UDim2.new(0, 30, 0, 90)
+	body.Size = UDim2.new(1, -60, 1, -110)
+	body.Font = Enum.Font.FredokaOne
+	body.TextScaled = true
+	body.TextColor3 = Color3.new(1, 1, 1)
+	body.TextXAlignment = Enum.TextXAlignment.Left
+	body.TextYAlignment = Enum.TextYAlignment.Top
+	body.Text = "…"
+	body.Parent = sg
+	m.Parent = parent
+	return body
+end
+
+local function showcaseSled(at: CFrame, skinId: string, caption: string, parent: Instance)
+	local skin = Config.skin(skinId)
+	part("Part", { Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 12, 12), CFrame = at * CFrame.new(0, 1, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(235, 240, 250) }, parent)
+	local ring = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 12.6, 12.6), CFrame = at * CFrame.new(0, 1.9, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = skin.rim }, parent)
+	local tilt = at * CFrame.new(0, 4.5, 0) * CFrame.Angles(math.rad(-20), math.rad(25), 0)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.4, 7, 7), CFrame = tilt * CFrame.Angles(0, 0, math.rad(90)), Color = skin.tube, Material = if skin.neon then Enum.Material.Neon elseif skin.metal then Enum.Material.Foil else Enum.Material.SmoothPlastic }, parent)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.2, 7.8, 7.8), CFrame = tilt * CFrame.new(0, 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = skin.rim, Material = if skin.neon then Enum.Material.Neon else Enum.Material.SmoothPlastic }, parent)
+	local glow = Instance.new("PointLight")
+	glow.Color = skin.rim
+	glow.Range = 14
+	glow.Brightness = 1.5
+	glow.Parent = ring
+	local anchor = deco({ Size = Vector3.new(1, 1, 1), CFrame = at * CFrame.new(0, 10, 0), Transparency = 1 }, parent)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(200, 50)
+	bb.MaxDistance = 90
+	bb.Parent = anchor
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.Font = Enum.Font.FredokaOne
+	t.TextScaled = true
+	t.TextColor3 = Color3.new(1, 1, 1)
+	t.TextStrokeTransparency = 0.3
+	t.Text = caption
+	t.Parent = bb
+end
+
 function Track.buildLobby()
 	local p = Config.LOBBY_POS
+	local base = CFrame.new(p)
 	local lobby = Instance.new("Model")
 	lobby.Name = "Lobby"
 	part("Part", {
-		Size = Vector3.new(90, 4, 90),
-		CFrame = CFrame.new(p + Vector3.new(0, -2, 0)),
+		Size = Vector3.new(150, 4, 150),
+		CFrame = base * CFrame.new(0, -2, -20),
 		Material = Enum.Material.Snow,
 		Color = SNOW,
 	}, lobby)
 	local rng = Random.new(7)
-	for x = -40, 40, 20 do
-		for _, z in { -40, 40 } do
-			Props.pine(rng, CFrame.new(p + Vector3.new(x, 0, z)), lobby)
+	for x = -70, 70, 18 do
+		for _, z in { -90, 50 } do
+			Props.pine(rng, base * CFrame.new(x + rng:NextNumber(-4, 4), 0, z), lobby)
 		end
 	end
-	Props.snowman(rng, CFrame.new(p + Vector3.new(18, 0, -12)) * CFrame.Angles(0, math.rad(200), 0), lobby)
+	for z = -80, 40, 18 do
+		for _, x in { -70, 70 } do
+			Props.pine(rng, base * CFrame.new(x, 0, z + rng:NextNumber(-4, 4)), lobby)
+		end
+	end
+	Props.snowman(rng, base * CFrame.new(-16, 0, 14) * CFrame.Angles(0, math.rad(160), 0), lobby)
+
+	-- Деревянный мостик к рогатке
+	for z = -6, -54, -3 do
+		part("Part", { Size = Vector3.new(14, 0.6, 2.6), CFrame = base * CFrame.new(0, 0.3, z), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(150, 105, 65) }, lobby)
+	end
+	for _, sx in { -1, 1 } do
+		deco({ Size = Vector3.new(0.8, 1, 50), CFrame = base * CFrame.new(sx * 7.4, 1.2, -30), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
+		for z = -6, -54, -8 do
+			deco({ Size = Vector3.new(0.6, 2, 0.6), CFrame = base * CFrame.new(sx * 7.4, 1, z), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
+		end
+		-- рогатка в конце мостика
+		part("Part", { Size = Vector3.new(2, 12, 2), CFrame = base * CFrame.new(sx * 9, 6, -58) * CFrame.Angles(0, 0, sx * math.rad(-10)), Material = Enum.Material.Wood, Color = Color3.fromRGB(140, 95, 55) }, lobby)
+	end
+	deco({ Size = Vector3.new(16, 0.5, 0.5), CFrame = base * CFrame.new(0, 9, -57), Color = Color3.fromRGB(200, 160, 110) }, lobby)
+
+	-- Подиумы с витринными санками
+	showcaseSled(base * CFrame.new(-22, 0, -24), "gold", "Золотые · 3000 💰", lobby)
+	showcaseSled(base * CFrame.new(22, 0, -24), "galaxy", "Галактика · 6000 💰", lobby)
+
+	-- Доска лидеров и табло обновления (лицом к точке появления)
+	local lbAt = CFrame.lookAt((base * CFrame.new(34, 0, -10)).Position, p)
+	board("Leaderboard", lbAt, "🏆 Лучшие игроки", lobby)
+	local upAt = CFrame.lookAt((base * CFrame.new(-34, 0, -10)).Position, p)
+	local upText = board("NextUpdate", upAt, "⏳ Следующее обновление", lobby)
+	task.spawn(function()
+		while lobby.Parent do
+			local left = math.max(0, Config.NEXT_UPDATE - os.time())
+			upText.TextXAlignment = Enum.TextXAlignment.Center
+			upText.Text = if left > 0
+				then string.format("%dд %dч %dм\n\nНовый мир и\nновые санки!", left // 86400, (left % 86400) // 3600, (left % 3600) // 60)
+				else "Уже скоро!"
+			task.wait(30)
+		end
+	end)
+
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Anchored = true
 	spawn.Neutral = true

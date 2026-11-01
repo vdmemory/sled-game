@@ -87,6 +87,28 @@ Config.THEMES = {
 	},
 }
 
+-- Мир = LEVELS_PER_WORLD уровней одной темы (Снежный лес → Ледяной город → Каньон → по кругу)
+Config.LEVELS_PER_WORLD = 5
+Config.WORLD_ICONS = { "🌲", "🏙", "🌵" }
+Config.WORLD_COLORS = { Color3.fromRGB(70, 150, 220), Color3.fromRGB(120, 110, 220), Color3.fromRGB(225, 135, 60) }
+function Config.worldOf(level: number): number
+	return (level - 1) // Config.LEVELS_PER_WORLD + 1
+end
+function Config.themeOfWorld(world: number): number
+	return ((world - 1) % #Config.THEMES) + 1
+end
+function Config.themeOf(level: number): number
+	return Config.themeOfWorld(Config.worldOf(level))
+end
+function Config.worldName(world: number): string
+	local base = Config.THEMES[Config.themeOfWorld(world)].name
+	local lap = (world - 1) // #Config.THEMES
+	return if lap > 0 then base .. " " .. string.rep("I", lap + 1) else base
+end
+
+-- Табло «Следующее обновление» в лобби (UTC)
+Config.NEXT_UPDATE = os.time({ year = 2026, month = 11, day = 15, hour = 12 })
+
 ------------------------------------------------------------------ ФИЗИКА САНОК
 Config.GRAVITY_ALONG = 60 -- «игровая» гравитация вдоль склона
 Config.DRAG = 0.0012 -- сопротивление воздуха (× v²)

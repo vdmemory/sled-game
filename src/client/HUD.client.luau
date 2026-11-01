@@ -120,6 +120,13 @@ local startBtn = button("▶ Поехали!", Color3.fromRGB(40, 175, 90), {
 	Size = UDim2.new(0, 280, 0, 70),
 })
 
+-- Кнопка-стрелка: свернуть/развернуть карточки апгрейдов (как ▾ у кнопки ИГРАТЬ в референсе)
+local collapseBtn = button("▾", Color3.fromRGB(70, 90, 130), {
+	Parent = lobby,
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0.5, 150, 1, -32),
+	Size = UDim2.new(0, 54, 0, 54),
+})
 local upgradesRow = frame({
 	Parent = lobby,
 	BackgroundTransparency = 1,
@@ -137,6 +144,10 @@ rowLayout.Parent = upgradesRow
 type Card = { root: TextButton, badge: TextLabel, pips: { Frame }, price: TextLabel, priceBox: Frame, effect: TextLabel }
 local upgradeButtons: { [string]: TextButton } = {}
 local cards: { [string]: Card } = {}
+collapseBtn.Activated:Connect(function()
+	upgradesRow.Visible = not upgradesRow.Visible
+	collapseBtn.Text = if upgradesRow.Visible then "▾" else "▴"
+end)
 for _, name in Config.UPGRADE_ORDER do
 	local u = Config.UPGRADES[name]
 	local root = Instance.new("TextButton")
@@ -265,6 +276,7 @@ for _, skin in Config.SKINS do
 	end)
 end
 
+shopBtn.Visible = false -- магазин открывается плиткой «Сани» в колонке слева (LobbyMenus)
 shopBtn.Activated:Connect(function()
 	shop.Visible = not shop.Visible
 end)
@@ -567,10 +579,10 @@ local function refresh()
 	runUi.Visible = inRun
 	currencyBar.Visible = not inRun
 
-	levelTitle.Text = "Уровень " .. level .. " · " .. (player:GetAttribute("ThemeName") or "")
+	levelTitle.Text = (player:GetAttribute("ThemeName") or "") .. " · уровень " .. ((level - 1) % Config.LEVELS_PER_WORLD + 1) .. "/" .. Config.LEVELS_PER_WORLD
 	local best = player:GetAttribute("LevelBest") or 0
 	levelSub.Text = if best > 0 then "Лучший результат: " .. best .. "% — качайся и доедь до финиша!" else "Доедь до финиша 🏁"
-	startBtn.Text = "▶ Поехали!"
+	startBtn.Text = "ИГРАТЬ ▶"
 
 	for _, name in Config.UPGRADE_ORDER do
 		local c = cards[name]

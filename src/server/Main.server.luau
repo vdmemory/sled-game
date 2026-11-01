@@ -30,6 +30,7 @@ local RunEnded: RemoteEvent = remote("RemoteEvent", "RunEnded")
 local Restart: RemoteEvent = remote("RemoteEvent", "Restart") -- ⟳ в заезде: закончить и сразу новый
 local Back: RemoteEvent = remote("RemoteEvent", "Back") -- BACK у рогатки: вернуться в лобби
 local Smash: RemoteEvent = remote("RemoteEvent", "Smash") -- разбил препятствие ракетой/на ускорителе
+local SetSetting: RemoteEvent = remote("RemoteEvent", "SetSetting") -- настройки: звуки, снег, тени
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 local SkinAction: RemoteFunction = remote("RemoteFunction", "SkinAction")
 remotes.Parent = ReplicatedStorage
@@ -104,7 +105,10 @@ local function syncPlayer(player: Player)
 		table.insert(owned, id)
 	end
 	player:SetAttribute("OwnedSkins", table.concat(owned, ","))
-	player:SetAttribute("ThemeName", Config.THEMES[((d.Level - 1) % #Config.THEMES) + 1].name)
+	player:SetAttribute("ThemeName", Config.worldName(Config.worldOf(d.Level)))
+	for key, v in d.Settings do
+		player:SetAttribute("Set" .. key, v)
+	end
 	local ls = player:FindFirstChild("leaderstats")
 	if ls then
 		(ls :: any)["Уровень"].Value = d.Level;
@@ -118,6 +122,34 @@ local function onCharacter(character: Model)
 	end
 	character.DescendantAdded:Connect(setRider)
 end
+
+------------------------------------------------------------------ Доска лидеров (лучший уровень)
+local DataStoreService = game:GetService("DataStoreService")
+local okBoard, levelBoard = pcall(DataStoreService.GetOrderedDataStore, DataStoreService, "BestLevel_v1")
+local function postLevel(player: Player, level: number)
+	if okBoard then
+		task.spawn(pcall, levelBoard.SetAsync, levelBoard, "u_" .. player.UserId, level)
+	end
+end
+local boardGui: TextLabel? = nil
+task.spawn(function()
+	local lobby = workspace:WaitForChild("Lobby", 30)
+	local board = lobby and lobby:FindFirstChild("Leaderboard")
+	boardGui = board and board:FindFirstChild("List", true) :: TextLabel?
+	while okBoard and boardGui do
+		local ok, pages = pcall(levelBoard.GetSortedAsync, levelBoard, false, 10)
+		if ok then
+			local lines = {}
+			for rank, entry in pages:GetCurrentPage() do
+				local id = tonumber(string.sub(entry.key, 3)) or 0
+				local okName, name = pcall(Players.GetNameFromUserIdAsync, Players, id)
+				table.insert(lines, string.format("%d. %s — ур. %d", rank, if okName then name else "?", entry.value))
+			end
+			boardGui.Text = if #lines > 0 then table.concat(lines, "\n") else "Пока пусто — будь первым!"
+		end
+		task.wait(60)
+	end
+end)
 
 local function onPlayerAdded(player: Player)
 	local ls = Instance.new("Folder")
@@ -141,6 +173,10 @@ local function onPlayerAdded(player: Player)
 	end
 	syncPlayer(player)
 	player:SetAttribute("Loaded", true)
+	local d0 = Data.get(player)
+	if d0 then
+		postLevel(player, d0.Level)
+	end
 end
 
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
@@ -208,6 +244,7 @@ local function endRun(player: Player, reason: string)
 			d.Level += 1
 			d.LevelBest = 0
 			gems += Config.GEMS_FINISH
+			postLevel(player, d.Level)
 		elseif pct > d.LevelBest and reason ~= "restart" and reason ~= "back" then
 			d.LevelBest = pct
 			newBest = true
@@ -444,6 +481,15 @@ startRun = function(player: Player)
 	end)
 end
 StartRun.OnServerEvent:Connect(startRun)
+
+SetSetting.OnServerEvent:Connect(function(player, key, value)
+	local d = Data.get(player)
+	if not d or typeof(key) ~= "string" or typeof(value) ~= "boolean" or d.Settings[key] == nil then
+		return
+	end
+	d.Settings[key] = value
+	player:SetAttribute("Set" .. key, value)
+end)
 
 Restart.OnServerEvent:Connect(function(player)
 	local run = runs[player]

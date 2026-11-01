@@ -167,6 +167,12 @@ snow.SpreadAngle = Vector2.new(15, 15)
 snow.Acceleration = Vector3.new(2, 0, 0)
 snow.Rate = 120
 snow.Parent = fxAnchor
+-- Настройка «Снегопад» (меню ⚙)
+local function applySnow()
+	snow.Enabled = Players.LocalPlayer:GetAttribute("SetSnow") ~= false
+end
+Players.LocalPlayer:GetAttributeChangedSignal("SetSnow"):Connect(applySnow)
+applySnow()
 
 local linesAtt = Instance.new("Attachment")
 linesAtt.Parent = fxAnchor
