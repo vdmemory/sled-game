@@ -545,6 +545,7 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	airborne, flipping, flipHeld, rocketHeld = false, false, false, false
 	flipAngle = 0
 	magnetUntil = 0
+	magnetLeft.Value = 0
 	fuel = Config.rocketFuel(player:GetAttribute("RocketLevel") or 0)
 	fuelMaxValue.Value = fuel
 	fuelValue.Value = fuel
