@@ -267,7 +267,8 @@ Config.RARITIES = {
 	{ name = "Gold", bonus = 2, color = Color3.fromRGB(245, 195, 60), material = Enum.Material.SmoothPlastic, shine = 0.25 },
 	{ name = "Diamond", bonus = 4, color = Color3.fromRGB(160, 225, 255), material = Enum.Material.Glass, shine = 0.2 },
 	{ name = "Ruby", bonus = 7, color = Color3.fromRGB(220, 40, 70), material = Enum.Material.SmoothPlastic, shine = 0.15 },
-	{ name = "Galaxy", bonus = 10, color = Color3.fromRGB(120, 60, 230), material = Enum.Material.Neon },
+	-- Galaxy: тёмно-фиолетовый глянец, светятся только акценты (иначе неон «съедает» детали модели)
+	{ name = "Galaxy", bonus = 10, color = Color3.fromRGB(95, 45, 200), material = Enum.Material.SmoothPlastic, shine = 0.2 },
 }
 Config.SLEDS = {
 	{ id = "tube", name = "Ватрушка", icon = "🍩", world = 1, bonus = 0, prices = { 0, 300, 900, 2400, 6000 } },

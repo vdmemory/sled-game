@@ -407,7 +407,7 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 			deco("Nozzle", Vector3.new(0.4, 0.8, 0.8), CFrame.new(bx, 0.3, 2.6) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 140, 40), Enum.Material.Neon, Enum.PartType.Cylinder)
 		end
 	end
-	if tier >= 2 and model.id ~= "plane" then -- аэро-хвост
+	if tier >= 2 and model.id == "tube" then -- аэро-хвост (у доски/санок/самолёта мешает посадке)
 		local fin = deco("Fin", Vector3.new(0.3, 1.8, 2), CFrame.new(0, 1.3, if model.id == "tube" then 4.3 else 3.8), skin.rim)
 		local wedge = Instance.new("SpecialMesh")
 		wedge.MeshType = Enum.MeshType.Wedge
