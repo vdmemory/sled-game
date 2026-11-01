@@ -123,6 +123,7 @@ local fuelMaxValue = value("FuelMax")
 local rocketOn = value("RocketOn", "BoolValue")
 local meterValue = value("Meter") -- шкала силы рогатки 0..1
 local awaitingLaunch = value("AwaitingLaunch", "BoolValue")
+local magnetLeft = value("MagnetLeft") -- сек до конца магнита (HUD показывает иконку)
 state.Parent = script
 
 -- Звуковые события для Sounds-скрипта: sfx:Fire("launch" | "land" | "hit" | "boost" | "coin" | "flip")
@@ -391,8 +392,79 @@ local function smash(model: Model)
 	Remotes.Smash:FireServer()
 end
 
+local magnetUntil = 0
+local magnetScan = 0
+local function hideLocal(p: BasePart)
+	p.LocalTransparencyModifier = 1
+	for _, d in p:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.LocalTransparencyModifier = 1
+		elseif d:IsA("ParticleEmitter") or d:IsA("Light") then
+			d.Enabled = false
+		end
+	end
+end
+
+-- Ледяной кристалл: разлетается осколками, сервер даёт монеты и гем
+local crystalDone: { [Instance]: boolean } = {}
+local function breakCrystal(hit: BasePart)
+	local model = hit.Parent
+	if not model or crystalDone[model] then
+		return
+	end
+	crystalDone[model] = true
+	for _, p in model:GetChildren() do
+		if p:IsA("BasePart") then
+			hideLocal(p)
+			for _ = 1, 3 do
+				local shard = Instance.new("Part")
+				shard.Size = Vector3.new(0.8, 1.6, 0.8)
+				shard.Color = p.Color
+				shard.Material = Enum.Material.Glass
+				shard.Transparency = 0.2
+				shard.CFrame = p.CFrame
+				shard.CanQuery = false
+				shard.CanTouch = false
+				shard.CollisionGroup = "Riders"
+				shard.Parent = workspace
+				shard.AssemblyLinearVelocity = fwd * speed * 0.6 + Vector3.new(math.random(-20, 20), math.random(15, 35), math.random(-20, 20))
+				game:GetService("Debris"):AddItem(shard, 2)
+			end
+		end
+	end
+	trickPopup:Fire("💎 Кристалл!  +" .. Config.CRYSTAL_COINS .. " 💰 +1 💎")
+	sfx:Fire("smash")
+	Remotes.Crystal:FireServer(hit)
+end
+
 local function onTouched(hit: BasePart)
 	local now = os.clock()
+	if CollectionService:HasTag(hit, "Crystal") then
+		if started and not crashed then
+			breakCrystal(hit)
+		end
+		return
+	elseif CollectionService:HasTag(hit, "Gem") then
+		if hit.LocalTransparencyModifier < 1 then
+			hideLocal(hit)
+			trickPopup:Fire("💎 +1 гем!")
+			sfx:Fire("gem")
+		end
+		return
+	elseif CollectionService:HasTag(hit, "Magnet") then
+		if hit.LocalTransparencyModifier < 1 then
+			hideLocal(hit)
+			for _, d in (hit.Parent :: Instance):GetChildren() do
+				if d:IsA("BasePart") and (d.Position - hit.Position).Magnitude < 4 then
+					d.LocalTransparencyModifier = 1
+				end
+			end
+			magnetUntil = now + Config.MAGNET_TIME
+			trickPopup:Fire("🧲 Магнит!")
+			sfx:Fire("boost")
+		end
+		return
+	end
 	if CollectionService:HasTag(hit, "Obstacle") then
 		if crashed or not started or now - lastObstacle < 0.5 then
 			return
@@ -472,6 +544,7 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	crashed = false
 	airborne, flipping, flipHeld, rocketHeld = false, false, false, false
 	flipAngle = 0
+	magnetUntil = 0
 	fuel = Config.rocketFuel(player:GetAttribute("RocketLevel") or 0)
 	fuelMaxValue.Value = fuel
 	fuelValue.Value = fuel
@@ -603,6 +676,45 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 	rocketOn.Value = useRocket
 	fuelValue.Value = fuel
+
+	-- Магнит: притягиваем монеты рядом (анимация у себя, засчитывает сервер)
+	local mLeft = math.max(0, magnetUntil - os.clock())
+	magnetLeft.Value = mLeft
+	if mLeft > 0 and not crashed then
+		magnetScan += dt
+		if magnetScan > 0.1 then
+			magnetScan = 0
+			for _, coin in CollectionService:GetTagged("Coin") do
+				if coin:IsA("BasePart") and coin.LocalTransparencyModifier < 1 and not coin:GetAttribute("Taken")
+					and (coin.Position - s.Position).Magnitude < Config.MAGNET_RADIUS then
+					hideLocal(coin)
+					Remotes.CoinGrab:FireServer(coin)
+					sfx:Fire("coin")
+					-- летящая к санкам копия монеты
+					local ghost = Instance.new("Part")
+					ghost.Shape = Enum.PartType.Cylinder
+					ghost.Size = Vector3.new(0.45, 3, 3)
+					ghost.Color = Color3.fromRGB(255, 196, 45)
+					ghost.Anchored = true
+					ghost.CanCollide = false
+					ghost.CanQuery = false
+					ghost.CanTouch = false
+					ghost.CFrame = coin.CFrame
+					ghost.Parent = workspace
+					local target = s
+					task.spawn(function()
+						local t0 = os.clock()
+						while ghost.Parent and os.clock() - t0 < 0.35 do
+							local k = (os.clock() - t0) / 0.35
+							ghost.CFrame = ghost.CFrame:Lerp(target.CFrame + Vector3.new(0, 2, 0), k)
+							task.wait()
+						end
+						ghost:Destroy()
+					end)
+				end
+			end
+		end
+	end
 
 	-- Подстраховка к Touched: машины и кабинки двигаются кадрами (CFrame), касание может не прийти
 	if started and not crashed then

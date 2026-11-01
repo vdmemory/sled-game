@@ -93,6 +93,69 @@ local function makeCoin(at: CFrame, parent: Instance)
 	return coin
 end
 
+------------------------------------------------------------------ бонусы: гем, магнит, кристалл
+local GEM_BLUE = Color3.fromRGB(80, 190, 255)
+local function makeGem(at: CFrame, parent: Instance)
+	local gem = part("Part", {
+		Name = "Gem",
+		Size = Vector3.new(2.2, 2.2, 2.2),
+		CFrame = at * CFrame.Angles(math.rad(45), 0, math.rad(45)),
+		Color = GEM_BLUE,
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+		CanQuery = false,
+		CastShadow = false,
+	})
+	local light = Instance.new("PointLight")
+	light.Color = GEM_BLUE
+	light.Range = 10
+	light.Parent = gem
+	CollectionService:AddTag(gem, "Gem")
+	gem.Parent = parent
+end
+
+local function makeMagnet(at: CFrame, parent: Instance)
+	local hit = part("Part", {
+		Name = "Magnet",
+		Size = Vector3.new(4, 4, 4),
+		CFrame = at,
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+	}, parent)
+	-- подкова: две половинки (синяя и розовая) + серебряные кончики
+	for _, sx in { -1, 1 } do
+		deco({ Size = Vector3.new(0.9, 2.6, 0.9), CFrame = at * CFrame.new(sx * 1, 0.2, 0), Color = if sx < 0 then Color3.fromRGB(60, 130, 255) else Color3.fromRGB(255, 90, 170) }, parent)
+		deco({ Size = Vector3.new(0.92, 0.6, 0.92), CFrame = at * CFrame.new(sx * 1, -1.3, 0), Color = Color3.fromRGB(220, 225, 235), Material = Enum.Material.Metal }, parent)
+	end
+	deco({ Size = Vector3.new(2.9, 0.9, 0.9), CFrame = at * CFrame.new(0, 1.5, 0), Color = Color3.fromRGB(160, 110, 220) }, parent)
+	CollectionService:AddTag(hit, "Magnet")
+end
+
+local function makeCrystal(at: CFrame, rng: Random, parent: Instance)
+	local m = Instance.new("Model")
+	m.Name = "Crystal"
+	for k = 1, 5 do
+		local h = rng:NextNumber(5, 10)
+		local p = part("Part", {
+			Size = Vector3.new(2.2, h, 2.2),
+			CFrame = at * CFrame.new(rng:NextNumber(-2, 2), h / 2 - 0.5, rng:NextNumber(-2, 2)) * CFrame.Angles(rng:NextNumber(-0.4, 0.4), rng:NextNumber(0, 3), rng:NextNumber(-0.4, 0.4)),
+			Color = Color3.fromRGB(150, 220, 255),
+			Material = Enum.Material.Glass,
+			Transparency = 0.15,
+			Reflectance = 0.2,
+			CanCollide = false,
+		}, m)
+		CollectionService:AddTag(p, "Crystal")
+	end
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(150, 220, 255)
+	light.Range = 18
+	light.Brightness = 2
+	light.Parent = m:FindFirstChildWhichIsA("BasePart")
+	m.Parent = parent
+end
+
 ------------------------------------------------------------------ оформление миров
 local function dressSegment(theme: number, rng: Random, cf: CFrame, len: number, m: Instance, prof)
 	local out, top = prof.out, prof.top
@@ -610,6 +673,28 @@ function Track:buildSegment(i: number)
 	elseif seg.kind == "curve" and i % 2 == 0 then
 		-- В жёлобе — дорожка монет, которая «едет» по дуге
 		makeCoin(cf * CFrame.new(laneX(3 + (i // 2) % 2), 3, -len / 2), m)
+	end
+
+	-- Гемы и кристалл в фиксированных местах уровня, магниты — на прямых
+	local cosA = math.cos(math.rad(seg.angle))
+	local function zAt(hh: number): number?
+		if hh >= seg.hStart and hh < seg.hStart + seg.hLen then
+			return (hh - seg.hStart) / cosA
+		end
+		return nil
+	end
+	for _, f in Config.GEMS_ON_TRACK do
+		local z = zAt(self.length * f)
+		if z then
+			makeGem(cf * CFrame.new(laneX(rng:NextInteger(2, Config.LANES - 1)), 3, -z), m)
+		end
+	end
+	local zc = zAt(self.length * Config.CRYSTAL_AT)
+	if zc then
+		makeCrystal(cf * CFrame.new(laneX(rng:NextInteger(2, Config.LANES - 1)), 0, -zc), rng, m)
+	end
+	if (seg.kind == "gentle" or seg.kind == "steep") and seg.hStart > Config.SAFE_START and rng:NextNumber() < Config.MAGNET_CHANCE then
+		makeMagnet(cf * CFrame.new(laneX(rng:NextInteger(1, Config.LANES)), 3, -len * 0.15), m)
 	end
 
 	-- Финиш: клетчатая арка

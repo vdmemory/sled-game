@@ -11,6 +11,7 @@ local Lighting = game:GetService("Lighting")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Track = require(script.Parent.Track)
 local Data = require(script.Parent.DataService)
+local Rewards = require(script.Parent.Rewards)
 
 ------------------------------------------------------------------ Remotes
 local remotes = Instance.new("Folder")
@@ -31,6 +32,10 @@ local Restart: RemoteEvent = remote("RemoteEvent", "Restart") -- ⟳ в заез
 local Back: RemoteEvent = remote("RemoteEvent", "Back") -- BACK у рогатки: вернуться в лобби
 local Smash: RemoteEvent = remote("RemoteEvent", "Smash") -- разбил препятствие ракетой/на ускорителе
 local SetSetting: RemoteEvent = remote("RemoteEvent", "SetSetting") -- настройки: звуки, снег, тени
+local RewardAction: RemoteFunction = remote("RemoteFunction", "RewardAction") -- задания, билет, подарки, сундук
+local TaskDone: RemoteEvent = remote("RemoteEvent", "TaskDone") -- «задание выполнено!»
+local Crystal: RemoteEvent = remote("RemoteEvent", "Crystal") -- разбил ледяной кристалл
+local CoinGrab: RemoteEvent = remote("RemoteEvent", "CoinGrab") -- монету притянул магнит
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 local SkinAction: RemoteFunction = remote("RemoteFunction", "SkinAction")
 remotes.Parent = ReplicatedStorage
@@ -177,6 +182,7 @@ local function onPlayerAdded(player: Player)
 	if d0 then
 		postLevel(player, d0.Level)
 	end
+	Rewards.onJoin(player)
 end
 
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
@@ -212,6 +218,12 @@ type Run = {
 	crashed: boolean?,
 	finishedAt: number?,
 	smashes: number?,
+	airTotal: number?,
+	flips: number?,
+	gems: number?,
+	combo: number?,
+	lastCoin: number?,
+	crystal: boolean?,
 	lastAir: number?,
 	ended: boolean?,
 }
@@ -250,8 +262,21 @@ local function endRun(player: Player, reason: string)
 			newBest = true
 			gems += Config.GEMS_NEW_BEST
 		end
+		gems += run.gems or 0
 		d.Gems += gems
+		local done = Rewards.onRun(player, {
+			runs = if reason == "back" or reason == "restart" then 0 else 1,
+			coins = earned,
+			distance = math.floor(dist),
+			air = math.floor(run.airTotal or 0),
+			flips = run.flips or 0,
+			smash = run.smashes or 0,
+			best = if newBest or finished then 1 else 0,
+		})
 		syncPlayer(player)
+		for _, text in done do
+			TaskDone:FireClient(player, text)
+		end
 	end
 
 	player:SetAttribute("InRun", false)
@@ -472,6 +497,8 @@ startRun = function(player: Player)
 	player:SetAttribute("RunDistance", 0)
 	player:SetAttribute("RunCoins", 0)
 	player:SetAttribute("Finished", false)
+	player:SetAttribute("RunGems", 0)
+	player:SetAttribute("Combo", 0)
 
 	sled:GetPropertyChangedSignal("Occupant"):Connect(function()
 		-- при аварии персонаж вылетает из санок сам — это не «вышел»
@@ -490,6 +517,25 @@ SetSetting.OnServerEvent:Connect(function(player, key, value)
 	d.Settings[key] = value
 	player:SetAttribute("Set" .. key, value)
 end)
+
+RewardAction.OnServerInvoke = function(player, action, arg)
+	local ok, res
+	if action == "task" then
+		ok, res = Rewards.claimTask(player, arg)
+	elseif action == "taskChest" then
+		ok, res = Rewards.claimTaskChest(player)
+	elseif action == "scratch" then
+		ok, res = Rewards.scratch(player)
+	elseif action == "gift" then
+		ok, res = Rewards.claimGift(player, arg)
+	elseif action == "chest" then
+		ok, res = Rewards.openChest(player)
+	else
+		return false, "?"
+	end
+	syncPlayer(player)
+	return ok, res
+end
 
 Restart.OnServerEvent:Connect(function(player)
 	local run = runs[player]
@@ -568,6 +614,7 @@ Air.OnServerEvent:Connect(function(player, seconds)
 		return
 	end
 	run.lastAir = now
+	run.airTotal = (run.airTotal or 0) + math.min(seconds, 6)
 	local add = math.floor(math.min(seconds, 4) * Config.AIR_COINS_PER_SEC)
 	run.bonusCoins += add
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
@@ -626,6 +673,7 @@ Trick.OnServerEvent:Connect(function(player, flips)
 		return
 	end
 	run.lastTrick = now
+	run.flips = (run.flips or 0) + math.clamp(math.floor(flips), 0, 3)
 	local add = math.clamp(math.floor(flips), 0, 3) * Config.COINS_PER_FLIP
 	run.bonusCoins += add
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
@@ -688,6 +736,82 @@ local function playerFromHit(hit: BasePart): Player?
 	return model and Players:GetPlayerFromCharacter(model)
 end
 
+-- Монета с комбо: подряд (без пауз) — множитель растёт
+local function awardCoin(player: Player, run: Run)
+	local now = os.clock()
+	run.combo = if now - (run.lastCoin or 0) < Config.COMBO_WINDOW then (run.combo or 0) + 1 else 1
+	run.lastCoin = now
+	local value = Config.COIN_PICKUP_VALUE * Config.comboMult(run.combo or 1)
+	run.bonusCoins += value
+	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + value)
+	player:SetAttribute("Combo", run.combo)
+end
+
+local function takeCoin(coin: BasePart)
+	coin:SetAttribute("Taken", true)
+	coin.Transparency = 1
+	coin.CanTouch = false
+	for _, detail in coin:GetChildren() do
+		if detail:IsA("BasePart") then
+			detail.Transparency = 1
+		end
+	end
+end
+
+-- Магнит: клиент притягивает монеты и сообщает; проверяем, что монета рядом с санками
+CoinGrab.OnServerEvent:Connect(function(player, coin)
+	local run = runs[player]
+	if not run or run.ended or typeof(coin) ~= "Instance" or not coin:IsA("BasePart") then
+		return
+	end
+	if not CollectionService:HasTag(coin, "Coin") or coin:GetAttribute("Taken") then
+		return
+	end
+	if (coin.Position - run.sled.Position).Magnitude > Config.MAGNET_RADIUS + 25 then
+		return
+	end
+	takeCoin(coin)
+	awardCoin(player, run)
+end)
+
+-- Гем на трассе
+CollectionService:GetInstanceAddedSignal("Gem"):Connect(function(gem)
+	if not gem:IsA("BasePart") then
+		return
+	end
+	gem.Touched:Connect(function(hit)
+		if gem:GetAttribute("Taken") then
+			return
+		end
+		local player = playerFromHit(hit)
+		local run = player and runs[player]
+		if not run or run.ended then
+			return
+		end
+		gem:SetAttribute("Taken", true)
+		gem.Transparency = 1
+		gem.CanTouch = false
+		run.gems = (run.gems or 0) + 1
+		player:SetAttribute("RunGems", run.gems)
+	end)
+end)
+
+-- Ледяной кристалл: клиент разбивает его касанием, сервер начисляет (один раз за заезд)
+Crystal.OnServerEvent:Connect(function(player, part)
+	local run = runs[player]
+	if not run or run.ended or run.crystal or typeof(part) ~= "Instance" or not CollectionService:HasTag(part, "Crystal") then
+		return
+	end
+	if (part.Position - run.sled.Position).Magnitude > 30 then
+		return
+	end
+	run.crystal = true
+	run.bonusCoins += Config.CRYSTAL_COINS
+	run.gems = (run.gems or 0) + 1
+	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.CRYSTAL_COINS)
+	player:SetAttribute("RunGems", run.gems)
+end)
+
 local function setupCoin(coin: Instance)
 	if not coin:IsA("BasePart") then
 		return
@@ -709,8 +833,7 @@ local function setupCoin(coin: Instance)
 				detail.Transparency = 1
 			end
 		end
-		run.bonusCoins += Config.COIN_PICKUP_VALUE
-		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.COIN_PICKUP_VALUE)
+		awardCoin(player, run)
 	end)
 end
 CollectionService:GetInstanceAddedSignal("Coin"):Connect(setupCoin)
@@ -781,6 +904,7 @@ Players.PlayerRemoving:Connect(function(player)
 		run.track:destroy()
 		slots[run.slot] = nil
 	end
+	Rewards.onLeave(player)
 	Data.release(player)
 end)
 

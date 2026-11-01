@@ -391,6 +391,56 @@ local bestMark = frame({
 	Visible = false,
 })
 label({ Parent = progress, Text = "🏁", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -4), Size = UDim2.new(0, 36, 0, 36) })
+-- Ромбы гемов на полосе прогресса (как в оригинале)
+for _, f in Config.GEMS_ON_TRACK do
+	label({ Parent = progress, Text = "💎", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 1 - f), Size = UDim2.new(0, 26, 0, 26), ZIndex = 3 })
+end
+-- Гемы за заезд, комбо и магнит
+local gemPill = frame({
+	Parent = runUi,
+	Position = UDim2.new(0, 16, 0, 110),
+	Size = UDim2.new(0, 110, 0, 36),
+	BackgroundColor3 = Color3.fromRGB(35, 50, 90),
+	BackgroundTransparency = 0.25,
+	Visible = false,
+})
+corner(gemPill, 18)
+local runGems = label({ Parent = gemPill, Text = "💎 0", Position = UDim2.new(0, 10, 0, 4), Size = UDim2.new(1, -20, 1, -8), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(140, 210, 255) })
+local comboLabel = label({
+	Parent = runUi,
+	Text = "",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 92),
+	Size = UDim2.new(0, 240, 0, 34),
+	TextColor3 = Color3.fromRGB(255, 200, 70),
+	Rotation = -4,
+})
+local magnetIcon = label({
+	Parent = runUi,
+	Text = "🧲",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.new(0.5, 0, 0.62, 0),
+	Size = UDim2.new(0, 70, 0, 50),
+	Visible = false,
+})
+-- Всплывающее «+N» у монет
+local function floater(text: string, color: Color3)
+	local f = label({
+		Parent = runUi,
+		Text = text,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, math.random(-40, 40), 0.55, 0),
+		Size = UDim2.new(0, 120, 0, 36),
+		TextColor3 = color,
+		ZIndex = 6,
+	})
+	TweenService:Create(f, TweenInfo.new(0.8, Enum.EasingStyle.Quad), { Position = f.Position - UDim2.fromOffset(0, 90), TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+	task.delay(0.85, function()
+		f:Destroy()
+	end)
+end
+local lastRunCoins = 0
+
 local pctBubble = label({
 	Parent = progress,
 	Text = "0%",
@@ -655,6 +705,16 @@ local function updateRun()
 	pctBubble.Position = UDim2.new(0, -8, 1 - p, 0)
 	local c = player:GetAttribute("RunCoins") or 0
 	runCoins.Text = "💰 " .. c
+	if c > lastRunCoins and player:GetAttribute("InRun") then
+		floater("+" .. (c - lastRunCoins), Color3.fromRGB(255, 220, 80))
+	end
+	lastRunCoins = c
+	local g = player:GetAttribute("RunGems") or 0
+	gemPill.Visible = g > 0
+	runGems.Text = "💎 " .. g
+	local combo = player:GetAttribute("Combo") or 0
+	local mult = Config.comboMult(combo)
+	comboLabel.Text = if combo >= 3 then "Комбо x" .. combo .. (if mult > 1 then "  (монеты x" .. mult .. ")" else "") else ""
 	distLabel.Text = (player:GetAttribute("RunDistance") or 0) .. " м"
 	local best = math.floor((player:GetAttribute("LevelBest") or 0) / 100 * L)
 	bestLabel.Text = if best > 0 then "★ " .. best .. " м" else ""
@@ -668,6 +728,14 @@ local function updateRun()
 end
 player:GetAttributeChangedSignal("RunDistance"):Connect(updateRun)
 player:GetAttributeChangedSignal("RunCoins"):Connect(updateRun)
+player:GetAttributeChangedSignal("RunGems"):Connect(updateRun)
+player:GetAttributeChangedSignal("Combo"):Connect(updateRun)
+Remotes.TaskDone.OnClientEvent:Connect(function(text)
+	task.delay(3.8, function() -- после карточки итога
+		showToast("📋 Задание выполнено!\n" .. text, 2.5)
+		controller.Sfx:Fire("reward")
+	end)
+end)
 player:GetAttributeChangedSignal("InRun"):Connect(updateRun)
 player:GetAttributeChangedSignal("Finished"):Connect(function()
 	if player:GetAttribute("Finished") then
@@ -719,6 +787,11 @@ RunService.RenderStepped:Connect(function()
 		elseif state.Fuel.Value > 0 then Color3.fromRGB(255, 120, 40)
 		else Color3.fromRGB(110, 110, 130)
 	restartBtn.Visible = launched
+	local ml = state.MagnetLeft.Value
+	magnetIcon.Visible = ml > 0
+	if ml > 0 then
+		magnetIcon.Text = "🧲 " .. math.ceil(ml)
+	end
 	backBtn.Visible = awaiting
 	ring.Visible = launched and stick.On.Value
 	if ring.Visible then

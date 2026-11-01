@@ -168,8 +168,7 @@ local trailsBtn, trailsBadge = tile(3, "✨", "Следы", Color3.fromRGB(140, 
 local tasksBtn, tasksBadge = tile(4, "📋", "Задания", Color3.fromRGB(240, 160, 40))
 trailsBadge.Text = "скоро"
 trailsBadge.Visible = true
-tasksBadge.Text = "скоро"
-tasksBadge.Visible = true
+
 
 -- Шестерёнка настроек справа сверху
 local gear = new("TextButton", {
@@ -266,11 +265,7 @@ trailsBtn.Activated:Connect(function()
 	soonText.Text = "Цветные шлейфы за санками\nс бонусом к монетам —\nв следующем обновлении!"
 	open(soonWin)
 end)
-tasksBtn.Activated:Connect(function()
-	soonTitle.Text = "📋 Задания"
-	soonText.Text = "Ежедневные задания с гемами\nи сундуком за все —\nв следующем обновлении!"
-	open(soonWin)
-end)
+
 
 ------------------------------------------------------------------ Настройки
 local setWin, setBody = window("⚙ Настройки", Color3.fromRGB(60, 80, 120), 420, 320)
@@ -311,6 +306,302 @@ local function applyShadows()
 end
 player:GetAttributeChangedSignal("SetShadows"):Connect(applyShadows)
 applyShadows()
+
+------------------------------------------------------------------ награды (состояние с сервера)
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local rewards: any = nil
+local function readRewards()
+	local raw = player:GetAttribute("Rewards")
+	if typeof(raw) == "string" then
+		local ok, v = pcall(HttpService.JSONDecode, HttpService, raw)
+		if ok then
+			rewards = v
+			rewards.offset = v.now - os.time() -- поправка часов клиента к серверу
+		end
+	end
+end
+local function serverNow(): number
+	return os.time() + (if rewards then rewards.offset else 0)
+end
+local function clock(sec: number): string
+	sec = math.max(0, math.floor(sec))
+	if sec >= 3600 then
+		return string.format("%dч %02dм", sec // 3600, (sec % 3600) // 60)
+	end
+	return string.format("%d:%02d", sec // 60, sec % 60)
+end
+
+local toastLabel = new("TextLabel", {
+	Text = "",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.3),
+	Size = UDim2.fromOffset(460, 90),
+	BackgroundTransparency = 1,
+	TextColor3 = Color3.fromRGB(255, 230, 90),
+	TextStrokeTransparency = 0.3,
+	Visible = false,
+	ZIndex = 60,
+	Parent = hud,
+})
+local toastN = 0
+local function toast(text: string)
+	toastN += 1
+	local my = toastN
+	toastLabel.Text = text
+	toastLabel.Visible = true
+	task.delay(2, function()
+		if toastN == my then
+			toastLabel.Visible = false
+		end
+	end)
+end
+local function act(action: string, arg: any?): (boolean, any)
+	local ok, res = Remotes.RewardAction:InvokeServer(action, arg)
+	if typeof(res) == "string" then
+		toast(res)
+	end
+	return ok, res
+end
+
+------------------------------------------------------------------ Задания
+local tasksWin, tasksBody = window("📋 Задания дня", Color3.fromRGB(240, 160, 40), 520, 460)
+local taskRows = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -110), ZIndex = 32, Parent = tasksBody })
+local tl = Instance.new("UIListLayout")
+tl.Padding = UDim.new(0, 10)
+tl.Parent = taskRows
+local chestRow = new("Frame", { Position = UDim2.new(0, 0, 1, -96), Size = UDim2.new(1, 0, 0, 60), BackgroundColor3 = Color3.fromRGB(255, 205, 70), ZIndex = 32, Parent = tasksBody })
+corner(chestRow, 14)
+stroke(chestRow, 2)
+new("TextLabel", { Text = "🧰", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 6), Size = UDim2.fromOffset(48, 48), ZIndex = 33, Parent = chestRow })
+local chestText = new("TextLabel", { Text = "", BackgroundTransparency = 1, Position = UDim2.fromOffset(62, 10), Size = UDim2.new(1, -200, 1, -20), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = DARK, ZIndex = 33, Parent = chestRow })
+local chestBtn = new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(120, 42), ZIndex = 33, Parent = chestRow })
+corner(chestBtn, 12)
+stroke(chestBtn, 2)
+bouncy(chestBtn)
+chestBtn.Activated:Connect(function()
+	act("taskChest")
+end)
+local resetLabel = new("TextLabel", { Text = "", BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -30), Size = UDim2.new(1, 0, 0, 26), TextColor3 = Color3.fromRGB(110, 120, 140), ZIndex = 32, Parent = tasksBody })
+
+local function drawTasks()
+	for _, c in taskRows:GetChildren() do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	if not rewards then
+		return
+	end
+	local readyCount = 0
+	for i, t in rewards.tasks do
+		local row = new("Frame", { LayoutOrder = i, Size = UDim2.new(1, 0, 0, 74), BackgroundColor3 = Color3.fromRGB(225, 232, 248), ZIndex = 33, Parent = taskRows })
+		corner(row, 14)
+		new("TextLabel", { Text = t.text, BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -170, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = DARK, ZIndex = 34, Parent = row })
+		local bar = new("Frame", { Position = UDim2.fromOffset(14, 42), Size = UDim2.new(1, -170, 0, 20), BackgroundColor3 = Color3.fromRGB(190, 200, 225), ZIndex = 34, Parent = row })
+		corner(bar, 10)
+		local fill = new("Frame", { Size = UDim2.fromScale(math.clamp(t.progress / t.target, 0, 1), 1), BackgroundColor3 = Color3.fromRGB(70, 170, 255), ZIndex = 35, Parent = bar })
+		corner(fill, 10)
+		new("TextLabel", { Text = t.progress .. "/" .. t.target, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), TextStrokeTransparency = 0.4, ZIndex = 36, Parent = bar })
+		local done = t.progress >= t.target
+		local b = new("TextButton", {
+			Text = if t.claimed then "✔" elseif done then "ЗАБРАТЬ\n💎 " .. t.gems else "💎 " .. t.gems,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -12, 0.5, 0),
+			Size = UDim2.fromOffset(130, 54),
+			BackgroundColor3 = if t.claimed then Color3.fromRGB(150, 155, 170) elseif done then Color3.fromRGB(70, 190, 90) else Color3.fromRGB(80, 150, 240),
+			AutoButtonColor = done and not t.claimed,
+			ZIndex = 34,
+			Parent = row,
+		})
+		corner(b, 12)
+		stroke(b, 2)
+		if done and not t.claimed then
+			readyCount += 1
+			bouncy(b)
+			b.Activated:Connect(function()
+				act("task", i)
+			end)
+		end
+	end
+	local allClaimed = true
+	for _, t in rewards.tasks do
+		allClaimed = allClaimed and t.claimed
+	end
+	chestText.Text = if rewards.chestClaimed then "Сундук открыт — приходи завтра!" else "Выполни все задания — получи сундук"
+	chestBtn.Text = if rewards.chestClaimed then "✔" elseif allClaimed then "ОТКРЫТЬ" else "🔒"
+	chestBtn.BackgroundColor3 = if allClaimed and not rewards.chestClaimed then Color3.fromRGB(70, 190, 90) else Color3.fromRGB(150, 155, 170)
+	tasksBadge.Text = if readyCount > 0 then "!" .. readyCount else ""
+	tasksBadge.Visible = readyCount > 0
+end
+tasksBtn.Activated:Connect(function()
+	drawTasks()
+	open(tasksWin)
+end)
+
+------------------------------------------------------------------ Подарки за время в игре
+local giftBtn = new("TextButton", {
+	Text = "",
+	LayoutOrder = 5,
+	Size = UDim2.fromOffset(170, 50),
+	Position = UDim2.new(0, 16, 0, 290),
+	BackgroundColor3 = Color3.fromRGB(70, 190, 90),
+	Parent = lobby,
+})
+corner(giftBtn, 16)
+stroke(giftBtn, 3)
+bouncy(giftBtn)
+local giftText = new("TextLabel", { Text = "🎁", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 6), Size = UDim2.new(1, -16, 1, -12), Parent = giftBtn })
+local giftsWin, giftsBody = window("🎁 Подарки", Color3.fromRGB(230, 90, 110), 560, 440)
+local giftGrid = Instance.new("UIGridLayout")
+giftGrid.CellSize = UDim2.fromOffset(118, 96)
+giftGrid.CellPadding = UDim2.fromOffset(10, 10)
+giftGrid.SortOrder = Enum.SortOrder.LayoutOrder
+giftGrid.Parent = giftsBody
+local giftCells: { { btn: TextButton, status: TextLabel } } = {}
+for i, g in Config.PLAYTIME_GIFTS do
+	local cell = new("TextButton", { Text = "", LayoutOrder = i, BackgroundColor3 = Color3.fromRGB(225, 232, 248), ZIndex = 33, Parent = giftsBody })
+	corner(cell, 14)
+	stroke(cell, 2)
+	local reward = (if g.coins then "💰 " .. g.coins .. "+" else "") .. (if g.gems then (if g.coins then "\n" else "") .. "💎 " .. g.gems else "")
+	new("TextLabel", { Text = reward, BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 52), TextColor3 = DARK, ZIndex = 34, Parent = cell })
+	local st = new("TextLabel", { Text = "", Position = UDim2.new(0, 8, 1, -32), Size = UDim2.new(1, -16, 0, 26), BackgroundColor3 = Color3.fromRGB(150, 155, 170), ZIndex = 34, Parent = cell })
+	corner(st, 8)
+	cell.Activated:Connect(function()
+		act("gift", i)
+	end)
+	giftCells[i] = { btn = cell, status = st }
+end
+giftBtn.Activated:Connect(function()
+	open(giftsWin)
+end)
+
+------------------------------------------------------------------ Сундук в лобби (раз в 4 часа)
+local chestLobby = new("TextButton", {
+	Text = "",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 100),
+	Size = UDim2.fromOffset(190, 46),
+	BackgroundColor3 = Color3.fromRGB(255, 190, 60),
+	Parent = lobby,
+})
+corner(chestLobby, 16)
+stroke(chestLobby, 3)
+bouncy(chestLobby)
+local chestLobbyText = new("TextLabel", { Text = "", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 5), Size = UDim2.new(1, -16, 1, -10), TextColor3 = DARK, Parent = chestLobby })
+chestLobby.Activated:Connect(function()
+	act("chest")
+end)
+
+------------------------------------------------------------------ Скретч-билет дня
+local ticketWin, ticketBody = window("🎟 Билет дня", Color3.fromRGB(240, 130, 50), 560, 400)
+new("TextLabel", { Text = "Сотри 3 карточки — награды твои!", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), TextColor3 = DARK, ZIndex = 32, Parent = ticketBody })
+local ticketCards: { TextButton } = {}
+local ticketResult: any = nil
+for i = 1, 3 do
+	local c = new("TextButton", {
+		Text = "❄",
+		Position = UDim2.new((i - 1) / 3, 6, 0, 40),
+		Size = UDim2.new(1 / 3, -12, 0, 190),
+		BackgroundColor3 = Color3.fromRGB(240, 190, 70),
+		ZIndex = 33,
+		Parent = ticketBody,
+	})
+	corner(c, 14)
+	stroke(c, 3)
+	bouncy(c)
+	ticketCards[i] = c
+	c.Activated:Connect(function()
+		if not ticketResult then
+			local ok, res = act("scratch")
+			if not ok then
+				return
+			end
+			ticketResult = res
+		end
+		local r = ticketResult[i]
+		if r and c:GetAttribute("Open") ~= true then
+			c:SetAttribute("Open", true)
+			c.Text = r.rarity .. "\n" .. r.text
+			c.TextColor3 = DARK
+			c.BackgroundColor3 = if r.gem then Color3.fromRGB(150, 210, 255) else Color3.fromRGB(255, 240, 190)
+		end
+	end)
+end
+new("TextLabel", {
+	Text = "Шансы: обычная 60% · необычная 25% · редкая 10% · эпическая 4% · легенда 1%",
+	BackgroundTransparency = 1,
+	Position = UDim2.new(0, 0, 1, -40),
+	Size = UDim2.new(1, 0, 0, 30),
+	TextColor3 = Color3.fromRGB(110, 120, 140),
+	ZIndex = 32,
+	Parent = ticketBody,
+})
+
+-- Обновление таймеров и бейджей
+local ticketShown = false
+local function refreshRewards()
+	readRewards()
+	if not rewards then
+		return
+	end
+	if tasksWin.Visible then
+		drawTasks()
+	else
+		local ready = 0
+		for _, t in rewards.tasks do
+			if t.progress >= t.target and not t.claimed then
+				ready += 1
+			end
+		end
+		tasksBadge.Text = if ready > 0 then "!" .. ready else ""
+		tasksBadge.Visible = ready > 0
+	end
+	-- билет дня показываем сам при заходе, если он доступен
+	if rewards.ticketReady and not ticketShown and player:GetAttribute("InRun") ~= true then
+		ticketShown = true
+		task.delay(2, function()
+			open(ticketWin)
+		end)
+	end
+end
+player:GetAttributeChangedSignal("Rewards"):Connect(refreshRewards)
+refreshRewards()
+
+local acc = 0
+RunService.Heartbeat:Connect(function(dt)
+	acc += dt
+	if acc < 0.5 or not rewards then
+		return
+	end
+	acc = 0
+	local now = serverNow()
+	local elapsed = now - rewards.sessionStart
+	local nextIn: number? = nil
+	local ready = 0
+	for i, g in Config.PLAYTIME_GIFTS do
+		local cell = giftCells[i]
+		local left = g.min * 60 - elapsed
+		if rewards.gifts[i] then
+			cell.status.Text = "✔"
+			cell.status.BackgroundColor3 = Color3.fromRGB(150, 155, 170)
+		elseif left <= 0 then
+			ready += 1
+			cell.status.Text = "ЗАБРАТЬ"
+			cell.status.BackgroundColor3 = Color3.fromRGB(70, 190, 90)
+		else
+			cell.status.Text = clock(left)
+			cell.status.BackgroundColor3 = Color3.fromRGB(80, 150, 240)
+			nextIn = if nextIn then math.min(nextIn, left) else left
+		end
+	end
+	giftText.Text = if ready > 0 then "🎁 Забрать! (" .. ready .. ")" elseif nextIn then "🎁 " .. clock(nextIn) else "🎁 Всё собрано"
+	giftBtn.BackgroundColor3 = if ready > 0 then Color3.fromRGB(70, 190, 90) else Color3.fromRGB(90, 110, 150)
+	local chestLeft = rewards.chestAt - now
+	chestLobbyText.Text = if chestLeft <= 0 then "🧰 Открыть сундук!" else "🧰 " .. clock(chestLeft)
+	chestLobby.BackgroundColor3 = if chestLeft <= 0 then Color3.fromRGB(255, 190, 60) else Color3.fromRGB(200, 205, 220)
+	resetLabel.Text = "Новые задания через " .. clock(rewards.resetAt - now)
+end)
 
 -- В заезде все окна закрываем
 player:GetAttributeChangedSignal("InRun"):Connect(function()

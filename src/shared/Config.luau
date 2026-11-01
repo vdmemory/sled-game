@@ -109,6 +109,64 @@ end
 -- Табло «Следующее обновление» в лобби (UTC)
 Config.NEXT_UPDATE = os.time({ year = 2026, month = 11, day = 15, hour = 12 })
 
+------------------------------------------------------------------ БОНУСЫ НА ТРАССЕ
+Config.MAGNET_CHANCE = 0.12 -- магнит на прямом участке
+Config.MAGNET_TIME = 8 -- сек
+Config.MAGNET_RADIUS = 32 -- studs
+Config.GEMS_ON_TRACK = { 0.3, 0.62, 0.9 } -- где лежат гемы (доли уровня)
+Config.CRYSTAL_AT = 0.5 -- ледяной кристалл (разбей — монеты + гем)
+Config.CRYSTAL_COINS = 60
+Config.COMBO_WINDOW = 1.3 -- сек между монетами, чтобы комбо не сбросилось
+function Config.comboMult(combo: number): number
+	return math.min(3, 1 + combo // 5) -- каждые 5 монет подряд +1 к множителю (до x3)
+end
+
+------------------------------------------------------------------ НАГРАДЫ (удержание)
+-- Монетные награды растут с уровнем, чтобы оставаться полезными
+function Config.rewardCoins(base: number, level: number): number
+	return math.floor(base * (1 + (level - 1) * 0.6))
+end
+-- Ежедневные задания: 3 в день из пула (выбор детерминирован по номеру дня)
+Config.TASK_POOL = {
+	{ id = "runs", text = "Сделай %d заездов", targets = { 5, 8 }, gems = 3 },
+	{ id = "coins", text = "Собери %d монет", targets = { 300, 800 }, gems = 4 },
+	{ id = "distance", text = "Проедь %d м всего", targets = { 3000, 8000 }, gems = 4 },
+	{ id = "air", text = "Пробудь в воздухе %d с", targets = { 15, 40 }, gems = 5 },
+	{ id = "flips", text = "Сделай %d флипов", targets = { 3, 8 }, gems = 5 },
+	{ id = "smash", text = "Разбей %d препятствий", targets = { 5, 15 }, gems = 4 },
+	{ id = "best", text = "Побей свой рекорд %d раз", targets = { 1, 2 }, gems = 5 },
+}
+Config.TASKS_PER_DAY = 3
+Config.TASK_CHEST_COINS = 400 -- сундук за все задания (× rewardCoins) + гемы
+Config.TASK_CHEST_GEMS = 8
+-- Скретч-билет раз в сутки: 3 карточки, шансы как в Roblox-референсе
+Config.TICKET_REWARDS = {
+	{ chance = 60, coins = 200, label = "+%d 💰", rarity = "Обычная" },
+	{ chance = 25, coins = 400, label = "+%d 💰", rarity = "Необычная" },
+	{ chance = 10, gems = 5, label = "+%d 💎", rarity = "Редкая" },
+	{ chance = 4, coins = 1200, label = "+%d 💰", rarity = "Эпическая" },
+	{ chance = 1, coins = 3200, gems = 25, label = "+%d 💰 +25 💎", rarity = "Легенда" },
+}
+-- Подарки за время в игре (минуты с захода), как сетка «Подарки» в референсе
+Config.PLAYTIME_GIFTS = {
+	{ min = 1, coins = 120 },
+	{ min = 3, gems = 2 },
+	{ min = 5, coins = 250 },
+	{ min = 8, gems = 3 },
+	{ min = 12, coins = 400 },
+	{ min = 16, coins = 500, gems = 2 },
+	{ min = 20, coins = 600 },
+	{ min = 25, gems = 5 },
+	{ min = 30, coins = 900 },
+	{ min = 40, gems = 6 },
+	{ min = 50, coins = 1400 },
+	{ min = 60, coins = 2000, gems = 10 },
+}
+-- Сундук в лобби раз в 4 часа
+Config.CHEST_INTERVAL = 4 * 3600
+Config.CHEST_COINS = 500
+Config.CHEST_GEMS = 3
+
 ------------------------------------------------------------------ ФИЗИКА САНОК
 Config.GRAVITY_ALONG = 60 -- «игровая» гравитация вдоль склона
 Config.DRAG = 0.0012 -- сопротивление воздуха (× v²)

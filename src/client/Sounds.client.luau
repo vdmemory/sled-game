@@ -34,6 +34,8 @@ local ONE_SHOTS = {
 	finish = { "impact_explosion_03.mp3", 0.35, 1.2 },
 	smash = { "impact_explosion_03.mp3", 0.25, 1.8 },
 	record = { "electronicpingshort.wav", 0.6, 1 },
+	gem = { "electronicpingshort.wav", 0.5, 1.5 },
+	reward = { "electronicpingshort.wav", 0.5, 1.2 },
 }
 local cache: { [string]: Sound } = {}
 local function play(name: string)
