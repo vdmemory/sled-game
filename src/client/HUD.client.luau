@@ -87,10 +87,10 @@ TweenService:Create(tapScale, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.Eas
 
 -- Карточки апгрейдов: Рогатка / Сани / Доход внизу, Ракета — справа (как в оригинале)
 local CARD_STYLE = {
-	Launch = { pip = Color3.fromRGB(235, 70, 70), btn = { Color3.fromRGB(150, 60, 80), Color3.fromRGB(105, 35, 55) }, art = "🎯" },
-	Sled = { pip = Color3.fromRGB(80, 190, 250), btn = { Color3.fromRGB(60, 110, 170), Color3.fromRGB(35, 75, 125) }, art = "🛷" },
-	Income = { pip = Color3.fromRGB(250, 190, 50), btn = { Color3.fromRGB(150, 120, 70), Color3.fromRGB(105, 80, 45) }, art = "💰" },
-	Rocket = { pip = Color3.fromRGB(110, 200, 255), btn = { Color3.fromRGB(110, 190, 255), Color3.fromRGB(50, 130, 230) }, art = "🚀" },
+	Launch = { title = "РОГАТКА", pip = Color3.fromRGB(235, 70, 70), btn = { Color3.fromRGB(150, 60, 80), Color3.fromRGB(105, 35, 55) }, art = "🎯" },
+	Sled = { title = "САНИ", pip = Color3.fromRGB(80, 190, 250), btn = { Color3.fromRGB(60, 110, 170), Color3.fromRGB(35, 75, 125) }, art = "🛷" },
+	Income = { title = "ДОХОД", pip = Color3.fromRGB(250, 190, 50), btn = { Color3.fromRGB(150, 120, 70), Color3.fromRGB(105, 80, 45) }, art = "💰" },
+	Rocket = { title = "РАКЕТА", pip = Color3.fromRGB(110, 200, 255), btn = { Color3.fromRGB(110, 190, 255), Color3.fromRGB(50, 130, 230) }, art = "🚀" },
 }
 local notice: (string, number?) -> ()
 type Card = { root: TextButton, badge: TextLabel, pips: { Frame }, price: TextLabel, priceBtn: Frame, effect: TextLabel, style: any }
@@ -123,7 +123,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	UI.stroke(card, 3)
 	UI.bounce(card)
 	if not compact then
-		UI.text({ Text = string.upper(u.title), Position = UDim2.fromOffset(10, 5), Size = UDim2.new(1, -54, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card })
+		UI.text({ Text = st.title, Position = UDim2.fromOffset(10, 5), Size = UDim2.new(1, -54, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card })
 	end
 	-- бейдж уровня (тёмный кружок в углу)
 	local badgeBg = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -8, 0, 8), Size = UDim2.fromOffset(38, 38), BackgroundColor3 = C.navy, BackgroundTransparency = 0, ZIndex = 5, Parent = card })
@@ -212,9 +212,9 @@ for i, name in { "Launch", "Sled", "Income" } do
 	makeCard(name, cardsRow, UDim2.fromOffset(156, 240), i, false)
 end
 -- Ракета — отдельная голубая карточка справа (как UPGRADE 💎1 в оригинале)
-local rocketCard = makeCard("Rocket", lobby, UDim2.fromOffset(124, 150), 0, true)
-rocketCard.root.AnchorPoint = Vector2.new(1, 1)
-rocketCard.root.Position = UDim2.new(1, -18, 1, -280)
+local rocketCard = makeCard("Rocket", lobby, UDim2.fromOffset(130, 170), 0, true)
+rocketCard.root.AnchorPoint = Vector2.new(0, 1)
+rocketCard.root.Position = UDim2.new(0.5, 3 * 156 / 2 + 14 + 18, 1, -14)
 
 ------------------------------------------------------------------ заезд
 local runUi = UI.new("Frame", { Name = "Run", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = root })
