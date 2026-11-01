@@ -278,7 +278,7 @@ Config.RARITIES = {
 	{ name = "Galaxy", bonus = 10, color = Color3.fromRGB(120, 60, 230), material = Enum.Material.Neon },
 }
 Config.SLEDS = {
-	{ id = "tube", name = "Ватрушка", icon = "🛟", world = 1, bonus = 0, prices = { 0, 300, 900, 2400, 6000 } },
+	{ id = "tube", name = "Ватрушка", icon = "🍩", world = 1, bonus = 0, prices = { 0, 300, 900, 2400, 6000 } },
 	{ id = "board", name = "Доска", icon = "🏂", world = 1, bonus = 3, prices = { 700, 1500, 3500, 8000, 18000 } },
 	{ id = "classic", name = "Деревянные санки", icon = "🛷", world = 2, bonus = 6, prices = { 4000, 8000, 16000, 32000, 60000 } },
 	{ id = "plane", name = "Сани-самолёт", icon = "✈", world = 3, bonus = 10, prices = { 15000, 30000, 60000, 120000, 240000 } },
