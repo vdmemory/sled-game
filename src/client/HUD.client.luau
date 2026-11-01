@@ -175,7 +175,11 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 		if not ok then
 			notice(msg or "Ошибка")
 		elseif msg then
-			notice("✨ ПОЛУЧЕНО: " .. string.upper(msg) .. "!", 2.5)
+			-- новый тир → большая анимация (Reveal.client)
+			upgradeReveal:Fire(name, msg)
+		else
+			UI.pop(card)
+			controller.Sfx:Fire("coin")
 		end
 	end)
 	return c
