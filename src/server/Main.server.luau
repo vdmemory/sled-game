@@ -385,6 +385,7 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 		accent = accent,
 		material = if rarityIdx > 1 then rarity.material else (if skin.metal then Enum.Material.Foil else nil),
 		glow = skin.neon or rarityIdx == 5,
+		shine = rarity.shine,
 	}, seat, rarityIdx > 1)
 	if rarityIdx == 5 then
 		local glow = Instance.new("PointLight")
@@ -407,7 +408,7 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 		end
 	end
 	if tier >= 2 and model.id ~= "plane" then -- аэро-хвост
-		local fin = deco("Fin", Vector3.new(0.3, 2, 2.2), CFrame.new(0, 1.6, 3.4), skin.rim)
+		local fin = deco("Fin", Vector3.new(0.3, 1.8, 2), CFrame.new(0, 1.3, if model.id == "tube" then 4.3 else 3.8), skin.rim)
 		local wedge = Instance.new("SpecialMesh")
 		wedge.MeshType = Enum.MeshType.Wedge
 		wedge.Parent = fin
@@ -415,7 +416,7 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	if tier >= 3 and model.id ~= "plane" then -- обтекатель спереди
 		deco("Shield", Vector3.new(4, 1.6, 0.25), CFrame.new(0, 1.4, -3.4) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(170, 220, 255), Enum.Material.Glass).Transparency = 0.35
 	end
-	if tier >= 4 and model.id == "tube" then -- золотая отделка
+	if false then -- (золотая отделка убрана: перекрывала верх ватрушки)
 		deco("Trim", Vector3.new(0.35, 8.1, 8.1), CFrame.new(0, 0.95, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(240, 195, 60), Enum.Material.Foil, Enum.PartType.Cylinder)
 	end
 	if tier >= 5 then -- неон
@@ -956,6 +957,16 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 	local step = acc
 	acc = 0
+
+	-- Упал с площадки лобби (не в заезде) — возвращаем на точку появления
+	for _, p in Players:GetPlayers() do
+		if not runs[p] then
+			local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root and root.Position.Y < Config.LOBBY_POS.Y - 30 then
+				p.Character:PivotTo(CFrame.new(Config.LOBBY_POS + Vector3.new(0, 4, 0)))
+			end
+		end
+	end
 
 	for player, run in runs do
 		local sled = run.sled

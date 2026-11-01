@@ -9,7 +9,7 @@
 
 local SledModels = {}
 
-type Look = { main: Color3, accent: Color3, material: Enum.Material?, glow: boolean? }
+type Look = { main: Color3, accent: Color3, material: Enum.Material?, glow: boolean?, shine: number? }
 
 local WOOD = Color3.fromRGB(186, 128, 74)
 local WOOD_DARK = Color3.fromRGB(140, 92, 50)
@@ -22,7 +22,7 @@ local Builder = {}
 Builder.__index = Builder
 
 local function newBuilder(parent: Instance, base: CFrame, weldTo: BasePart?)
-	return setmetatable({ parent = parent, base = base, weldTo = weldTo, count = 0 }, Builder)
+	return setmetatable({ parent = parent, base = base, weldTo = weldTo, count = 0, main = nil, shine = 0 }, Builder)
 end
 
 function Builder:part(shape: Enum.PartType, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, props: { [string]: any }?): BasePart
@@ -40,6 +40,9 @@ function Builder:part(shape: Enum.PartType, size: Vector3, cf: CFrame, color: Co
 	p.CastShadow = true
 	p.Massless = true
 	p.CollisionGroup = "Riders"
+	if self.main and color == self.main then
+		p.Reflectance = self.shine -- глянец корпуса (Gold, Diamond)
+	end
 	for k, v in props or {} do
 		(p :: any)[k] = v
 	end
@@ -259,6 +262,8 @@ end
 
 function SledModels.build(parent: Instance, base: CFrame, id: string, look: Look, weldTo: BasePart?, painted: boolean?): number
 	local b = newBuilder(parent, base, weldTo)
+	b.main = look.main
+	b.shine = look.shine or 0
 	if id == "board" then
 		buildBoard(b, look)
 	elseif id == "classic" then

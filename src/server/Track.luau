@@ -914,6 +914,7 @@ local function showcaseSled(at: CFrame, sledId: string, rarityIdx: number, capti
 		accent = Color3.new(1, 1, 1):Lerp(col, 0.35),
 		material = rarity.material,
 		glow = rarityIdx == 5,
+		shine = rarity.shine,
 	}, nil, true)
 	holder.Parent = parent
 	local glow = Instance.new("PointLight")
