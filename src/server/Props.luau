@@ -376,7 +376,8 @@ function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instan
 	local m = Instance.new("Model")
 	m.Name = "Obstacle"
 	-- Машины стоят вдоль или поперёк; остальное слегка развёрнуто
-	local turned = base * CFrame.Angles(0, if rng:NextNumber() < 0.5 then 0 else math.pi / 2, 0)
+	-- Машины стоят вдоль трассы (носом вверх или вниз): поперёк грузовик перекрывал 2–3 полосы сразу
+	local turned = base * CFrame.Angles(0, if rng:NextNumber() < 0.5 then 0 else math.pi, 0)
 	local twisted = base * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0)
 	-- Взвешенный выбор: { вес, функция }
 	local options
