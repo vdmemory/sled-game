@@ -67,6 +67,36 @@ local function addSnowTrail(sled: Instance)
 	trail.Enabled = false
 	trail.Parent = sled
 
+	-- Цветной след (купленный в меню «Следы»): лента повыше, видна и в полёте
+	local tc = sled:GetAttribute("TrailColor")
+	if typeof(tc) == "Color3" then
+		local b0 = Instance.new("Attachment")
+		b0.Position = Vector3.new(-1.3, 0.4, 2.8)
+		b0.Parent = sled
+		local b1 = Instance.new("Attachment")
+		b1.Position = Vector3.new(1.3, 0.4, 2.8)
+		b1.Parent = sled
+		local ct = Instance.new("Trail")
+		ct.Name = "ColorTrail"
+		ct.Attachment0 = b0
+		ct.Attachment1 = b1
+		ct.Color = if sled:GetAttribute("Rainbow")
+			then ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 70)),
+				ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 200, 50)),
+				ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 230, 100)),
+				ColorSequenceKeypoint.new(0.75, Color3.fromRGB(70, 150, 255)),
+				ColorSequenceKeypoint.new(1, Color3.fromRGB(190, 90, 255)),
+			})
+			else ColorSequence.new(tc)
+		ct.Transparency = NumberSequence.new(0.1, 1)
+		ct.Lifetime = 0.9
+		ct.LightEmission = 0.6
+		ct.FaceCamera = true
+		ct.Enabled = false
+		ct.Parent = sled
+	end
+
 	-- Ракетные сопла (горят, когда у этих санок включена ракета; видно только своему игроку)
 	if sled:GetAttribute("Owner") == player.UserId then
 		for _, side in { -1, 1 } do
@@ -221,6 +251,10 @@ RunService.RenderStepped:Connect(function(dt)
 			local trail = s:FindFirstChild("IceTrail")
 			if trail then
 				trail.Enabled = grounded and v > 5 and not s.Anchored
+			end
+			local ct = s:FindFirstChild("ColorTrail")
+			if ct then
+				ct.Enabled = v > 5 and not s.Anchored
 			end
 		end
 		if s:GetAttribute("Owner") == player.UserId then

@@ -36,6 +36,8 @@ local RewardAction: RemoteFunction = remote("RemoteFunction", "RewardAction") --
 local TaskDone: RemoteEvent = remote("RemoteEvent", "TaskDone") -- «задание выполнено!»
 local Crystal: RemoteEvent = remote("RemoteEvent", "Crystal") -- разбил ледяной кристалл
 local CoinGrab: RemoteEvent = remote("RemoteEvent", "CoinGrab") -- монету притянул магнит
+local SledAction: RemoteFunction = remote("RemoteFunction", "SledAction") -- купить/надеть сани (модель + редкость)
+local TrailAction: RemoteFunction = remote("RemoteFunction", "TrailAction") -- купить/надеть след
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 local SkinAction: RemoteFunction = remote("RemoteFunction", "SkinAction")
 remotes.Parent = ReplicatedStorage
@@ -111,6 +113,19 @@ local function syncPlayer(player: Player)
 	end
 	player:SetAttribute("OwnedSkins", table.concat(owned, ","))
 	player:SetAttribute("ThemeName", Config.worldName(Config.worldOf(d.Level)))
+	player:SetAttribute("Sled", d.Sled)
+	player:SetAttribute("SledRarity", d.SledRarity)
+	local ownedSleds = {}
+	for k in d.OwnedSleds do
+		table.insert(ownedSleds, k)
+	end
+	player:SetAttribute("OwnedSleds", table.concat(ownedSleds, ","))
+	player:SetAttribute("Trail", d.Trail)
+	local ownedTrails = {}
+	for k in d.OwnedTrails do
+		table.insert(ownedTrails, k)
+	end
+	player:SetAttribute("OwnedTrails", table.concat(ownedTrails, ","))
 	for key, v in d.Settings do
 		player:SetAttribute("Set" .. key, v)
 	end
@@ -245,7 +260,9 @@ local function endRun(player: Player, reason: string)
 	local finished = reason == "finish"
 	local dist = math.min(run.distance, L)
 	local pct = math.floor(dist / L * 100)
-	local mult = (if player:GetAttribute("X2Coins") then 2 else 1) * Config.incomeMult(d and d.IncomeLevel or 0)
+	local mult = (if player:GetAttribute("X2Coins") then 2 else 1)
+		* Config.incomeMult(d and d.IncomeLevel or 0)
+		* (1 + Config.trail(d and d.Trail).bonus / 100)
 	local earned = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + (if finished then Config.finishBonus(level) else 0)) * mult)
 	local newBest = false
 	local gems = 0
@@ -331,33 +348,6 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 
 	local d = Data.get(player)
 	local skin = Config.skin(d and d.Skin)
-	for _, spec in {
-		{ name = "Tube", size = Vector3.new(1.4, 7, 7), color = skin.tube, y = -0.1, glow = false },
-		{ name = "Rim", size = Vector3.new(1.2, 7.8, 7.8), color = skin.rim, y = 0.5, glow = skin.neon },
-	} do
-		local p = Instance.new("Part")
-		p.Name = spec.name
-		p.Shape = Enum.PartType.Cylinder
-		p.Size = spec.size
-		p.Color = spec.color
-		p.Material = if spec.glow
-			then Enum.Material.Neon
-			elseif skin.metal then Enum.Material.Foil
-			else Enum.Material.SmoothPlastic
-		p.Reflectance = if skin.metal then 0.25 else 0
-		p.CanCollide = false
-		p.CanQuery = false
-		p.Massless = true
-		p.CollisionGroup = "Riders"
-		-- Цилиндр в Roblox вытянут по X; кладём его «блином»
-		p.CFrame = seat.CFrame * CFrame.new(0, spec.y, 0) * CFrame.Angles(0, 0, math.rad(90))
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = seat
-		weld.Part1 = p
-		weld.Parent = p
-		p.Parent = seat
-	end
-
 	-- Тиры апгрейда «Сани»: санки обрастают деталями (как MEGA THRUSTER / AERO TAIL в оригинале)
 	local tier = Config.tierOf(d and d.SledLevel or 0)
 	local function deco(name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?)
@@ -381,6 +371,57 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 		return p
 	end
 	local metal = Color3.fromRGB(70, 75, 90)
+
+	-- Корпус: модель саней + редкость (как в каталоге референса). Редкость красит корпус.
+	local model = Config.sled(d and d.Sled)
+	local rarityIdx = math.clamp(d and d.SledRarity or 1, 1, #Config.RARITIES)
+	local rarity = Config.RARITIES[rarityIdx]
+	local main = rarity.color or skin.tube
+	local accent = if rarityIdx > 1 then Color3.new(1, 1, 1):Lerp(rarity.color :: Color3, 0.35) else skin.rim
+	local mainMat = rarity.material or (if skin.metal then Enum.Material.Foil elseif skin.neon and rarityIdx == 1 then Enum.Material.SmoothPlastic else Enum.Material.SmoothPlastic)
+	local cyl = Enum.PartType.Cylinder
+	local flat = CFrame.Angles(0, 0, math.rad(90)) -- цилиндр «блином»
+	if model.id == "board" then
+		deco("Body", Vector3.new(4.2, 0.6, 8.6), CFrame.new(0, -0.2, 0), main, mainMat)
+		deco("Nose", Vector3.new(0.6, 4.2, 4.2), CFrame.new(0, -0.2, -4.3) * flat, main, mainMat, cyl)
+		deco("Tail", Vector3.new(0.6, 4.2, 4.2), CFrame.new(0, -0.2, 4.3) * flat, main, mainMat, cyl)
+		deco("Stripe", Vector3.new(1, 0.65, 8.6), CFrame.new(0, -0.15, 0), accent, if skin.neon then Enum.Material.Neon else nil)
+	elseif model.id == "classic" then
+		local wood = if rarityIdx > 1 then main else Color3.fromRGB(170, 115, 65)
+		for _, sx in { -1, 1 } do
+			deco("Runner", Vector3.new(0.4, 0.4, 8.4), CFrame.new(sx * 2.1, -0.4, 0.3), metal, Enum.Material.Metal)
+			deco("RunnerTip", Vector3.new(0.4, 0.4, 2.2), CFrame.new(sx * 2.1, 0.3, -4.3) * CFrame.Angles(math.rad(50), 0, 0), metal, Enum.Material.Metal)
+			deco("Rail", Vector3.new(0.35, 0.8, 6.5), CFrame.new(sx * 2.3, 0.6, 0.6), wood, mainMat)
+		end
+		for z = -2.8, 3.6, 1.6 do
+			deco("Slat", Vector3.new(4.8, 0.3, 1.1), CFrame.new(0, 0.15, z), wood, if rarityIdx > 1 then mainMat else Enum.Material.Wood)
+		end
+		deco("Rope", Vector3.new(4, 0.25, 0.25), CFrame.new(0, 0.9, -3.6), accent)
+	elseif model.id == "plane" then
+		deco("Body", Vector3.new(3.4, 1.6, 7.4), CFrame.new(0, 0.1, 0.2), main, mainMat)
+		deco("Nose", Vector3.new(1.6, 3.2, 3.2), CFrame.new(0, 0.1, -3.7) * CFrame.Angles(0, math.rad(90), 0), main, mainMat, cyl)
+		deco("Wing", Vector3.new(10, 0.3, 2.2), CFrame.new(0, 0.5, 0), accent)
+		deco("Tail", Vector3.new(0.3, 2, 1.8), CFrame.new(0, 1.6, 3.6), accent)
+		deco("Hub", Vector3.new(0.6, 0.9, 0.9), CFrame.new(0, 0.1, -4.6) * CFrame.Angles(0, math.rad(90), 0), metal, Enum.Material.Metal, cyl)
+		deco("Blade", Vector3.new(0.25, 4.2, 0.5), CFrame.new(0, 0.1, -4.75), Color3.fromRGB(40, 40, 50))
+		deco("Blade2", Vector3.new(4.2, 0.25, 0.5), CFrame.new(0, 0.1, -4.75), Color3.fromRGB(40, 40, 50))
+	else -- ватрушка
+		deco("Tube", Vector3.new(1.4, 7, 7), CFrame.new(0, -0.1, 0) * flat, main, mainMat, cyl)
+		deco("Rim", Vector3.new(1.2, 7.8, 7.8), CFrame.new(0, 0.5, 0) * flat, accent, if skin.neon or rarityIdx == 5 then Enum.Material.Neon else mainMat, cyl)
+	end
+	if rarityIdx == 5 then
+		local glow = Instance.new("PointLight")
+		glow.Color = main
+		glow.Range = 10
+		glow.Parent = seat
+	end
+	seat:SetAttribute("SledBonus", Config.sledBonus(model.id, rarityIdx))
+	-- След: цвет шлейфа за санками (Effects рисует его у всех игроков)
+	local trail = Config.trail(d and d.Trail)
+	if trail.id ~= "white" then
+		seat:SetAttribute("TrailColor", trail.color)
+		seat:SetAttribute("Rainbow", trail.rainbow == true)
+	end
 	if tier >= 1 then -- боковые ускорители
 		for _, sx in { -1, 1 } do
 			deco("Booster", Vector3.new(3, 1.1, 1.1), CFrame.new(sx * 4.1, 0.4, 1) * CFrame.Angles(0, math.rad(90), 0), metal, Enum.Material.Metal, Enum.PartType.Cylinder)
@@ -517,6 +558,58 @@ SetSetting.OnServerEvent:Connect(function(player, key, value)
 	d.Settings[key] = value
 	player:SetAttribute("Set" .. key, value)
 end)
+
+-- Сани: модель открывается с миром, редкости покупаются по порядку; купленное — надеть
+SledAction.OnServerInvoke = function(player, id, rarity)
+	local d = Data.get(player)
+	if not d or runs[player] or typeof(id) ~= "string" or typeof(rarity) ~= "number" then
+		return false, "Недоступно"
+	end
+	local model = Config.sled(id)
+	if model.id ~= id or not Config.RARITIES[rarity] then
+		return false, "Нет таких саней"
+	end
+	local key = id .. ":" .. rarity
+	if not d.OwnedSleds[key] then
+		if Config.worldOf(d.Level) < model.world then
+			return false, "Откроется в мире " .. model.world
+		end
+		if rarity > 1 and not d.OwnedSleds[id .. ":" .. (rarity - 1)] then
+			return false, "Сначала купи " .. Config.RARITIES[rarity - 1].name
+		end
+		local price = model.prices[rarity]
+		if d.Coins < price then
+			return false, "Не хватает монет"
+		end
+		d.Coins -= price
+		d.OwnedSleds[key] = true
+	end
+	d.Sled = id
+	d.SledRarity = rarity
+	syncPlayer(player)
+	return true, model.name .. " · " .. Config.RARITIES[rarity].name
+end
+
+TrailAction.OnServerInvoke = function(player, id)
+	local d = Data.get(player)
+	if not d or runs[player] or typeof(id) ~= "string" then
+		return false, "Недоступно"
+	end
+	local t = Config.trail(id)
+	if t.id ~= id then
+		return false, "Нет такого следа"
+	end
+	if not d.OwnedTrails[id] then
+		if d.Coins < t.price then
+			return false, "Не хватает монет"
+		end
+		d.Coins -= t.price
+		d.OwnedTrails[id] = true
+	end
+	d.Trail = id
+	syncPlayer(player)
+	return true, "След «" .. t.name .. "» надет"
+end
 
 RewardAction.OnServerInvoke = function(player, action, arg)
 	local ok, res

@@ -124,7 +124,7 @@ end
 ------------------------------------------------------------------ НАГРАДЫ (удержание)
 -- Монетные награды растут с уровнем, чтобы оставаться полезными
 function Config.rewardCoins(base: number, level: number): number
-	return math.floor(base * (1 + (level - 1) * 0.6))
+	return math.floor(base * (1 + (level - 1) * 0.25))
 end
 -- Ежедневные задания: 3 в день из пула (выбор детерминирован по номеру дня)
 Config.TASK_POOL = {
@@ -137,7 +137,7 @@ Config.TASK_POOL = {
 	{ id = "best", text = "Побей свой рекорд %d раз", targets = { 1, 2 }, gems = 5 },
 }
 Config.TASKS_PER_DAY = 3
-Config.TASK_CHEST_COINS = 400 -- сундук за все задания (× rewardCoins) + гемы
+Config.TASK_CHEST_COINS = 300 -- сундук за все задания (× rewardCoins) + гемы
 Config.TASK_CHEST_GEMS = 8
 -- Скретч-билет раз в сутки: 3 карточки, шансы как в Roblox-референсе
 Config.TICKET_REWARDS = {
@@ -149,22 +149,22 @@ Config.TICKET_REWARDS = {
 }
 -- Подарки за время в игре (минуты с захода), как сетка «Подарки» в референсе
 Config.PLAYTIME_GIFTS = {
-	{ min = 1, coins = 120 },
+	{ min = 1, coins = 60 },
 	{ min = 3, gems = 2 },
-	{ min = 5, coins = 250 },
+	{ min = 5, coins = 125 },
 	{ min = 8, gems = 3 },
-	{ min = 12, coins = 400 },
-	{ min = 16, coins = 500, gems = 2 },
-	{ min = 20, coins = 600 },
+	{ min = 12, coins = 200 },
+	{ min = 16, coins = 250, gems = 2 },
+	{ min = 20, coins = 300 },
 	{ min = 25, gems = 5 },
-	{ min = 30, coins = 900 },
+	{ min = 30, coins = 450 },
 	{ min = 40, gems = 6 },
-	{ min = 50, coins = 1400 },
-	{ min = 60, coins = 2000, gems = 10 },
+	{ min = 50, coins = 700 },
+	{ min = 60, coins = 1000, gems = 10 },
 }
 -- Сундук в лобби раз в 4 часа
 Config.CHEST_INTERVAL = 4 * 3600
-Config.CHEST_COINS = 500
+Config.CHEST_COINS = 250
 Config.CHEST_GEMS = 3
 
 ------------------------------------------------------------------ ФИЗИКА САНОК
@@ -266,6 +266,56 @@ function Config.skin(id: string?)
 		end
 	end
 	return Config.SKINS[1]
+end
+
+------------------------------------------------------------------ САНИ С РЕДКОСТЯМИ (как в Roblox-референсе)
+-- Модель открывается с миром; у каждой 5 редкостей. Редкость покупается по порядку и даёт +% скорости.
+Config.RARITIES = {
+	{ name = "Обычная", bonus = 0 },
+	{ name = "Gold", bonus = 2, color = Color3.fromRGB(245, 195, 60), material = Enum.Material.Foil },
+	{ name = "Diamond", bonus = 4, color = Color3.fromRGB(160, 225, 255), material = Enum.Material.Glass },
+	{ name = "Ruby", bonus = 7, color = Color3.fromRGB(220, 40, 70), material = Enum.Material.SmoothPlastic },
+	{ name = "Galaxy", bonus = 10, color = Color3.fromRGB(120, 60, 230), material = Enum.Material.Neon },
+}
+Config.SLEDS = {
+	{ id = "tube", name = "Ватрушка", icon = "🛟", world = 1, bonus = 0, prices = { 0, 300, 900, 2400, 6000 } },
+	{ id = "board", name = "Доска", icon = "🏂", world = 1, bonus = 3, prices = { 700, 1500, 3500, 8000, 18000 } },
+	{ id = "classic", name = "Деревянные санки", icon = "🛷", world = 2, bonus = 6, prices = { 4000, 8000, 16000, 32000, 60000 } },
+	{ id = "plane", name = "Сани-самолёт", icon = "✈", world = 3, bonus = 10, prices = { 15000, 30000, 60000, 120000, 240000 } },
+}
+function Config.sled(id: string?)
+	for _, s in Config.SLEDS do
+		if s.id == id then
+			return s
+		end
+	end
+	return Config.SLEDS[1]
+end
+-- Общий бонус скорости (доля): модель + редкость
+function Config.sledBonus(id: string?, rarity: number?): number
+	local s = Config.sled(id)
+	local r = Config.RARITIES[math.clamp(rarity or 1, 1, #Config.RARITIES)]
+	return (s.bonus + r.bonus) / 100
+end
+
+------------------------------------------------------------------ СЛЕДЫ (шлейф за санками, +% монет)
+Config.TRAILS = {
+	{ id = "white", name = "Снежный", color = Color3.fromRGB(235, 245, 255), bonus = 0, price = 0 },
+	{ id = "orange", name = "Апельсин", color = Color3.fromRGB(255, 150, 50), bonus = 10, price = 600 },
+	{ id = "yellow", name = "Солнце", color = Color3.fromRGB(255, 225, 60), bonus = 15, price = 1500 },
+	{ id = "green", name = "Лайм", color = Color3.fromRGB(110, 230, 90), bonus = 25, price = 4000 },
+	{ id = "blue", name = "Океан", color = Color3.fromRGB(70, 150, 255), bonus = 30, price = 9000 },
+	{ id = "purple", name = "Аметист", color = Color3.fromRGB(170, 90, 255), bonus = 35, price = 16000 },
+	{ id = "pink", name = "Фламинго", color = Color3.fromRGB(255, 110, 190), bonus = 45, price = 30000 },
+	{ id = "rainbow", name = "Радуга", color = Color3.fromRGB(255, 80, 80), bonus = 60, price = 60000, rainbow = true },
+}
+function Config.trail(id: string?)
+	for _, t in Config.TRAILS do
+		if t.id == id then
+			return t
+		end
+	end
+	return Config.TRAILS[1]
 end
 
 ------------------------------------------------------------------ ЭКОНОМИКА

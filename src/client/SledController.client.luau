@@ -669,7 +669,9 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 
 	local sledLevel = player:GetAttribute("SledLevel") or 0
-	local maxSpeed = Config.maxSpeed(sledLevel)
+	-- Бонус модели и редкости саней (+% скорости): выше потолок и меньше трение
+	local sledBonus = s:GetAttribute("SledBonus") or 0
+	local maxSpeed = Config.maxSpeed(sledLevel) * (1 + sledBonus)
 	local useRocket = rocketHeld and fuel > 0
 	if useRocket then
 		fuel = math.max(0, fuel - dt)
@@ -741,7 +743,7 @@ RunService.Heartbeat:Connect(function(dt)
 		local onRamp = hit.Instance.Name == "Ramp"
 		local acc = if onRamp
 			then 0
-			else -Config.GRAVITY_ALONG * d.Y - Config.friction(sledLevel) - Config.DRAG * speed * speed
+			else -Config.GRAVITY_ALONG * d.Y - Config.friction(sledLevel) * (1 - sledBonus) - Config.DRAG * speed * speed
 		if useRocket then
 			acc += Config.ROCKET_THRUST
 		end

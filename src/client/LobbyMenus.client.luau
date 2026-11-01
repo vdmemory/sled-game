@@ -166,8 +166,7 @@ local worldsBtn = tile(1, "🌍", "Миры", Color3.fromRGB(70, 150, 220))
 local sledsBtn = tile(2, "🛷", "Сани", Color3.fromRGB(230, 90, 140))
 local trailsBtn, trailsBadge = tile(3, "✨", "Следы", Color3.fromRGB(140, 100, 230))
 local tasksBtn, tasksBadge = tile(4, "📋", "Задания", Color3.fromRGB(240, 160, 40))
-trailsBadge.Text = "скоро"
-trailsBadge.Visible = true
+
 
 
 -- Шестерёнка настроек справа сверху
@@ -250,21 +249,189 @@ worldsBtn.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Сани (магазин ватрушек из HUD)
-sledsBtn.Activated:Connect(function()
-	local was = shop.Visible
+local function csvSet(attr: string): { [string]: boolean }
+	local set = {}
+	for id in string.gmatch(player:GetAttribute(attr) or "", "[^,]+") do
+		set[id] = true
+	end
+	return set
+end
+local function money(n: number): string
+	if n >= 1000000 then
+		return string.format("%.1fM", n / 1000000)
+	elseif n >= 10000 then
+		return string.format("%.0fK", n / 1000)
+	elseif n >= 1000 then
+		return string.format("%.1fK", n / 1000)
+	end
+	return tostring(n)
+end
+local function say(ok: boolean, msg: any)
+	if typeof(msg) == "string" then
+		local t = hud:FindFirstChild("MenuToast") :: TextLabel?
+		if not t then
+			t = new("TextLabel", { Name = "MenuToast", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.18), Size = UDim2.fromOffset(460, 50), BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(255, 230, 90), TextStrokeTransparency = 0.3, ZIndex = 60, Parent = hud })
+		end
+		local label = t :: TextLabel
+		label.Text = (if ok then "✔ " else "") .. msg
+		label.Visible = true
+		task.delay(1.8, function()
+			if label.Text == (if ok then "✔ " else "") .. msg then
+				label.Visible = false
+			end
+		end)
+	end
+end
+
+------------------------------------------------------------------ Сани: модели × редкости (как в референсе)
+local sledWin, sledBody = window("🛷 Сани", Color3.fromRGB(230, 90, 140), 820, 500)
+local colorsTab = new("TextButton", { Text = "🎨 Цвета ватрушки", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -60, 0, -58), Size = UDim2.fromOffset(200, 40), BackgroundColor3 = Color3.fromRGB(170, 80, 220), ZIndex = 33, Parent = sledBody })
+corner(colorsTab, 12)
+stroke(colorsTab, 2)
+bouncy(colorsTab)
+colorsTab.Activated:Connect(function()
 	closeAll()
-	shop.Visible = not was
+	shop.Visible = true
+end)
+local sledList = new("ScrollingFrame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), ScrollBarThickness = 6, ZIndex = 32, Parent = sledBody })
+local sl = Instance.new("UIListLayout")
+sl.Padding = UDim.new(0, 12)
+sl.Parent = sledList
+type Cell = { btn: TextButton, model: any, rarity: number }
+local sledCells: { Cell } = {}
+for mi, model in Config.SLEDS do
+	local row = new("Frame", { LayoutOrder = mi, Size = UDim2.new(1, -12, 0, 150), BackgroundColor3 = Color3.fromRGB(225, 232, 248), ZIndex = 33, Parent = sledList })
+	corner(row, 16)
+	local head = new("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.new(0, 150, 1, -16), BackgroundColor3 = WHITE, ZIndex = 34, Parent = row })
+	corner(head, 12)
+	new("TextLabel", { Text = model.icon, BackgroundTransparency = 1, Position = UDim2.fromOffset(35, 6), Size = UDim2.fromOffset(80, 64), ZIndex = 35, Parent = head })
+	new("TextLabel", { Text = model.name, BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 72), Size = UDim2.new(1, -12, 0, 26), TextColor3 = DARK, ZIndex = 35, Parent = head })
+	local tag = new("TextLabel", { Text = "+" .. model.bonus .. "% скорости", Position = UDim2.fromOffset(10, 102), Size = UDim2.new(1, -20, 0, 24), BackgroundColor3 = Color3.fromRGB(70, 190, 90), ZIndex = 35, Parent = head })
+	corner(tag, 8)
+	if model.bonus == 0 then
+		tag.Visible = false
+	end
+	for r, rar in Config.RARITIES do
+		local cell = new("TextButton", {
+			Text = "",
+			Position = UDim2.new(0, 170 + (r - 1) * 124, 0, 8),
+			Size = UDim2.new(0, 116, 1, -16),
+			BackgroundColor3 = WHITE,
+			AutoButtonColor = true,
+			ZIndex = 34,
+			Parent = row,
+		})
+		corner(cell, 12)
+		stroke(cell, 2)
+		new("TextLabel", { Text = rar.name, BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 4), Size = UDim2.new(1, -12, 0, 22), TextColor3 = rar.color or DARK, TextStrokeTransparency = 0.6, ZIndex = 35, Parent = cell })
+		local sw = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 30), Size = UDim2.fromOffset(46, 46), BackgroundColor3 = rar.color or Color3.fromRGB(240, 70, 120), ZIndex = 35, Parent = cell })
+		corner(sw, 23)
+		new("TextLabel", { Text = model.icon, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 36, Parent = sw })
+		local total = model.bonus + rar.bonus
+		new("TextLabel", { Text = if total > 0 then "+" .. total .. "%" else "базовые", BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 78), Size = UDim2.new(1, -12, 0, 18), TextColor3 = Color3.fromRGB(70, 150, 90), TextStrokeTransparency = 1, ZIndex = 35, Parent = cell })
+		local status = new("TextLabel", { Name = "Status", Text = "", Position = UDim2.new(0, 6, 1, -32), Size = UDim2.new(1, -12, 0, 26), BackgroundColor3 = Color3.fromRGB(70, 190, 90), ZIndex = 35, Parent = cell })
+		corner(status, 8)
+		cell.Activated:Connect(function()
+			say(Remotes.SledAction:InvokeServer(model.id, r))
+		end)
+		table.insert(sledCells, { btn = cell, model = model, rarity = r })
+	end
+end
+local function drawSleds()
+	local owned = csvSet("OwnedSleds")
+	local coins = player:GetAttribute("Coins") or 0
+	local world = Config.worldOf(player:GetAttribute("Level") or 1)
+	local cur, curR = player:GetAttribute("Sled") or "tube", player:GetAttribute("SledRarity") or 1
+	for _, c in sledCells do
+		local status = c.btn:FindFirstChild("Status") :: TextLabel
+		local key = c.model.id .. ":" .. c.rarity
+		if c.model.id == cur and c.rarity == curR then
+			status.Text, status.BackgroundColor3 = "✔ Надето", Color3.fromRGB(70, 190, 90)
+		elseif owned[key] then
+			status.Text, status.BackgroundColor3 = "Надеть", Color3.fromRGB(80, 150, 240)
+		elseif world < c.model.world then
+			status.Text, status.BackgroundColor3 = "🔒 мир " .. c.model.world, Color3.fromRGB(150, 155, 170)
+		elseif c.rarity > 1 and not owned[c.model.id .. ":" .. (c.rarity - 1)] then
+			status.Text, status.BackgroundColor3 = "🔒 " .. money(c.model.prices[c.rarity]), Color3.fromRGB(150, 155, 170)
+		else
+			local price = c.model.prices[c.rarity]
+			status.Text = "💰 " .. money(price)
+			status.BackgroundColor3 = if coins >= price then Color3.fromRGB(240, 170, 40) else Color3.fromRGB(150, 155, 170)
+		end
+	end
+end
+sledsBtn.Activated:Connect(function()
+	drawSleds()
+	open(sledWin)
 end)
 
------------------------------------------------------------------- Следы и Задания — скоро
-local soonWin, soonBody = window("Скоро!", Color3.fromRGB(140, 100, 230), 420, 240)
-local soonText = new("TextLabel", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), TextColor3 = DARK, ZIndex = 32, Parent = soonBody })
-local soonTitle = soonWin:FindFirstChild("TextLabel", true) :: TextLabel
+------------------------------------------------------------------ Следы (+% монет)
+local trailWin, trailBody = window("✨ Следы", Color3.fromRGB(140, 100, 230), 640, 470)
+local trailGrid = Instance.new("UIGridLayout")
+trailGrid.CellSize = UDim2.fromOffset(140, 170)
+trailGrid.CellPadding = UDim2.fromOffset(12, 12)
+trailGrid.SortOrder = Enum.SortOrder.LayoutOrder
+trailGrid.Parent = trailBody
+local trailCells: { [string]: TextLabel } = {}
+for i, t in Config.TRAILS do
+	local card = new("TextButton", { Text = "", LayoutOrder = i, BackgroundColor3 = WHITE, ZIndex = 33, Parent = trailBody })
+	corner(card, 14)
+	stroke(card, 2)
+	local ribbon = new("Frame", { Position = UDim2.fromOffset(14, 14), Size = UDim2.new(1, -28, 0, 44), BackgroundColor3 = t.color, ZIndex = 34, Parent = card })
+	corner(ribbon, 22)
+	if t.rainbow then
+		local g = Instance.new("UIGradient")
+		g.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 70)),
+			ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 210, 50)),
+			ColorSequenceKeypoint.new(0.66, Color3.fromRGB(80, 220, 120)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 90, 255)),
+		})
+		g.Parent = ribbon
+		ribbon.BackgroundColor3 = WHITE
+	end
+	new("TextLabel", { Text = t.name, BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 64), Size = UDim2.new(1, -16, 0, 26), TextColor3 = DARK, ZIndex = 34, Parent = card })
+	new("TextLabel", { Text = if t.bonus > 0 then "+" .. t.bonus .. "% монет" else "без бонуса", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 92), Size = UDim2.new(1, -16, 0, 22), TextColor3 = Color3.fromRGB(200, 150, 30), TextStrokeTransparency = 1, ZIndex = 34, Parent = card })
+	local st = new("TextLabel", { Text = "", Position = UDim2.new(0, 10, 1, -40), Size = UDim2.new(1, -20, 0, 30), BackgroundColor3 = Color3.fromRGB(70, 190, 90), ZIndex = 34, Parent = card })
+	corner(st, 10)
+	trailCells[t.id] = st
+	card.Activated:Connect(function()
+		say(Remotes.TrailAction:InvokeServer(t.id))
+	end)
+end
+local function drawTrails()
+	local owned = csvSet("OwnedTrails")
+	local coins = player:GetAttribute("Coins") or 0
+	local cur = player:GetAttribute("Trail") or "white"
+	for _, t in Config.TRAILS do
+		local st = trailCells[t.id]
+		if t.id == cur then
+			st.Text, st.BackgroundColor3 = "✔ Надет", Color3.fromRGB(70, 190, 90)
+		elseif owned[t.id] then
+			st.Text, st.BackgroundColor3 = "Надеть", Color3.fromRGB(80, 150, 240)
+		else
+			st.Text = "💰 " .. money(t.price)
+			st.BackgroundColor3 = if coins >= t.price then Color3.fromRGB(240, 170, 40) else Color3.fromRGB(150, 155, 170)
+		end
+	end
+end
 trailsBtn.Activated:Connect(function()
-	soonTitle.Text = "✨ Следы"
-	soonText.Text = "Цветные шлейфы за санками\nс бонусом к монетам —\nв следующем обновлении!"
-	open(soonWin)
+	drawTrails()
+	open(trailWin)
 end)
+for _, attr in { "Coins", "Level", "OwnedSleds", "Sled", "SledRarity", "OwnedTrails", "Trail" } do
+	player:GetAttributeChangedSignal(attr):Connect(function()
+		if sledWin.Visible then
+			drawSleds()
+		end
+		if trailWin.Visible then
+			drawTrails()
+		end
+	end)
+end
+
+
+
 
 
 ------------------------------------------------------------------ Настройки
@@ -458,19 +625,19 @@ giftGrid.CellSize = UDim2.fromOffset(118, 96)
 giftGrid.CellPadding = UDim2.fromOffset(10, 10)
 giftGrid.SortOrder = Enum.SortOrder.LayoutOrder
 giftGrid.Parent = giftsBody
-local giftCells: { { btn: TextButton, status: TextLabel } } = {}
+local giftCells: { { btn: TextButton, status: TextLabel, reward: TextLabel } } = {}
 for i, g in Config.PLAYTIME_GIFTS do
 	local cell = new("TextButton", { Text = "", LayoutOrder = i, BackgroundColor3 = Color3.fromRGB(225, 232, 248), ZIndex = 33, Parent = giftsBody })
 	corner(cell, 14)
 	stroke(cell, 2)
-	local reward = (if g.coins then "💰 " .. g.coins .. "+" else "") .. (if g.gems then (if g.coins then "\n" else "") .. "💎 " .. g.gems else "")
-	new("TextLabel", { Text = reward, BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 52), TextColor3 = DARK, ZIndex = 34, Parent = cell })
+	local reward = (if g.coins then "💰 " .. g.coins else "") .. (if g.gems then (if g.coins then "\n" else "") .. "💎 " .. g.gems else "")
+	local rewardLabel = new("TextLabel", { Text = reward, BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 52), TextColor3 = DARK, ZIndex = 34, Parent = cell })
 	local st = new("TextLabel", { Text = "", Position = UDim2.new(0, 8, 1, -32), Size = UDim2.new(1, -16, 0, 26), BackgroundColor3 = Color3.fromRGB(150, 155, 170), ZIndex = 34, Parent = cell })
 	corner(st, 8)
 	cell.Activated:Connect(function()
 		act("gift", i)
 	end)
-	giftCells[i] = { btn = cell, status = st }
+	giftCells[i] = { btn = cell, status = st, reward = rewardLabel }
 end
 giftBtn.Activated:Connect(function()
 	open(giftsWin)
@@ -542,6 +709,12 @@ new("TextLabel", {
 local ticketShown = false
 local function refreshRewards()
 	readRewards()
+	-- монетные награды растут с уровнем — показываем реальные суммы
+	local level = player:GetAttribute("Level") or 1
+	for i, g in Config.PLAYTIME_GIFTS do
+		giftCells[i].reward.Text = (if g.coins then "💰 " .. Config.rewardCoins(g.coins, level) else "")
+			.. (if g.gems then (if g.coins then "\n" else "") .. "💎 " .. g.gems else "")
+	end
 	if not rewards then
 		return
 	end

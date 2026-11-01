@@ -17,6 +17,11 @@ local DEFAULT = {
 	Skin = "classic", -- надетый скин
 	OwnedSkins = { classic = true },
 	Settings = { Sfx = true, Snow = true, Shadows = true },
+	Sled = "tube", -- модель саней
+	SledRarity = 1,
+	OwnedSleds = { ["tube:1"] = true },
+	Trail = "white",
+	OwnedTrails = { white = true },
 }
 
 local function deepCopy(t: any): any
