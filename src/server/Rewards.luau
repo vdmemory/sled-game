@@ -49,6 +49,7 @@ function Rewards.sync(player: Player)
 	local list = {}
 	for i, t in tasks do
 		table.insert(list, {
+			id = t.id,
 			text = t.text,
 			target = t.target,
 			gems = t.gems,
