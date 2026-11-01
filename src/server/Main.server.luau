@@ -429,24 +429,37 @@ startRun = function(player: Player)
 	local startCF = track:startCFrame()
 	local sled = makeSled(player, startCF)
 
-	-- Тиры рогатки: столбы меняют материал (дерево → сталь → красная → сила → золото → неон)
-	local POST_STYLES = Config.POST_STYLES
-	local ltier = math.min(Config.tierOf(d.LaunchLevel) + 1, #POST_STYLES)
+	-- Тиры рогатки: свой детализированный столб на каждый тир (Shared/SledModels.slingshot)
+	local ltier = math.min(Config.tierOf(d.LaunchLevel), 5)
 	for _, post in track.posts do
-		post.Color = POST_STYLES[ltier][1]
-		post.Material = POST_STYLES[ltier][2]
+		local old = post:FindFirstChild("Look")
+		if old then
+			old:Destroy()
+		end
+		local look = Instance.new("Folder")
+		look.Name = "Look"
+		look.Parent = post
+		SledModels.slingshot(look, post.CFrame, ltier)
 	end
-	local ropeColor = if ltier >= 5 then Color3.fromRGB(255, 220, 90) elseif ltier >= 2 then Color3.fromRGB(70, 70, 80) else Color3.fromRGB(200, 160, 110)
+	local ropeColor = SledModels.ROPE_COLORS[ltier + 1]
 
-	-- Резинка рогатки
+	-- Резинка рогатки: «витая» верёвка — чередующиеся светлые и тёмные полосы вдоль луча
+	local keys = {}
+	for i = 0, 18 do
+		local c = if i % 2 == 0 then ropeColor else ropeColor:Lerp(Color3.new(0, 0, 0), 0.35)
+		table.insert(keys, ColorSequenceKeypoint.new(i / 18, c))
+	end
+	local twisted = ColorSequence.new(keys)
 	local ropes = {}
 	for _, post in track.posts do
 		local beam = Instance.new("Beam")
 		beam.Attachment0 = post.RopeAttachment
 		beam.Attachment1 = sled.RopeAttachment
-		beam.Width0 = 0.5
-		beam.Width1 = 0.5
-		beam.Color = ColorSequence.new(ropeColor)
+		beam.Width0 = 0.6
+		beam.Width1 = 0.6
+		beam.Color = twisted
+		beam.LightInfluence = 1
+		beam.LightEmission = if ltier == 5 then 0.6 else 0
 		beam.FaceCamera = true
 		beam.Segments = 1
 		beam.Parent = sled

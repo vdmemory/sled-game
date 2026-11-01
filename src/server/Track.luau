@@ -410,7 +410,13 @@ function Track:buildStart()
 			CFrame = self.origin * CFrame.new(side * 9, 4.5, -1) * CFrame.Angles(0, 0, side * math.rad(-8)),
 			Material = Enum.Material.Wood,
 			Color = Color3.fromRGB(140, 95, 55),
+			Transparency = 1,
 		}, m)
+		-- видимый столб (дизайн по тиру рогатки; в заезде Main пересобирает под игрока)
+		local look = Instance.new("Folder")
+		look.Name = "Look"
+		look.Parent = post
+		SledModels.slingshot(look, post.CFrame, 0)
 		local att = Instance.new("Attachment")
 		att.Name = "RopeAttachment"
 		att.Position = Vector3.new(0, 3.5, 0)

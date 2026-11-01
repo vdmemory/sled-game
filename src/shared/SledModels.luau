@@ -134,6 +134,12 @@ local function buildTube(b, look: Look)
 	end
 	-- клапан сзади
 	b:cyl(0.35, 0.5, Vector3.new(0, 0.55, 3.75), Vector3.new(0, 0.6, 1), BLACK)
+	-- шов по экватору и нижний защитный пояс
+	b:torus(Vector3.new(0, 0.05, 0), 3.93, 0.1, 26, look.main:Lerp(BLACK, 0.35), mat)
+	b:torus(Vector3.new(0, -0.75, 0), 3.35, 0.28, 24, BLACK, Enum.Material.Rubber)
+	-- нашивка-эмблема спереди
+	b:part(Enum.PartType.Cylinder, Vector3.new(0.06, 1.1, 1.1), CFrame.new(0, 0.35, -3.93) * CFrame.Angles(0, math.rad(90), 0), WHITE)
+	b:part(Enum.PartType.Cylinder, Vector3.new(0.08, 0.7, 0.7), CFrame.new(0, 0.35, -3.95) * CFrame.Angles(0, math.rad(90), 0), look.accent, if look.glow then Enum.Material.Neon else nil)
 end
 
 ------------------------------------------------------------------ деревянные санки
@@ -160,10 +166,21 @@ local function buildClassic(b, look: Look, painted: boolean)
 		-- продольный брус под настилом
 		b:block(Vector3.new(0.4, 0.28, 6.0), CFrame.new(x, 0.25, 0.7), wood, woodMat)
 	end
-	-- рейки настила с зазорами
+	-- рейки настила с зазорами, на концах — болты
 	for k = 0, 5 do
-		b:block(Vector3.new(4.5, 0.2, 0.75), CFrame.new(0, 0.48, -1.5 + k * 1.0), wood, woodMat)
+		local z = -1.5 + k * 1.0
+		b:block(Vector3.new(4.5, 0.2, 0.75), CFrame.new(0, 0.48, z), wood, woodMat)
+		for _, sx in { -1, 1 } do
+			b:ball(0.14, CFrame.new(sx * 1.9, 0.6, z), STEEL, Enum.Material.Metal)
+		end
 	end
+	-- стальные уголки у стоек и задний бортик
+	for _, sx in { -1, 1 } do
+		for _, z in { -1.8, 0, 1.8, 3.2 } do
+			b:block(Vector3.new(0.34, 0.12, 0.6), CFrame.new(sx * 1.9, -0.47, z), STEEL, Enum.Material.Metal)
+		end
+	end
+	b:block(Vector3.new(4.5, 0.45, 0.25), CFrame.new(0, 0.75, 3.85), WOOD_DARK, Enum.Material.Wood)
 	-- передняя поперечина и дуга-руль
 	b:block(Vector3.new(4.4, 0.3, 0.5), CFrame.new(0, 0.6, -2.2), WOOD_DARK, Enum.Material.Wood)
 	b:rod({ Vector3.new(-1.9, 1.0, -1.9), Vector3.new(-1.2, 1.25, -2.15), Vector3.new(0, 1.32, -2.25), Vector3.new(1.2, 1.25, -2.15), Vector3.new(1.9, 1.0, -1.9) }, 0.24, WOOD_DARK, Enum.Material.Wood)
@@ -203,6 +220,10 @@ local function buildBoard(b, look: Look)
 	for _, z in { -1.2, 1.2 } do
 		b:block(Vector3.new(W * 0.9, 0.02, 0.35), CFrame.new(0, y + T / 2 + 0.01, z) * CFrame.Angles(0, math.rad(25), 0), look.accent, if look.glow then Enum.Material.Neon else nil)
 	end
+	-- стомп-пэд между креплениями
+	for k = -1, 1 do
+		b:block(Vector3.new(0.9, 0.05, 0.14), CFrame.new(0, y + T / 2 + 0.02, k * 0.25), BLACK, Enum.Material.Rubber)
+	end
 	-- крепления: платформа, задник (хайбэк) и два ремешка
 	for _, z in { -1.55, 1.55 } do
 		local c = CFrame.new(0, y + T / 2, z) * CFrame.Angles(0, math.rad(if z < 0 then 12 else -12), 0)
@@ -210,6 +231,11 @@ local function buildBoard(b, look: Look)
 		b:block(Vector3.new(1.4, 0.75, 0.16), c * CFrame.new(0, 0.45, 0.55) * CFrame.Angles(math.rad(-12), 0, 0), BLACK)
 		for _, dz in { -0.2, 0.25 } do
 			b:block(Vector3.new(1.7, 0.18, 0.28), c * CFrame.new(0, 0.38, dz), look.accent:Lerp(BLACK, 0.3))
+			b:block(Vector3.new(0.2, 0.22, 0.32), c * CFrame.new(0.75, 0.4, dz), STEEL, Enum.Material.Metal) -- пряжки
+		end
+		-- болты крепления
+		for _, o in { Vector3.new(-0.45, 0.16, -0.3), Vector3.new(0.45, 0.16, -0.3), Vector3.new(-0.45, 0.16, 0.3), Vector3.new(0.45, 0.16, 0.3) } do
+			b:ball(0.12, c * CFrame.new(o), STEEL, Enum.Material.Metal)
 		end
 	end
 end
@@ -249,6 +275,16 @@ local function buildPlane(b, look: Look)
 		b:block(Vector3.new(0.28, 3.6, 0.12), CFrame.new(0, 0.2, -3.5) * CFrame.Angles(0, 0, math.rad(a + 20)) * CFrame.Angles(0, math.rad(12), 0), BLACK)
 	end
 	b:part(Enum.PartType.Cylinder, Vector3.new(0.04, 3.8, 3.8), CFrame.new(0, 0.2, -3.55) * CFrame.Angles(0, math.rad(90), 0), WHITE, nil, { Transparency = 0.8, Name = "PropDisc" })
+	-- навигационные огни на концах крыльев, выхлопные патрубки, антенна
+	b:ball(0.35, CFrame.new(-5.0, -0.35, -0.2), Color3.fromRGB(255, 60, 60), Enum.Material.Neon)
+	b:ball(0.35, CFrame.new(5.0, -0.35, -0.2), Color3.fromRGB(60, 255, 120), Enum.Material.Neon)
+	for _, sx in { -1, 1 } do
+		for k = 0, 1 do
+			b:cyl(0.22, 0.5, Vector3.new(sx * 1.15, -0.05 - k * 0.3, -1.4 + k * 0.1), Vector3.new(sx * 0.4, -0.3, 1), STEEL, Enum.Material.Metal)
+		end
+	end
+	b:rod({ Vector3.new(0, 1.4, 1.6), Vector3.new(0, 2.3, 2.3) }, 0.08, BLACK)
+	b:block(Vector3.new(1.2, 0.7, 0.3), CFrame.new(0, 1.7, 1.45) * CFrame.Angles(math.rad(10), 0, 0), BLACK, Enum.Material.Fabric) -- спинка кресла
 	-- лыжи на стойках
 	for _, sx in { -1, 1 } do
 		local x = sx * 1.3
@@ -277,44 +313,79 @@ SledModels.ROCKETS = ROCKETS
 local function buildRocket(b, at: Vector3, tier: number): Vector3
 	local r = ROCKETS[math.clamp(tier, 0, 5)]
 	local d, len = r.d, r.len
-	local back = at.Z + len / 2
-	-- корпус
-	local body = b:cyl(d, len, at, Vector3.zAxis, r.body, r.bodyMat)
+	local front, back = at.Z - len / 2, at.Z + len / 2
+	local metal = Enum.Material.Metal
+	local function rz(z: number): Vector3
+		return Vector3.new(at.X, at.Y, z)
+	end
+	-- заклёпки по кругу (ряд маленьких шариков вокруг корпуса)
+	local function rivets(z: number, n: number)
+		for i = 0, n - 1 do
+			local a = i / n * math.pi * 2
+			b:ball(0.09, CFrame.new(at.X + math.cos(a) * d * 0.52, at.Y + math.sin(a) * d * 0.52, z), STEEL, metal)
+		end
+	end
+	-- корпус: основная труба + чуть уже «шея» под носом (ступенька как у настоящей ракеты)
+	local body = b:cyl(d, len * 0.82, rz(at.Z + len * 0.09), Vector3.zAxis, r.body, r.bodyMat)
 	body.Reflectance = r.shine or 0
-	-- нос: вытянутый обтекатель + наконечник
-	b:ellipsoid(Vector3.new(d, d, d * 1.7), CFrame.new(at.X, at.Y, at.Z - len / 2), r.nose, if r.nose == BLACK then Enum.Material.Metal else nil)
-	b:ball(d * 0.22, CFrame.new(at.X, at.Y, at.Z - len / 2 - d * 0.82), r.band, r.bandMat)
-	-- пояски
-	for _, k in { -0.28, 0.12 } do
-		b:cyl(d * 1.04, 0.16, at + Vector3.new(0, 0, len * k), Vector3.zAxis, r.band, r.bandMat)
+	local neck = b:cyl(d * 0.9, len * 0.2, rz(front + len * 0.1), Vector3.zAxis, r.body, r.bodyMat)
+	neck.Reflectance = r.shine or 0
+	-- нос: обтекатель + кольцо-стык + наконечник
+	b:ellipsoid(Vector3.new(d * 0.9, d * 0.9, d * 1.8), CFrame.new(at.X, at.Y, front), r.nose, if r.nose == BLACK then metal else nil)
+	b:cyl(d * 0.95, 0.12, rz(front + 0.02), Vector3.zAxis, r.band, r.bandMat)
+	b:ball(d * 0.2, CFrame.new(at.X, at.Y, front - d * 0.86), r.band, r.bandMat)
+	-- пояски-хомуты с заклёпками
+	for _, k in { -0.18, 0.2 } do
+		local z = at.Z + len * k
+		b:cyl(d * 1.06, 0.2, rz(z), Vector3.zAxis, r.band, r.bandMat)
+		rivets(z, 8)
+	end
+	-- гоночная полоса сверху (тир 2+), иллюминатор сбоку (тир 1+)
+	if tier >= 2 then
+		b:block(Vector3.new(d * 0.22, 0.04, len * 0.7), CFrame.new(at.X, at.Y + d / 2 + 0.01, at.Z + len * 0.05), r.band, r.bandMat)
+	end
+	if tier >= 1 then
+		for _, sx in { -1, 1 } do
+			local ox = sx * (d / 2 + 0.01)
+			b:part(Enum.PartType.Cylinder, Vector3.new(0.05, d * 0.32, d * 0.32), CFrame.new(at.X + ox, at.Y, at.Z - len * 0.02), STEEL, metal)
+			b:part(Enum.PartType.Cylinder, Vector3.new(0.06, d * 0.22, d * 0.22), CFrame.new(at.X + ox, at.Y, at.Z - len * 0.02), Color3.fromRGB(150, 210, 255), Enum.Material.Glass)
+		end
 	end
 	if r.wick then -- фитиль у петарды
-		b:rod({ at + Vector3.new(0, d * 0.4, len * 0.3), at + Vector3.new(0, d * 0.75, len * 0.38), at + Vector3.new(0, d * 0.85, len * 0.5) }, 0.08, Color3.fromRGB(60, 50, 40), Enum.Material.Fabric)
+		b:rod({ rz(at.Z + len * 0.3) + Vector3.new(0, d * 0.4, 0), rz(at.Z + len * 0.38) + Vector3.new(0, d * 0.75, 0), rz(at.Z + len * 0.5) + Vector3.new(0, d * 0.85, 0) }, 0.08, Color3.fromRGB(60, 50, 40), Enum.Material.Fabric)
+		b:ball(0.16, CFrame.new(at.X, at.Y + d * 0.88, at.Z + len * 0.52), Color3.fromRGB(255, 170, 60), Enum.Material.Neon)
 	end
-	if r.intake then -- воздухозаборник сверху
-		b:block(Vector3.new(d * 0.35, d * 0.22, len * 0.35), CFrame.new(at.X, at.Y + d * 0.52, at.Z - len * 0.05), BLACK, Enum.Material.Metal)
+	if r.intake then -- воздухозаборники по бокам сверху
+		for _, sx in { -1, 1 } do
+			local c = CFrame.new(at.X + sx * d * 0.32, at.Y + d * 0.4, at.Z - len * 0.02) * CFrame.Angles(0, 0, sx * math.rad(-40))
+			b:block(Vector3.new(d * 0.28, d * 0.2, len * 0.32), c, r.band, r.bandMat)
+			b:block(Vector3.new(d * 0.18, d * 0.12, 0.05), c * CFrame.new(0, 0, -len * 0.16), BLACK)
+		end
 	end
-	-- сопло: раструб + тёмная дыра + (у старших тиров) светящееся кольцо
-	b:cyl(d * 0.82, 0.55, Vector3.new(at.X, at.Y, back + 0.22), Vector3.zAxis, r.nozzle, Enum.Material.Metal)
-	b:cyl(d * 0.95, 0.18, Vector3.new(at.X, at.Y, back + 0.5), Vector3.zAxis, r.nozzle, Enum.Material.Metal)
-	b:cyl(d * 0.6, 0.06, Vector3.new(at.X, at.Y, back + 0.6), Vector3.zAxis, BLACK)
-	if r.glow then
-		b:cyl(d * 0.42, 0.07, Vector3.new(at.X, at.Y, back + 0.62), Vector3.zAxis, r.glow, Enum.Material.Neon)
+	-- сопло-колокол: раструб расширяется ступеньками, внутри тёмный конус и огонёк
+	b:cyl(d * 0.9, 0.22, rz(back + 0.06), Vector3.zAxis, STEEL, metal)
+	local bell = { { 0.72, 0.22, 0.24 }, { 0.82, 0.18, 0.42 }, { 0.93, 0.16, 0.58 }, { 1.04, 0.1, 0.71 } }
+	for _, s in bell do
+		b:cyl(d * s[1], s[2], rz(back + s[3]), Vector3.zAxis, r.nozzle, metal)
 	end
-	-- стабилизаторы: треугольные крылышки в хвосте
-	local h = d * 0.75
+	b:cyl(d * 0.86, 0.04, rz(back + 0.77), Vector3.zAxis, BLACK)
+	b:cyl(d * 0.5, 0.05, rz(back + 0.76), Vector3.zAxis, r.glow or Color3.fromRGB(255, 140, 50), Enum.Material.Neon)
+	-- стабилизаторы: крупные стреловидные крылья с окантовкой
+	local h = d * 0.95
 	local start = if r.fins == 3 then 0 elseif r.fins == 2 then 90 else 45
 	for i = 0, r.fins - 1 do
 		local a = math.rad(start + i * 360 / r.fins)
-		local cf = CFrame.new(at.X, at.Y, back - 0.55) * CFrame.Angles(0, 0, a) * CFrame.new(0, d / 2 + h / 2 - 0.05, 0)
-		b:wedge(Vector3.new(0.12, h, 1.1), cf, r.fin, r.finMat)
+		local base = CFrame.new(at.X, at.Y, back - 0.65) * CFrame.Angles(0, 0, a)
+		b:wedge(Vector3.new(0.12, h, 1.4), base * CFrame.new(0, d / 2 + h / 2 - 0.05, 0), r.fin, r.finMat)
+		-- законцовка
+		b:block(Vector3.new(0.16, 0.14, 0.5), base * CFrame.new(0, d / 2 + h - 0.08, 0.45), r.band, r.bandMat)
 	end
-	if r.canards then -- маленькие передние крылышки
+	if r.canards then -- передние крылышки
 		for _, sx in { -1, 1 } do
-			b:wedge(Vector3.new(0.1, d * 0.35, 0.6), CFrame.new(at.X, at.Y, at.Z - len * 0.3) * CFrame.Angles(0, 0, sx * math.rad(90)) * CFrame.new(0, d / 2 + d * 0.15, 0), r.fin, r.finMat)
+			b:wedge(Vector3.new(0.1, d * 0.4, 0.7), CFrame.new(at.X, at.Y, front + len * 0.25) * CFrame.Angles(0, 0, sx * math.rad(90)) * CFrame.new(0, d / 2 + d * 0.18, 0), r.fin, r.finMat)
 		end
 	end
-	return Vector3.new(at.X, at.Y, back + 0.6)
+	return Vector3.new(at.X, at.Y, back + 0.78)
 end
 
 -- Где у каждой модели саней крепятся ракеты и фары
@@ -362,9 +433,11 @@ function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier:
 		for _, sx in { -1, 1 } do
 			b:block(Vector3.new(0.18, 0.7, 0.4), CFrame.new(sx * 0.9, yy, z), BLACK)
 		end
-		b:block(Vector3.new(2.6, 0.14, 0.7), CFrame.new(0, yy + 0.4, z + 0.1) * CFrame.Angles(math.rad(-10), 0, 0), accent)
+		-- крыло: скруглённая планка + синие торцевые пластины (как в оригинале)
+		b:rod({ Vector3.new(-1.3, yy + 0.42, z + 0.1), Vector3.new(1.3, yy + 0.42, z + 0.1) }, 0.3, accent)
+		b:block(Vector3.new(2.6, 0.08, 0.6), CFrame.new(0, yy + 0.42, z + 0.3) * CFrame.Angles(math.rad(-12), 0, 0), accent)
 		for _, sx in { -1, 1 } do
-			b:block(Vector3.new(0.1, 0.45, 0.8), CFrame.new(sx * 1.3, yy + 0.45, z + 0.1), accent)
+			b:block(Vector3.new(0.14, 0.8, 0.85), CFrame.new(sx * 1.4, yy + 0.4, z + 0.2), Color3.fromRGB(50, 70, 190))
 		end
 	end
 	if sledTier >= 3 and id ~= "plane" then
@@ -390,6 +463,135 @@ function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier:
 		end
 	end
 	return nozzle
+end
+
+------------------------------------------------------------------ столбы рогатки (апгрейд «Запуск»)
+-- Каждый тир — свой столб, как в оригинале: бревно → стальной кнехт → колонна → гидравлика →
+-- золотая колонна с камнем → неоновый обелиск. Вокруг верха намотана резинка.
+-- base — центр столба (высота 9, низ на −4.5); резинка крепится на высоте +3.5.
+SledModels.ROPE_COLORS = {
+	Color3.fromRGB(205, 170, 120),
+	Color3.fromRGB(205, 55, 50),
+	Color3.fromRGB(215, 185, 140),
+	Color3.fromRGB(45, 45, 55),
+	Color3.fromRGB(255, 210, 80),
+	Color3.fromRGB(90, 230, 255),
+}
+
+function SledModels.slingshot(parent: Instance, base: CFrame, tier: number)
+	local b = newBuilder(parent, base, nil)
+	tier = math.clamp(tier, 0, 5)
+	local Y = Vector3.yAxis
+	local function v(y: number): Vector3
+		return Vector3.new(0, y, 0)
+	end
+	local rope = SledModels.ROPE_COLORS[tier + 1]
+	local postR = 0.8 -- радиус там, где намотана резинка
+	if tier == 0 then
+		-- бревно с корой, срезом сверху и камнями у основания
+		local wood, dark = Color3.fromRGB(140, 95, 55), Color3.fromRGB(100, 66, 38)
+		b:cyl(1.5, 9, v(0), Y, wood, Enum.Material.Wood)
+		for _, y in { -2.6, -0.4, 1.8 } do
+			b:cyl(1.58, 0.22, v(y), Y, dark, Enum.Material.Wood)
+		end
+		b:cyl(1.38, 0.06, v(4.52), Y, Color3.fromRGB(215, 175, 115), Enum.Material.Wood)
+		b:cyl(0.8, 0.07, v(4.53), Y, Color3.fromRGB(180, 135, 85), Enum.Material.Wood)
+		b:cyl(0.25, 0.08, v(4.54), Y, dark, Enum.Material.Wood)
+		-- сучок
+		b:rod({ v(0.6) + Vector3.new(0.7, 0, 0), v(1.3) + Vector3.new(1.3, 0, 0.2) }, 0.32, wood, Enum.Material.Wood)
+		for i, off in { Vector3.new(1.0, -4.3, 0.5), Vector3.new(-0.9, -4.35, 0.7), Vector3.new(0.2, -4.3, -1.0), Vector3.new(-0.7, -4.4, -0.8) } do
+			b:ball(0.9 + i * 0.12, CFrame.new(off), Color3.fromRGB(125, 128, 135), Enum.Material.Slate)
+		end
+		postR = 0.76
+	elseif tier == 1 then
+		-- стальной кнехт: фланец с болтами, труба с кольцами, грибовидная шапка
+		local steel, dark = Color3.fromRGB(150, 156, 168), Color3.fromRGB(90, 95, 108)
+		b:cyl(2.8, 0.35, v(-4.35), Y, dark, Enum.Material.DiamondPlate)
+		for i = 0, 5 do
+			local a = i / 6 * math.pi * 2
+			b:ball(0.22, CFrame.new(math.cos(a) * 1.15, -4.12, math.sin(a) * 1.15), STEEL, Enum.Material.Metal)
+		end
+		b:cyl(1.6, 8.4, v(-0.1), Y, steel, Enum.Material.Metal)
+		for _, y in { -3.7, -1.0, 2.2 } do
+			b:cyl(1.85, 0.32, v(y), Y, dark, Enum.Material.Metal)
+		end
+		b:cyl(2.1, 0.45, v(4.2), Y, dark, Enum.Material.Metal)
+		b:ellipsoid(Vector3.new(1.9, 0.8, 1.9), CFrame.new(0, 4.45, 0), steel, Enum.Material.Metal)
+	elseif tier == 2 then
+		-- колонна (розовая, как в оригинале): плинт, база, каннелюры, капитель, цветные кольца
+		local pink, white = Color3.fromRGB(240, 160, 180), Color3.fromRGB(250, 245, 245)
+		b:block(Vector3.new(2.7, 0.6, 2.7), CFrame.new(0, -4.2, 0), white, Enum.Material.Marble)
+		b:cyl(2.25, 0.4, v(-3.7), Y, white, Enum.Material.Marble)
+		b:cyl(1.95, 0.25, v(-3.4), Y, pink)
+		b:cyl(1.6, 7.0, v(0), Y, pink)
+		for i = 0, 9 do
+			local a = i / 10 * math.pi * 2
+			b:block(Vector3.new(0.2, 6.6, 0.2), CFrame.new(math.cos(a) * 0.78, 0, math.sin(a) * 0.78) * CFrame.Angles(0, -a, 0), white)
+		end
+		b:cyl(1.75, 0.22, v(2.55), Y, Color3.fromRGB(220, 50, 60))
+		b:cyl(1.75, 0.22, v(2.85), Y, Color3.fromRGB(60, 110, 220))
+		b:cyl(2.0, 0.35, v(3.75), Y, pink)
+		b:cyl(2.3, 0.3, v(4.05), Y, white, Enum.Material.Marble)
+		b:block(Vector3.new(2.6, 0.35, 2.6), CFrame.new(0, 4.35, 0), white, Enum.Material.Marble)
+	elseif tier == 3 then
+		-- гидравлический силовой столб: корпус с «зеброй», хромированный шток, лампа
+		local blue, chrome = Color3.fromRGB(55, 85, 200), Color3.fromRGB(215, 220, 230)
+		b:block(Vector3.new(2.6, 2.2, 2.6), CFrame.new(0, -3.4, 0), blue, Enum.Material.Metal)
+		for i = 0, 5 do
+			b:cyl(2.2, 0.18, v(-2.15 + i * 0.18), Y, if i % 2 == 0 then Color3.fromRGB(250, 200, 30) else BLACK)
+		end
+		local rodp = b:cyl(1.0, 4.4, v(0.1), Y, chrome, Enum.Material.Metal)
+		rodp.Reflectance = 0.35
+		b:cyl(1.3, 0.3, v(-1.0), Y, STEEL, Enum.Material.Metal)
+		b:cyl(1.8, 2.3, v(3.2), Y, blue, Enum.Material.Metal)
+		b:cyl(1.9, 0.18, v(2.4), Y, Color3.fromRGB(90, 230, 255), Enum.Material.Neon)
+		b:cyl(1.9, 0.25, v(4.4), Y, STEEL, Enum.Material.Metal)
+		b:ball(0.5, CFrame.new(0, 4.65, 0), Color3.fromRGB(255, 70, 60), Enum.Material.Neon)
+		postR = 0.92
+	elseif tier == 4 then
+		-- золотая колонна на мраморе с драгоценным камнем
+		local gold, marble = Color3.fromRGB(245, 195, 60), Color3.fromRGB(245, 242, 235)
+		b:block(Vector3.new(2.8, 0.7, 2.8), CFrame.new(0, -4.15, 0), marble, Enum.Material.Marble)
+		b:cyl(2.3, 0.4, v(-3.6), Y, gold).Reflectance = 0.3
+		local shaft = b:cyl(1.6, 7.0, v(0), Y, gold)
+		shaft.Reflectance = 0.3
+		-- спиральный орнамент вокруг ствола
+		local spiral = {}
+		for k = 0, 16 do
+			local a = k / 16 * math.pi * 4
+			table.insert(spiral, Vector3.new(math.cos(a) * 0.82, -3.0 + k * 0.36, math.sin(a) * 0.82))
+		end
+		b:rod(spiral, 0.14, Color3.fromRGB(255, 240, 170))
+		for _, y in { -2.9, 2.6 } do
+			b:cyl(1.85, 0.28, v(y), Y, Color3.fromRGB(255, 225, 120)).Reflectance = 0.3
+		end
+		b:cyl(2.3, 0.45, v(3.85), Y, gold).Reflectance = 0.3
+		b:block(Vector3.new(2.5, 0.35, 2.5), CFrame.new(0, 4.25, 0), marble, Enum.Material.Marble)
+		local gem = b:block(Vector3.new(0.9, 0.9, 0.9), CFrame.new(0, 5.1, 0) * CFrame.Angles(math.rad(45), 0, math.rad(35)), Color3.fromRGB(80, 200, 255), Enum.Material.Glass)
+		gem.Transparency = 0.2
+		b:ball(0.45, CFrame.new(0, 5.1, 0), Color3.fromRGB(150, 230, 255), Enum.Material.Neon)
+	else
+		-- неоновый обелиск: тёмный камень, светящиеся кольца, парящий кристалл
+		local dark, neon = Color3.fromRGB(32, 26, 55), Color3.fromRGB(90, 230, 255)
+		b:block(Vector3.new(2.6, 0.6, 2.6), CFrame.new(0, -4.2, 0), dark, Enum.Material.Slate)
+		b:cyl(1.7, 8.0, v(-0.3), Y, dark, Enum.Material.Slate)
+		for _, y in { -3.4, -1.2, 1.0, 2.5 } do
+			b:cyl(1.8, 0.14, v(y), Y, neon, Enum.Material.Neon)
+		end
+		b:cyl(2.1, 0.3, v(3.9), Y, dark, Enum.Material.Slate)
+		local crystal = b:block(Vector3.new(0.9, 1.6, 0.9), CFrame.new(0, 5.3, 0) * CFrame.Angles(0, math.rad(45), 0), Color3.fromRGB(190, 110, 255), Enum.Material.Neon)
+		crystal.Name = "Crystal"
+		local light = Instance.new("PointLight")
+		light.Color = neon
+		light.Range = 12
+		light.Brightness = 1.5
+		light.Parent = crystal
+		postR = 0.85
+	end
+	-- намотка резинки: три витка у точки крепления
+	for i = 0, 2 do
+		b:torus(v(3.15 + i * 0.32), postR + 0.08, 0.3, 14, rope, if tier == 5 then Enum.Material.Neon else Enum.Material.Fabric)
+	end
 end
 
 function SledModels.build(parent: Instance, base: CFrame, id: string, look: Look, weldTo: BasePart?, painted: boolean?): number

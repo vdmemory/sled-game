@@ -43,35 +43,21 @@ local function buildModel(kind: string, level: number): Model
 		-- одна большая ракета, повёрнутая боком
 		SledModels.rocket(m, CFrame.Angles(0, math.rad(90), 0), tier)
 	elseif kind == "Launch" then
-		-- рогатка: два столба нового тира, резинка, санки перед ней
-		local style = Config.POST_STYLES[math.min(tier + 1, #Config.POST_STYLES)]
+		-- рогатка: два столба нового тира с натянутой резинкой, санки между ними
+		local rope = SledModels.ROPE_COLORS[math.clamp(tier, 0, 5) + 1]
 		for _, sx in { -1, 1 } do
-			local post = Instance.new("Part")
-			post.Shape = Enum.PartType.Cylinder
-			post.Size = Vector3.new(7, 1.2, 1.2)
-			post.CFrame = CFrame.new(sx * 5, 1.5, 3) * CFrame.Angles(0, 0, math.rad(90))
-			post.Color = style[1]
-			post.Material = style[2]
-			post.Anchored = true
-			post.Parent = m
-			local cap = Instance.new("Part")
-			cap.Shape = Enum.PartType.Ball
-			cap.Size = Vector3.new(1.6, 1.6, 1.6)
-			cap.Position = Vector3.new(sx * 5, 5.1, 3)
-			cap.Color = style[1]
-			cap.Material = style[2]
-			cap.Anchored = true
-			cap.Parent = m
+			SledModels.slingshot(m, CFrame.new(sx * 5, 0, 0) * CFrame.Angles(0, 0, sx * math.rad(-8)), tier)
 			local band = Instance.new("Part")
 			band.Shape = Enum.PartType.Cylinder
-			local a, b = Vector3.new(sx * 5, 4.6, 3), Vector3.new(sx * 1.6, 1.4, 4.8)
-			band.Size = Vector3.new((b - a).Magnitude, 0.35, 0.35)
+			local a, b = Vector3.new(sx * 4.6, 3.5, 0), Vector3.new(sx * 1.4, -3.2, 2.2)
+			band.Size = Vector3.new((b - a).Magnitude, 0.45, 0.45)
 			band.CFrame = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0)
-			band.Color = if tier >= 4 then Color3.fromRGB(255, 220, 90) elseif tier >= 1 then Color3.fromRGB(70, 70, 80) else Color3.fromRGB(200, 160, 110)
+			band.Color = rope
+			band.Material = if tier >= 5 then Enum.Material.Neon else Enum.Material.Fabric
 			band.Anchored = true
 			band.Parent = m
 		end
-		SledModels.build(m, CFrame.new(0, 0, 6), sledId, look, nil, rarityIdx > 1)
+		SledModels.build(m, CFrame.new(0, -3.5, 2.2), sledId, look, nil, rarityIdx > 1)
 	else
 		-- санки целиком с новым обвесом и ракетами
 		SledModels.build(m, CFrame.new(), sledId, look, nil, rarityIdx > 1)

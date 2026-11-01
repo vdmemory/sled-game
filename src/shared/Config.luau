@@ -195,16 +195,6 @@ Config.TIERS = {
 	Income = { "Копилка", "Мешок монет", "Сундук", "Сейф", "Банк", "Золотой банк" },
 	Rocket = { "Петарда", "Ракета", "Турбо-ракета", "Мега-двигатель", "Бласт-двигатель", "Гиперджет" },
 }
--- Столбы рогатки по тиру «Запуска»: {цвет, материал}
-Config.POST_STYLES = {
-	{ Color3.fromRGB(140, 95, 55), Enum.Material.Wood },
-	{ Color3.fromRGB(150, 155, 165), Enum.Material.DiamondPlate },
-	{ Color3.fromRGB(210, 60, 60), Enum.Material.SmoothPlastic },
-	{ Color3.fromRGB(70, 90, 200), Enum.Material.Metal },
-	{ Color3.fromRGB(240, 195, 60), Enum.Material.Foil },
-	{ Color3.fromRGB(90, 220, 255), Enum.Material.Neon },
-}
-
 -- Фоновая музыка: пробуем по порядку, первая загрузившаяся играет по кругу.
 -- Свой трек: залить аудио в Creator Hub и поставить его ID первым.
 Config.MUSIC_IDS = { 125871106395463, 132489602913551, 140520386514181 }
