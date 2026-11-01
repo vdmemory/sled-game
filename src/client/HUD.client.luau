@@ -238,29 +238,81 @@ end)
 ------------------------------------------------------------------ заезд
 local runUi = frame({ Name = "Run", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false })
 
-local runCoins = label({
+-- Монеты за заезд — плашка слева сверху (под кнопками Roblox)
+local coinPill = frame({
 	Parent = runUi,
-	Text = "",
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 14),
-	Size = UDim2.new(0, 300, 0, 40),
+	Position = UDim2.new(0, 16, 0, 64),
+	Size = UDim2.new(0, 150, 0, 40),
+	BackgroundColor3 = Color3.fromRGB(35, 50, 90),
+	BackgroundTransparency = 0.25,
+})
+corner(coinPill, 20)
+local runCoins = label({
+	Parent = coinPill,
+	Text = "💰 0",
+	Position = UDim2.new(0, 10, 0, 4),
+	Size = UDim2.new(1, -20, 1, -8),
+	TextXAlignment = Enum.TextXAlignment.Left,
 	TextColor3 = Color3.fromRGB(255, 220, 90),
 })
--- Пройденная дистанция крупно сверху, как в оригинале
+-- Пройденная дистанция крупно сверху по центру + рекорд под ней, как в оригинале
 local distLabel = label({
 	Parent = runUi,
 	Text = "",
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 52),
-	Size = UDim2.new(0, 260, 0, 34),
+	Position = UDim2.new(0.5, 0, 0, 14),
+	Size = UDim2.new(0, 260, 0, 52),
 })
-local speedLabel = label({
+local bestLabel = label({
 	Parent = runUi,
 	Text = "",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 64),
+	Size = UDim2.new(0, 220, 0, 24),
+	TextColor3 = Color3.fromRGB(255, 225, 120),
+})
+
+-- Круглый спидометр слева снизу: дуга из сегментов + цифра
+local SPEED_MAX = 160 -- км/ч на полной дуге
+local dial = frame({
+	Parent = runUi,
 	AnchorPoint = Vector2.new(0, 1),
-	Position = UDim2.new(0, 20, 1, -20),
-	Size = UDim2.new(0, 200, 0, 46),
-	TextXAlignment = Enum.TextXAlignment.Left,
+	Position = UDim2.new(0, 18, 1, -104),
+	Size = UDim2.new(0, 130, 0, 130),
+	BackgroundColor3 = Color3.fromRGB(30, 45, 80),
+	BackgroundTransparency = 0.35,
+})
+corner(dial, 65)
+local dialSegments: { Frame } = {}
+local SEGMENTS = 22
+for i = 1, SEGMENTS do
+	-- дуга 240° от левого-нижнего к правому-нижнему
+	local a = math.rad(150 + (i - 1) / (SEGMENTS - 1) * 240)
+	local seg = frame({
+		Parent = dial,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, math.cos(a) * 54, 0.5, math.sin(a) * 54),
+		Size = UDim2.new(0, 6, 0, 13),
+		Rotation = math.deg(a) + 90,
+		BackgroundColor3 = Color3.fromRGB(80, 100, 140),
+	})
+	corner(seg, 3)
+	dialSegments[i] = seg
+end
+local speedLabel = label({
+	Parent = dial,
+	Text = "0",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.45),
+	Size = UDim2.new(0, 80, 0, 44),
+})
+label({
+	Parent = dial,
+	Text = "км/ч",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.fromScale(0.5, 0.64),
+	Size = UDim2.new(0, 60, 0, 18),
+	TextTransparency = 0.2,
 })
 
 -- Прогресс до финиша (вертикальная шкала справа)
@@ -299,24 +351,99 @@ local pctBubble = label({
 	TextXAlignment = Enum.TextXAlignment.Right,
 })
 
--- Топливо ракеты
-local fuelBox = frame({
-	Parent = runUi,
-	AnchorPoint = Vector2.new(1, 1),
-	Position = UDim2.new(1, -70, 1, -24),
-	Size = UDim2.new(0, 220, 0, 22),
-	BackgroundColor3 = Color3.fromRGB(40, 50, 70),
-	BackgroundTransparency = 0.3,
-})
-corner(fuelBox, 11)
-local fuelFill = frame({ Parent = fuelBox, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 140, 50) })
-corner(fuelFill, 11)
+-- Кнопка ракеты под спидометром (держи — летишь) + столбик топлива рядом
+local rocketBtn = Instance.new("TextButton")
+rocketBtn.Text = ""
+rocketBtn.AutoButtonColor = false
+rocketBtn.AnchorPoint = Vector2.new(0.5, 0)
+rocketBtn.Position = UDim2.new(0.5, 0, 1, 8)
+rocketBtn.Size = UDim2.new(0, 72, 0, 72)
+rocketBtn.BackgroundColor3 = Color3.fromRGB(255, 120, 40)
+rocketBtn.Parent = dial
+corner(rocketBtn, 36)
+stroke(rocketBtn, 3)
+label({ Parent = rocketBtn, Text = "🚀", Position = UDim2.fromScale(0.18, 0.12), Size = UDim2.fromScale(0.64, 0.5) })
 label({
-	Parent = fuelBox,
-	Text = if game:GetService("UserInputService").TouchEnabled then "🚀 топливо" else "🚀 Shift / E",
-	Size = UDim2.fromScale(1, 1),
-	ZIndex = 2,
+	Parent = rocketBtn,
+	Text = if game:GetService("UserInputService").TouchEnabled then "ракета" else "Shift",
+	Position = UDim2.fromScale(0.1, 0.6),
+	Size = UDim2.fromScale(0.8, 0.26),
 })
+local rocketInput = controller:WaitForChild("RocketInput")
+rocketBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		rocketInput:Fire(true)
+	end
+end)
+rocketBtn.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		rocketInput:Fire(false)
+	end
+end)
+local fuelBox = frame({
+	Parent = dial,
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(1, 12, 1, 80),
+	Size = UDim2.new(0, 16, 0, 150),
+	BackgroundColor3 = Color3.fromRGB(30, 45, 80),
+	BackgroundTransparency = 0.25,
+})
+corner(fuelBox, 8)
+stroke(fuelBox)
+local fuelFill = frame({
+	Parent = fuelBox,
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.fromScale(0, 1),
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = Color3.fromRGB(255, 160, 50),
+})
+corner(fuelFill, 8)
+
+-- ⟳ Заново (справа сверху, как в оригинале) и BACK у рогатки
+local restartBtn = button("⟳", Color3.fromRGB(70, 90, 140), {
+	Parent = runUi,
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -16, 0, 64),
+	Size = UDim2.new(0, 56, 0, 56),
+})
+restartBtn.Activated:Connect(function()
+	Remotes.Restart:FireServer()
+end)
+local backBtn = button("НАЗАД", Color3.fromRGB(60, 130, 230), {
+	Parent = runUi,
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -24),
+	Size = UDim2.new(0, 170, 0, 56),
+	Visible = false,
+})
+backBtn.Activated:Connect(function()
+	Remotes.Back:FireServer()
+end)
+
+-- Плавающий джойстик-кольцо для телефона (появляется под пальцем)
+local stick = controller:WaitForChild("Stick")
+local ring = frame({
+	Parent = runUi,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Size = UDim2.new(0, 150, 0, 150),
+	BackgroundTransparency = 1,
+	Visible = false,
+})
+corner(ring, 75)
+local ringStroke = Instance.new("UIStroke")
+ringStroke.Thickness = 4
+ringStroke.Color = Color3.fromRGB(120, 200, 255)
+ringStroke.Transparency = 0.3
+ringStroke.Parent = ring
+local knob = frame({
+	Parent = ring,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(0, 44, 0, 44),
+	BackgroundColor3 = Color3.fromRGB(120, 200, 255),
+	BackgroundTransparency = 0.2,
+})
+corner(knob, 22)
 
 -- Шкала натяжения рогатки (как в оригинале: тянешь вниз — полоса наполняется, отпускаешь — выстрел)
 local meterBox = frame({
@@ -462,8 +589,10 @@ local function updateRun()
 	pctBubble.Text = math.floor(p * 100) .. "%"
 	pctBubble.Position = UDim2.new(0, -8, 1 - p, 0)
 	local c = player:GetAttribute("RunCoins") or 0
-	runCoins.Text = if c > 0 then "💰 +" .. c else ""
+	runCoins.Text = "💰 " .. c
 	distLabel.Text = (player:GetAttribute("RunDistance") or 0) .. " м"
+	local best = math.floor((player:GetAttribute("LevelBest") or 0) / 100 * L)
+	bestLabel.Text = if best > 0 then "★ " .. best .. " м" else ""
 end
 player:GetAttributeChangedSignal("RunDistance"):Connect(updateRun)
 player:GetAttributeChangedSignal("RunCoins"):Connect(updateRun)
@@ -494,9 +623,31 @@ RunService.RenderStepped:Connect(function()
 		then "ОТПУСТИ!"
 		elseif TOUCH then "Потяни вниз и отпусти 👇"
 		else "Зажми мышь и тяни вниз (или держи Пробел)"
-	speedLabel.Text = math.floor(state.Speed.Value * 1.1) .. " км/ч"
+	local launched = player:GetAttribute("Launched") == true
+	local kmh = math.floor(state.Speed.Value * 1.1)
+	speedLabel.Text = tostring(kmh)
+	local lit = math.floor(math.clamp(kmh / SPEED_MAX, 0, 1) * SEGMENTS + 0.5)
+	for i, seg in dialSegments do
+		seg.BackgroundColor3 = if i > lit
+			then Color3.fromRGB(80, 100, 140)
+			elseif i > SEGMENTS * 0.75 then Color3.fromRGB(255, 120, 60)
+			else Color3.fromRGB(110, 220, 255)
+	end
+	dial.Visible = not awaiting
 	local maxFuel = state.FuelMax.Value
-	fuelFill.Size = UDim2.fromScale(if maxFuel > 0 then state.Fuel.Value / maxFuel else 0, 1)
+	fuelFill.Size = UDim2.fromScale(1, if maxFuel > 0 then state.Fuel.Value / maxFuel else 0)
+	rocketBtn.BackgroundColor3 = if state.RocketOn.Value
+		then Color3.fromRGB(255, 190, 60)
+		elseif state.Fuel.Value > 0 then Color3.fromRGB(255, 120, 40)
+		else Color3.fromRGB(110, 110, 130)
+	restartBtn.Visible = launched
+	backBtn.Visible = awaiting
+	ring.Visible = launched and stick.On.Value
+	if ring.Visible then
+		local o = stick.Origin.Value
+		ring.Position = UDim2.fromOffset(o.X, o.Y)
+		knob.Position = UDim2.new(0.5, stick.X.Value * 53, 0.5, 0)
+	end
 end)
 
 ------------------------------------------------------------------ действия
@@ -521,19 +672,85 @@ for name, b in upgradeButtons do
 	end)
 end
 
+-- Карточка итога заезда (как «You got» в оригинале)
+local card = frame({
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(0, 400, 0, 330),
+	BackgroundColor3 = Color3.fromRGB(245, 248, 255),
+	Visible = false,
+	ZIndex = 20,
+})
+corner(card, 22)
+stroke(card, 4)
+local cardHead = frame({ Parent = card, Size = UDim2.new(1, 0, 0, 62), BackgroundColor3 = Color3.fromRGB(60, 130, 230), ZIndex = 21 })
+corner(cardHead, 22)
+local cardTitle = label({ Parent = cardHead, Text = "", Position = UDim2.new(0, 16, 0, 8), Size = UDim2.new(1, -32, 1, -16), ZIndex = 22 })
+local DARK = Color3.fromRGB(30, 45, 80)
+local cardDist = label({ Parent = card, Text = "", Position = UDim2.new(0, 20, 0, 74), Size = UDim2.new(1, -40, 0, 46), TextColor3 = DARK, TextStrokeTransparency = 1, ZIndex = 21 })
+local cardBar = frame({ Parent = card, Position = UDim2.new(0, 40, 0, 128), Size = UDim2.new(1, -80, 0, 14), BackgroundColor3 = Color3.fromRGB(200, 210, 230), ZIndex = 21 })
+corner(cardBar, 7)
+local cardBarFill = frame({ Parent = cardBar, Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(70, 170, 255), ZIndex = 22 })
+corner(cardBarFill, 7)
+local cardCoins = frame({ Parent = card, Position = UDim2.new(0, 40, 0, 156), Size = UDim2.new(1, -80, 0, 54), BackgroundColor3 = Color3.fromRGB(255, 236, 170), ZIndex = 21 })
+corner(cardCoins, 14)
+local cardCoinsText = label({ Parent = cardCoins, Text = "", Position = UDim2.new(0, 10, 0, 6), Size = UDim2.new(1, -20, 1, -12), TextColor3 = Color3.fromRGB(150, 95, 10), TextStrokeTransparency = 1, ZIndex = 22 })
+local cardBonus = label({ Parent = card, Text = "", Position = UDim2.new(0, 20, 0, 216), Size = UDim2.new(1, -40, 0, 24), TextColor3 = Color3.fromRGB(90, 105, 140), TextStrokeTransparency = 1, ZIndex = 21 })
+local cardBtn = button("Забрать", Color3.fromRGB(70, 190, 90), {
+	Parent = card,
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -16),
+	Size = UDim2.new(0, 200, 0, 58),
+	ZIndex = 22,
+})
+local bestBanner = label({
+	Parent = card,
+	Text = "🏆 НОВЫЙ РЕКОРД!",
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 0, -8),
+	Size = UDim2.new(0, 360, 0, 48),
+	TextColor3 = Color3.fromRGB(255, 215, 60),
+	Rotation = -3,
+	Visible = false,
+	ZIndex = 23,
+})
+local cardToken = 0
+local function hideCard()
+	card.Visible = false
+end
+cardBtn.Activated:Connect(hideCard)
+
 Remotes.RunEnded.OnClientEvent:Connect(function(r)
-	local text
-	if r.reason == "finish" then
-		text = "🏁 Уровень " .. r.level .. " пройден!\n+" .. r.coins .. " 💰"
-	else
-		local head = if r.reason == "crash"
-			then "💥 Врезался"
-			elseif r.reason == "fell" then "Улетел с трассы!"
-			elseif r.reason == "stopped" then "Остановился"
-			else "Заезд окончен"
-		text = head .. " на " .. r.percent .. "%\n+" .. r.coins .. " 💰" .. (if r.newBest then "  · 🏆 рекорд!" else "")
+	cardToken += 1
+	local my = cardToken
+	local finished = r.reason == "finish"
+	cardTitle.Text = if finished
+		then "🏁 Уровень " .. r.level .. " пройден!"
+		elseif r.reason == "crash" then "💥 Врезался!"
+		elseif r.reason == "fell" then "Улетел с трассы!"
+		elseif r.reason == "stopped" then "Остановился"
+		else "Заезд окончен"
+	cardHead.BackgroundColor3 = if finished then Color3.fromRGB(70, 190, 90) elseif r.reason == "crash" then Color3.fromRGB(230, 90, 80) else Color3.fromRGB(60, 130, 230)
+	cardDist.Text = (r.distance or 0) .. " м  ·  " .. r.percent .. "%"
+	cardBarFill.Size = UDim2.fromScale(0, 1)
+	TweenService:Create(cardBarFill, TweenInfo.new(0.8, Enum.EasingStyle.Quad), { Size = UDim2.fromScale(r.percent / 100, 1) }):Play()
+	cardCoinsText.Text = "💰 +" .. r.coins .. (if (r.mult or 1) > 1 then "  (x" .. r.mult .. ")" else "")
+	cardBonus.Text = if (r.bonus or 0) > 0 then "из них за монеты, полёт и трюки: +" .. r.bonus else ""
+	bestBanner.Visible = r.newBest == true or finished
+	bestBanner.Text = if finished then "🎉 ФИНИШ!" else "🏆 НОВЫЙ РЕКОРД!"
+	card.Size = UDim2.new(0, 300, 0, 250)
+	card.Visible = true
+	TweenService:Create(card, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Size = UDim2.new(0, 400, 0, 330) }):Play()
+	task.delay(7, function()
+		if cardToken == my then
+			hideCard()
+		end
+	end)
+end)
+player:GetAttributeChangedSignal("InRun"):Connect(function()
+	if player:GetAttribute("InRun") then
+		hideCard()
 	end
-	showToast(text, 3.5)
 end)
 
 controller:WaitForChild("TrickPopup").Event:Connect(function(text)

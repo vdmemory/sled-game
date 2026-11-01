@@ -27,6 +27,8 @@ local Crash: RemoteEvent = remote("RemoteEvent", "Crash")
 local Air: RemoteEvent = remote("RemoteEvent", "Air")
 local Trick: RemoteEvent = remote("RemoteEvent", "Trick")
 local RunEnded: RemoteEvent = remote("RemoteEvent", "RunEnded")
+local Restart: RemoteEvent = remote("RemoteEvent", "Restart") -- ⟳ в заезде: закончить и сразу новый
+local Back: RemoteEvent = remote("RemoteEvent", "Back") -- BACK у рогатки: вернуться в лобби
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 local SkinAction: RemoteFunction = remote("RemoteFunction", "SkinAction")
 remotes.Parent = ReplicatedStorage
@@ -176,6 +178,8 @@ type Run = {
 }
 local runs: { [Player]: Run } = {}
 
+local startRun: (Player) -> ()
+
 local function endRun(player: Player, reason: string)
 	local run = runs[player]
 	if not run or run.ended then
@@ -208,15 +212,22 @@ local function endRun(player: Player, reason: string)
 
 	player:SetAttribute("InRun", false)
 	player:SetAttribute("Launched", false)
-	RunEnded:FireClient(player, {
-		reason = reason,
-		percent = if finished then 100 else pct,
-		coins = earned,
-		level = level,
-		newBest = newBest,
-	})
+	local quiet = reason == "back" or reason == "restart"
+	if not quiet then
+		RunEnded:FireClient(player, {
+			reason = reason,
+			percent = if finished then 100 else pct,
+			coins = earned,
+			bonus = run.bonusCoins * mult,
+			distance = math.floor(dist),
+			length = L,
+			level = level,
+			newBest = newBest,
+			mult = mult,
+		})
+	end
 
-	task.delay(if finished then 2.5 else 1.5, function()
+	task.delay(if finished then 2.5 elseif quiet then 0.1 else 1.5, function()
 		run.sled:Destroy()
 		run.track:destroy()
 		if slots[run.slot] == player then
@@ -224,6 +235,10 @@ local function endRun(player: Player, reason: string)
 		end
 		if player.Parent then
 			player:LoadCharacter()
+			if reason == "restart" then
+				task.wait(0.3)
+				startRun(player)
+			end
 		end
 	end)
 end
@@ -295,7 +310,7 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	return seat
 end
 
-StartRun.OnServerEvent:Connect(function(player)
+startRun = function(player: Player)
 	if runs[player] or not player:GetAttribute("Loaded") then
 		return
 	end
@@ -348,11 +363,55 @@ StartRun.OnServerEvent:Connect(function(player)
 	player:SetAttribute("RunCoins", 0)
 
 	sled:GetPropertyChangedSignal("Occupant"):Connect(function()
-		if not sled.Occupant then
+		-- при аварии персонаж вылетает из санок сам — это не «вышел»
+		if not sled.Occupant and not run.crashed then
 			endRun(player, "left")
 		end
 	end)
+end
+StartRun.OnServerEvent:Connect(startRun)
+
+Restart.OnServerEvent:Connect(function(player)
+	local run = runs[player]
+	if run and not run.ended then
+		endRun(player, "restart")
+	end
 end)
+Back.OnServerEvent:Connect(function(player)
+	local run = runs[player]
+	if run and not run.launched and not run.ended then
+		endRun(player, "back")
+	end
+end)
+
+-- Ragdoll: суставы персонажа → шарниры, чтобы он кувыркался после аварии (видно всем)
+local function ragdoll(character: Model)
+	local hum = character:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.BreakJointsOnDeath = false
+		hum.RequiresNeck = false
+	end
+	for _, m in character:GetDescendants() do
+		if m:IsA("Motor6D") and m.Part0 and m.Part1 and m.Name ~= "RootJoint" and m.Name ~= "Root" then
+			local a0 = Instance.new("Attachment")
+			a0.CFrame = m.C0
+			a0.Parent = m.Part0
+			local a1 = Instance.new("Attachment")
+			a1.CFrame = m.C1
+			a1.Parent = m.Part1
+			local bs = Instance.new("BallSocketConstraint")
+			bs.Attachment0 = a0
+			bs.Attachment1 = a1
+			bs.LimitsEnabled = true
+			bs.UpperAngle = 70
+			bs.TwistLimitsEnabled = true
+			bs.TwistLowerAngle = -45
+			bs.TwistUpperAngle = 45
+			bs.Parent = m.Parent
+			m.Enabled = false
+		end
+	end
+end
 
 -- Игрок отпустил рогатку: power 0..1 — насколько сильно оттянул резинку
 Launch.OnServerEvent:Connect(function(player, power)
@@ -401,7 +460,15 @@ Crash.OnServerEvent:Connect(function(player)
 		return
 	end
 	run.crashed = true
-	task.delay(1.6, function()
+	-- выкидываем персонажа из санок и превращаем в ragdoll
+	local weld = run.sled:FindFirstChild("SeatWeld")
+	if weld then
+		weld:Destroy()
+	end
+	if player.Character then
+		ragdoll(player.Character)
+	end
+	task.delay(2.2, function()
 		if runs[player] == run then
 			endRun(player, "crash")
 		end

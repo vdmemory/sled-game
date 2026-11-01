@@ -44,18 +44,36 @@ task.spawn(function()
 	end
 end)
 
-local SWIPE_FULL = 90 -- пикселей свайпа = руль до упора
+local SWIPE_FULL = 70 -- пикселей = руль до упора (радиус кольца-джойстика в HUD)
 local swipeInput: InputObject? = nil
 local swipeStartX = 0
+-- Плавающий джойстик как в оригинале: кольцо появляется там, где коснулся пальцем
+local stickFolder = Instance.new("Folder")
+stickFolder.Name = "Stick"
+local stickOn = Instance.new("BoolValue")
+stickOn.Name = "On"
+stickOn.Parent = stickFolder
+local stickOrigin = Instance.new("Vector3Value")
+stickOrigin.Name = "Origin"
+stickOrigin.Parent = stickFolder
+local stickValue = Instance.new("NumberValue")
+stickValue.Name = "X"
+stickValue.Parent = stickFolder
+stickFolder.Parent = script
 UserInputService.InputBegan:Connect(function(input, processed)
 	if input.UserInputType == Enum.UserInputType.Touch and not processed and not swipeInput then
 		swipeInput = input
 		swipeStartX = input.Position.X
+		stickOrigin.Value = Vector3.new(input.Position.X, input.Position.Y, 0)
+		stickValue.Value = 0
+		stickOn.Value = true
 	end
 end)
 UserInputService.InputEnded:Connect(function(input)
 	if input == swipeInput then
 		swipeInput = nil
+		stickOn.Value = false
+		stickValue.Value = 0
 	end
 end)
 
@@ -78,6 +96,7 @@ local function readSteer(seat: VehicleSeat): number
 	-- Свайп: держишь палец и ведёшь влево/вправо
 	if swipeInput then
 		local s = math.clamp((swipeInput.Position.X - swipeStartX) / SWIPE_FULL, -1, 1)
+		stickValue.Value = s
 		if math.abs(s) > math.abs(steer) then
 			steer = s
 		end
@@ -115,6 +134,11 @@ sfx.Parent = script
 local requestLaunch = Instance.new("BindableEvent")
 requestLaunch.Name = "RequestLaunch"
 requestLaunch.Parent = script
+
+-- Кнопка ракеты в HUD (под спидометром): RocketInput:Fire(true/false)
+local rocketInput = Instance.new("BindableEvent")
+rocketInput.Name = "RocketInput"
+rocketInput.Parent = script
 
 local trickPopup = Instance.new("BindableEvent")
 trickPopup.Name = "TrickPopup" -- (текст) — HUD показывает всплывашку
@@ -255,6 +279,9 @@ local function onRocket(_, inputState: Enum.UserInputState)
 	rocketHeld = inputState == Enum.UserInputState.Begin
 	return Enum.ContextActionResult.Sink
 end
+rocketInput.Event:Connect(function(held: boolean)
+	rocketHeld = held
+end)
 
 ------------------------------------------------------------------ столкновения
 -- Удар о препятствие: ватрушка кувыркается вперёд и останавливается, заезд окончен
@@ -273,6 +300,38 @@ local function crash()
 	local side = if math.random() < 0.5 then -1 else 1
 	s.AssemblyLinearVelocity = fwd * math.min(speed, 60) * 0.35 + fwd:Cross(Vector3.yAxis) * side * 6 + Vector3.new(0, 28, 0)
 	s.AssemblyAngularVelocity = Vector3.new(-9, side * 2, side * 5) -- кувырок через «нос»
+	-- Персонаж вылетает из санок и кувыркается (суставы-шарниры ставит сервер)
+	local hum = humanoid
+	local root = hum and hum.Parent and hum.Parent:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if hum and root then
+		local weld = s:FindFirstChild("SeatWeld")
+		if weld then
+			weld:Destroy()
+		end
+		hum.Sit = false
+		hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+		hum:ChangeState(Enum.HumanoidStateType.Physics)
+		root.AssemblyLinearVelocity = fwd * math.clamp(speed, 25, 70) * 0.8 + Vector3.new(0, 30, 0)
+		root.AssemblyAngularVelocity = fwd:Cross(Vector3.yAxis) * -8 + Vector3.new(0, side * 3, 0)
+	end
+	-- Монеты разлетаются вокруг (только эффект)
+	local origin = s.Position
+	for i = 1, 14 do
+		local c = Instance.new("Part")
+		c.Shape = Enum.PartType.Cylinder
+		c.Size = Vector3.new(0.3, 1.4, 1.4)
+		c.Color = Color3.fromRGB(255, 200, 40)
+		c.Material = Enum.Material.SmoothPlastic
+		c.CanCollide = true
+		c.CanQuery = false
+		c.CanTouch = false
+		c.CollisionGroup = "Riders"
+		c.CFrame = CFrame.new(origin + Vector3.new(0, 2, 0)) * CFrame.Angles(math.random() * 6, math.random() * 6, 0)
+		c.Parent = workspace
+		c.AssemblyLinearVelocity = fwd * speed * 0.3 + Vector3.new(math.random(-20, 20), math.random(18, 34), math.random(-20, 20))
+		c.AssemblyAngularVelocity = Vector3.new(math.random(-10, 10), math.random(-10, 10), math.random(-10, 10))
+		game:GetService("Debris"):AddItem(c, 2.5 + i * 0.03)
+	end
 	speed = 0
 	rocketOn.Value = false
 	speedValue.Value = 0
@@ -324,6 +383,10 @@ local function stopRiding()
 	end
 	ContextActionService:UnbindAction("Flip")
 	ContextActionService:UnbindAction("Rocket")
+	if controls then
+		pcall(controls.Enable, controls)
+	end
+	stickOn.Value = false
 	awaitingLaunch.Value = false
 	pulling, keyPull, pullInput, baseCF = false, false, nil, nil
 	meterValue.Value = 0
@@ -362,14 +425,16 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	ContextActionService:BindActionAtPriority(
 		"Rocket",
 		onRocket,
-		true, -- кнопка на телефоне
+		false, -- на телефоне — своя кнопка в HUD под спидометром
 		Enum.ContextActionPriority.High.Value,
 		Enum.KeyCode.LeftShift,
 		Enum.KeyCode.E,
 		Enum.KeyCode.ButtonR2
 	)
-	ContextActionService:SetTitle("Rocket", "🚀")
-	ContextActionService:SetPosition("Rocket", UDim2.new(1, -150, 1, -150))
+	-- Стандартный стик Roblox на телефоне прячем: руль — наше кольцо в любом месте экрана
+	if controls and UserInputService.TouchEnabled then
+		pcall(controls.Disable, controls)
+	end
 
 	-- Рогатка: ждём, пока игрок оттянет и отпустит
 	launchSent = false
