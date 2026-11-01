@@ -139,39 +139,118 @@ local flipAngle = 0
 local lastObstacle, lastBoost = 0, 0
 
 ------------------------------------------------------------------ ввод
+-- Рогатка: зажал → тянешь вниз (санки отъезжают назад, резинка натягивается) → отпустил = выстрел.
+-- Сила = насколько сильно оттянул. Клавиатура/геймпад: держи Пробел/A — натяжение растёт само.
+local UIS = game:GetService("UserInputService")
+local PULL_BACK = 9 -- studs, на сколько санки отъезжают при полном натяжении
+local PULL_SCREEN = 0.28 -- доля высоты экрана для полного натяжения
+local PULL_KEY_TIME = 1.1 -- секунд удержания клавиши до 100%
+local MIN_PULL = 0.12 -- меньше — считаем, что передумал
+
 local launchSent = false
-local function tryLaunch()
+local pulling = false
+local pullInput: InputObject? = nil
+local pullStartY = 0
+local keyPull = false
+local pullAmount = 0
+local baseCF: CFrame? = nil
+
+local function setPull(a: number)
+	pullAmount = math.clamp(a, 0, 1)
+	meterValue.Value = pullAmount
+	local s = sled
+	if s and s.Anchored and baseCF then
+		-- локально (только у себя) отводим санки назад: резинка-Beam тянется за ними
+		s.CFrame = baseCF * CFrame.new(0, 0, PULL_BACK * pullAmount)
+	end
+end
+
+local function fireLaunch(power: number)
 	if awaitingLaunch.Value and not launchSent then
 		launchSent = true
 		awaitingLaunch.Value = false
-		ContextActionService:UnbindAction("LaunchTap")
-		Remotes.Launch:FireServer(meterValue.Value)
+		Remotes.Launch:FireServer(power)
 		sfx:Fire("launch")
 	end
 end
 
+local function beginPull(input: InputObject?)
+	if not awaitingLaunch.Value or launchSent or pulling then
+		return
+	end
+	local s = sled
+	if not s then
+		return
+	end
+	pulling = true
+	pullInput = input
+	keyPull = input == nil
+	pullStartY = if input then input.Position.Y else 0
+	baseCF = baseCF or s.CFrame
+	setPull(0)
+	sfx:Fire("pull")
+end
+
+local function releasePull()
+	if not pulling then
+		return
+	end
+	pulling, keyPull, pullInput = false, false, nil
+	local power = pullAmount
+	if sled and baseCF then
+		sled.CFrame = baseCF -- возвращаем санки к рогатке: дальше их везёт физика
+	end
+	setPull(0)
+	if power >= MIN_PULL then
+		fireLaunch(power)
+	end
+end
+
+-- Старый путь (кнопка HUD) — полный выстрел
+requestLaunch.Event:Connect(function()
+	fireLaunch(1)
+end)
+
+UIS.InputBegan:Connect(function(input)
+	-- processed не проверяем: на телефоне касание в зоне стика помечено как «обработанное»
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		beginPull(input)
+	end
+end)
+UIS.InputChanged:Connect(function(input)
+	if not pulling or keyPull then
+		return
+	end
+	local isMouse = input.UserInputType == Enum.UserInputType.MouseMovement
+		and pullInput
+		and pullInput.UserInputType == Enum.UserInputType.MouseButton1
+	if isMouse or input == pullInput then
+		local cam = workspace.CurrentCamera
+		local h = if cam then cam.ViewportSize.Y else 800
+		setPull((input.Position.Y - pullStartY) / (h * PULL_SCREEN))
+	end
+end)
+UIS.InputEnded:Connect(function(input)
+	if not pulling or keyPull then
+		return
+	end
+	if input == pullInput or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		releasePull()
+	end
+end)
+
 local function onFlip(_, inputState: Enum.UserInputState)
-	if inputState == Enum.UserInputState.Begin and awaitingLaunch.Value then
-		tryLaunch()
+	if awaitingLaunch.Value or (pulling and keyPull) then
+		if inputState == Enum.UserInputState.Begin then
+			beginPull(nil)
+		elseif inputState == Enum.UserInputState.End then
+			releasePull()
+		end
 		return Enum.ContextActionResult.Sink
 	end
 	flipHeld = inputState == Enum.UserInputState.Begin
 	return Enum.ContextActionResult.Sink
 end
-local function onLaunchTap(_, inputState: Enum.UserInputState)
-	if inputState == Enum.UserInputState.Begin then
-		tryLaunch()
-	end
-	return Enum.ContextActionResult.Pass
-end
-requestLaunch.Event:Connect(tryLaunch)
-
--- Запасной путь: любой тап / клик по экрану во время прицеливания
-game:GetService("UserInputService").InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-		tryLaunch()
-	end
-end)
 local function onRocket(_, inputState: Enum.UserInputState)
 	rocketHeld = inputState == Enum.UserInputState.Begin
 	return Enum.ContextActionResult.Sink
@@ -245,8 +324,13 @@ local function stopRiding()
 	end
 	ContextActionService:UnbindAction("Flip")
 	ContextActionService:UnbindAction("Rocket")
-	ContextActionService:UnbindAction("LaunchTap")
 	awaitingLaunch.Value = false
+	pulling, keyPull, pullInput, baseCF = false, false, nil, nil
+	meterValue.Value = 0
+	local cam = workspace.CurrentCamera
+	if cam and cam.CameraType == Enum.CameraType.Scriptable then
+		cam.CameraType = Enum.CameraType.Custom
+	end
 	sled, align, humanoid = nil, nil, nil
 	rocketOn.Value = false
 	speedValue.Value = 0
@@ -287,19 +371,11 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	ContextActionService:SetTitle("Rocket", "🚀")
 	ContextActionService:SetPosition("Rocket", UDim2.new(1, -150, 1, -150))
 
-	-- Рогатка: ждём клик / тап / пробел
+	-- Рогатка: ждём, пока игрок оттянет и отпустит
 	launchSent = false
+	pulling, keyPull, pullInput, baseCF = false, false, nil, nil
+	meterValue.Value = 0
 	awaitingLaunch.Value = seat.Anchored
-	if seat.Anchored then
-		ContextActionService:BindActionAtPriority(
-			"LaunchTap",
-			onLaunchTap,
-			false,
-			Enum.ContextActionPriority.Low.Value,
-			Enum.UserInputType.MouseButton1,
-			Enum.UserInputType.Touch
-		)
-	end
 
 	local function hook(p: Instance)
 		if p:IsA("BasePart") then
@@ -350,9 +426,25 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 	if s.Anchored then
-		-- Ждём рогатку: шкала силы бегает туда-сюда
-		meterValue.Value = 0.5 + 0.5 * math.sin(os.clock() * 3.4)
+		-- Ждём рогатку: при удержании клавиши натяжение растёт само
+		if pulling and keyPull then
+			setPull(pullAmount + dt / PULL_KEY_TIME)
+		end
+		-- Камера закреплена за рогаткой (как в оригинале), чтобы свайп не крутил её
+		local cam = workspace.CurrentCamera
+		if cam then
+			local base = baseCF or s.CFrame
+			cam.CameraType = Enum.CameraType.Scriptable
+			local eye = (base * CFrame.new(0, 7 + pullAmount * 2, 17 + pullAmount * 6)).Position
+			cam.CFrame = CFrame.lookAt(eye, (base * CFrame.new(0, 1, -30)).Position)
+		end
 		return
+	end
+	do
+		local cam = workspace.CurrentCamera
+		if cam and cam.CameraType == Enum.CameraType.Scriptable then
+			cam.CameraType = Enum.CameraType.Custom
+		end
 	end
 	-- Детали санок (стабилизатор) могут прийти по сети позже самих санок
 	local a = align

@@ -354,14 +354,14 @@ StartRun.OnServerEvent:Connect(function(player)
 	end)
 end)
 
--- Игрок отпустил рогатку: power 0..1 — насколько точно попал в шкалу
+-- Игрок отпустил рогатку: power 0..1 — насколько сильно оттянул резинку
 Launch.OnServerEvent:Connect(function(player, power)
 	local run = runs[player]
 	local d = Data.get(player)
 	if not run or run.launched or not d or typeof(power) ~= "number" then
 		return
 	end
-	power = math.clamp(power, 0.4, 1)
+	power = math.clamp(power, 0.25, 1)
 	run.launched = true
 	run.launchTime = os.clock()
 	for _, r in run.ropes do

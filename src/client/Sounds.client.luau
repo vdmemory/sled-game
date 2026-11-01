@@ -25,6 +25,7 @@ end
 -- Одиночные эффекты: имя события → {файл, громкость, высота}
 local ONE_SHOTS = {
 	launch = { "action_jump.mp3", 0.9, 0.75 },
+	pull = { "button.wav", 0.5, 0.6 },
 	land = { "action_jump_land.mp3", 0.9, 0.8 },
 	hit = { "oof.ogg", 0.7, 1 },
 	boost = { "impact_water.mp3", 0.5, 1.6 },

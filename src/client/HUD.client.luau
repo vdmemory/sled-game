@@ -318,51 +318,36 @@ label({
 	ZIndex = 2,
 })
 
--- Шкала рогатки
+-- Шкала натяжения рогатки (как в оригинале: тянешь вниз — полоса наполняется, отпускаешь — выстрел)
 local meterBox = frame({
 	Parent = runUi,
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -130),
-	Size = UDim2.new(0, 420, 0, 34),
-	BackgroundColor3 = Color3.fromRGB(230, 90, 80),
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 70),
+	Size = UDim2.new(0, 340, 0, 30),
+	BackgroundColor3 = Color3.fromRGB(35, 50, 90),
 	Visible = false,
 })
-corner(meterBox, 17)
+corner(meterBox, 15)
 stroke(meterBox, 3)
+local meterFill = frame({ Parent = meterBox, Size = UDim2.fromScale(0, 1), BackgroundColor3 = WHITE })
+corner(meterFill, 15)
 local meterGrad = Instance.new("UIGradient")
 meterGrad.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(230, 80, 70)),
-	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(250, 200, 60)),
-	ColorSequenceKeypoint.new(0.85, Color3.fromRGB(80, 210, 90)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 230, 90)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 70)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(255, 140, 50)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(240, 70, 60)),
 })
-meterGrad.Parent = meterBox
-local needle = frame({
-	Parent = meterBox,
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0, 0.5),
-	Size = UDim2.new(0, 8, 1, 16),
-	BackgroundColor3 = WHITE,
-})
-corner(needle, 4)
-stroke(needle)
-local launchBtn = button("🚀 ЗАПУСК!", Color3.fromRGB(255, 120, 40), {
-	Parent = meterBox,
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 1, 14),
-	Size = UDim2.new(0, 240, 0, 64),
-	ZIndex = 3,
-})
-launchBtn.Activated:Connect(function()
-	controller.RequestLaunch:Fire()
-end)
+meterGrad.Parent = meterFill
+local meterPct = label({ Parent = meterBox, Text = "0%", Size = UDim2.fromScale(1, 1), ZIndex = 2 })
 local meterHint = label({
 	Parent = meterBox,
-	Text = "Жми ЗАПУСК (или пробел), когда стрелка в зелёной зоне!",
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 0, -8),
-	Size = UDim2.new(1.3, 0, 0, 30),
+	Text = "",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 1, 10),
+	Size = UDim2.new(1.4, 0, 0, 34),
+	TextSize = 26,
 })
+local TOUCH = game:GetService("UserInputService").TouchEnabled
 
 -- Подсказка управления
 local controlsHint = label({
@@ -502,7 +487,13 @@ RunService.RenderStepped:Connect(function()
 	local awaiting = state.AwaitingLaunch.Value
 	meterBox.Visible = awaiting
 	controlsHint.Visible = not awaiting and player:GetAttribute("Launched") == true
-	needle.Position = UDim2.fromScale(state.Meter.Value, 0.5)
+	local pull = state.Meter.Value
+	meterFill.Size = UDim2.fromScale(pull, 1)
+	meterPct.Text = math.floor(pull * 100 + 0.5) .. "%"
+	meterHint.Text = if pull > 0.15
+		then "ОТПУСТИ!"
+		elseif TOUCH then "Потяни вниз и отпусти 👇"
+		else "Зажми мышь и тяни вниз (или держи Пробел)"
 	speedLabel.Text = math.floor(state.Speed.Value * 1.1) .. " км/ч"
 	local maxFuel = state.FuelMax.Value
 	fuelFill.Size = UDim2.fromScale(if maxFuel > 0 then state.Fuel.Value / maxFuel else 0, 1)
