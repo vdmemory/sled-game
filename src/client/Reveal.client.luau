@@ -142,7 +142,7 @@ local function reveal(kind: string, tierName: string)
 	vp.CurrentCamera = vcam
 	local bbCF, bbSize = model:GetBoundingBox()
 	local center = bbCF.Position
-	local dist = bbSize.Magnitude * 1.25 + 2
+	local dist = bbSize.Magnitude * 0.95 + 1.5
 
 	-- тексты
 	local top = UI.text({ Text = "НОВОЕ УЛУЧШЕНИЕ!", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.76), Size = UDim2.fromOffset(420, 34), TextColor3 = Color3.fromRGB(255, 215, 70), TextTransparency = 1, Parent = root })
