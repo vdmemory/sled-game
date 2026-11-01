@@ -121,7 +121,7 @@ local startBtn = button("▶ Поехали!", Color3.fromRGB(40, 175, 90), {
 })
 
 -- Кнопка-стрелка: свернуть/развернуть карточки апгрейдов (как ▾ у кнопки ИГРАТЬ в референсе)
-local collapseBtn = button("▾", Color3.fromRGB(70, 90, 130), {
+local collapseBtn = button("V", Color3.fromRGB(70, 90, 130), {
 	Parent = lobby,
 	AnchorPoint = Vector2.new(0, 1),
 	Position = UDim2.new(0.5, 150, 1, -32),
@@ -146,7 +146,7 @@ local upgradeButtons: { [string]: TextButton } = {}
 local cards: { [string]: Card } = {}
 collapseBtn.Activated:Connect(function()
 	upgradesRow.Visible = not upgradesRow.Visible
-	collapseBtn.Text = if upgradesRow.Visible then "▾" else "▴"
+	collapseBtn.Text = if upgradesRow.Visible then "V" else "^"
 end)
 for _, name in Config.UPGRADE_ORDER do
 	local u = Config.UPGRADES[name]
