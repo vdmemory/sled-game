@@ -49,7 +49,7 @@ Config.FORCED_KICKERS = { 0.35, 0.7 } -- обязательные обрывы �
 Config.COIN_LINE_CHANCE = 0.5
 
 -- Дороги поперёк трассы с движущимися машинами (как в оригинале)
-Config.ROAD_AT = { 0.22, 0.5, 0.78 } -- доли уровня, где могут быть дороги
+Config.ROAD_AT = { 0.12, 0.42, 0.72 } -- доли уровня, где могут быть дороги
 function Config.roadCount(level: number): number
 	return math.min(#Config.ROAD_AT, 1 + (level - 1) // 2)
 end
