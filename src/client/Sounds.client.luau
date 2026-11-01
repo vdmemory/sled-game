@@ -32,6 +32,8 @@ local ONE_SHOTS = {
 	coin = { "volume_slider.ogg", 0.6, 1.8 },
 	flip = { "action_get_up.mp3", 0.8, 1.4 },
 	finish = { "impact_explosion_03.mp3", 0.35, 1.2 },
+	smash = { "impact_explosion_03.mp3", 0.25, 1.8 },
+	record = { "electronicpingshort.wav", 0.6, 1 },
 }
 local cache: { [string]: Sound } = {}
 local function play(name: string)

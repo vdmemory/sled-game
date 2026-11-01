@@ -47,6 +47,22 @@ Config.SAFE_START = 220 -- первые N studs после старта без �
 Config.BOOST_CHANCE = 0.1 -- ускоритель в ряду (≈ 1 на 3 сегмента)
 Config.FORCED_KICKERS = { 0.35, 0.7 } -- обязательные обрывы на этих долях уровня
 Config.COIN_LINE_CHANCE = 0.5
+
+-- Дороги поперёк трассы с движущимися машинами (как в оригинале)
+Config.ROAD_AT = { 0.22, 0.5, 0.78 } -- доли уровня, где могут быть дороги
+function Config.roadCount(level: number): number
+	return math.min(#Config.ROAD_AT, 1 + (level - 1) // 2)
+end
+function Config.carsPerLane(level: number): number
+	return math.min(4, 2 + (level - 1) // 3)
+end
+Config.ROAD_LOOP = 360 -- длина «кольца» полосы (studs): машина уезжает за край и возвращается
+Config.CAR_SPEED = { 38, 55 } -- studs/с
+Config.TRAIN_SPEED = 80
+Config.TRAIN_LOOP = 1400
+Config.GONDOLA_CHANCE = 0.6 -- канатка над приземлением после обрыва
+Config.SMASH_COINS = 5 -- за разбитое препятствие (ракетой или на ускорителе)
+Config.FINISH_GLIDE_MAX = 8 -- сек: после финиша катимся по ледяному озеру до остановки
 Config.COINS_PER_LINE = 5
 
 -- Миры по уровням (по кругу)

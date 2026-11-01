@@ -29,6 +29,7 @@ local Trick: RemoteEvent = remote("RemoteEvent", "Trick")
 local RunEnded: RemoteEvent = remote("RemoteEvent", "RunEnded")
 local Restart: RemoteEvent = remote("RemoteEvent", "Restart") -- ⟳ в заезде: закончить и сразу новый
 local Back: RemoteEvent = remote("RemoteEvent", "Back") -- BACK у рогатки: вернуться в лобби
+local Smash: RemoteEvent = remote("RemoteEvent", "Smash") -- разбил препятствие ракетой/на ускорителе
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 local SkinAction: RemoteFunction = remote("RemoteFunction", "SkinAction")
 remotes.Parent = ReplicatedStorage
@@ -173,6 +174,8 @@ type Run = {
 	startTime: number,
 	launchTime: number?,
 	crashed: boolean?,
+	finishedAt: number?,
+	smashes: number?,
 	lastAir: number?,
 	ended: boolean?,
 }
@@ -376,7 +379,7 @@ startRun = function(player: Player)
 	end
 
 	local slot = takeSlot(player)
-	local track = Track.new(slot, d.Level)
+	local track = Track.new(slot, d.Level, d.LevelBest / 100 * Config.levelLength(d.Level))
 	local startCF = track:startCFrame()
 	local sled = makeSled(player, startCF)
 
@@ -431,6 +434,7 @@ startRun = function(player: Player)
 	player:SetAttribute("Launched", false)
 	player:SetAttribute("RunDistance", 0)
 	player:SetAttribute("RunCoins", 0)
+	player:SetAttribute("Finished", false)
 
 	sled:GetPropertyChangedSignal("Occupant"):Connect(function()
 		-- при аварии персонаж вылетает из санок сам — это не «вышел»
@@ -530,6 +534,14 @@ Crash.OnServerEvent:Connect(function(player)
 		return
 	end
 	run.crashed = true
+	if run.finishedAt then
+		-- после финишной арки авария уже не страшна: уровень пройден
+		task.delay(1.2, function()
+			if runs[player] == run then
+				endRun(player, "finish")
+			end
+		end)
+	end
 	-- выкидываем персонажа из санок и превращаем в ragdoll
 	local weld = run.sled:FindFirstChild("SeatWeld")
 	if weld then
@@ -543,6 +555,19 @@ Crash.OnServerEvent:Connect(function(player)
 			endRun(player, "crash")
 		end
 	end)
+end)
+
+Smash.OnServerEvent:Connect(function(player)
+	local run = runs[player]
+	if not run or not run.launched or run.crashed then
+		return
+	end
+	run.smashes = (run.smashes or 0) + 1
+	if run.smashes > 40 then
+		return
+	end
+	run.bonusCoins += Config.SMASH_COINS
+	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.SMASH_COINS)
 end)
 
 Trick.OnServerEvent:Connect(function(player, flips)
@@ -670,8 +695,16 @@ RunService.Heartbeat:Connect(function(dt)
 		if not run.launched or run.crashed then
 			continue
 		end
-		if run.distance >= track.length then
-			endRun(player, "finish")
+		if run.distance >= track.length and not run.finishedAt then
+			-- Финишная арка пройдена: дальше скользим по ледяному озеру до остановки
+			run.finishedAt = os.clock()
+			player:SetAttribute("Finished", true)
+		end
+		if run.finishedAt then
+			local slow = sled.AssemblyLinearVelocity.Magnitude < Config.STOP_SPEED * 2
+			if slow or os.clock() - run.finishedAt > Config.FINISH_GLIDE_MAX then
+				endRun(player, "finish")
+			end
 		elseif y < -60 or math.abs(x) > Config.TRACK_WIDTH * 2 then
 			endRun(player, "fell")
 		else

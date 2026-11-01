@@ -634,6 +634,7 @@ for _, attr in { "Coins", "Gems", "Level", "LevelBest", "InRun", "Loaded", "Them
 end
 refresh()
 
+local recordShown = false
 local function updateRun()
 	local L = player:GetAttribute("LevelLength") or 1
 	local p = math.clamp((player:GetAttribute("RunDistance") or 0) / L, 0, 1)
@@ -645,10 +646,23 @@ local function updateRun()
 	distLabel.Text = (player:GetAttribute("RunDistance") or 0) .. " м"
 	local best = math.floor((player:GetAttribute("LevelBest") or 0) / 100 * L)
 	bestLabel.Text = if best > 0 then "★ " .. best .. " м" else ""
+	if not player:GetAttribute("InRun") then
+		recordShown = false
+	elseif not recordShown and best > 0 and (player:GetAttribute("RunDistance") or 0) > best and player:GetAttribute("Launched") then
+		recordShown = true
+		showToast("🏆 НОВЫЙ РЕКОРД!", 1.6)
+		controller.Sfx:Fire("record")
+	end
 end
 player:GetAttributeChangedSignal("RunDistance"):Connect(updateRun)
 player:GetAttributeChangedSignal("RunCoins"):Connect(updateRun)
 player:GetAttributeChangedSignal("InRun"):Connect(updateRun)
+player:GetAttributeChangedSignal("Finished"):Connect(function()
+	if player:GetAttribute("Finished") then
+		showToast("🏁 ФИНИШ!\nкатись по озеру до остановки", 2.2)
+		controller.Sfx:Fire("finish")
+	end
+end)
 
 -- Кадр: шкала рогатки, скорость, топливо
 RunService.RenderStepped:Connect(function()

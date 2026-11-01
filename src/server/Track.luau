@@ -28,6 +28,8 @@ local function profile(banks: { { width: number, angle: number } })
 end
 local SNOW_PROFILE = profile({ { width = 14, angle = 14 }, { width = 14, angle = 32 } })
 local CHUTE_PROFILE = profile({ { width = 12, angle = 22 }, { width = 14, angle = 48 }, { width = 14, angle = 74 } })
+local ROAD_PROFILE = profile({}) -- дорога: ровная площадка без бортов
+local LAKE_PROFILE = { banks = {}, out = W * 1.5, top = 0, floorW = W * 3 } -- ледяное озеро после финиша
 local BANK_OUT, BANK_TOP = SNOW_PROFILE.out, SNOW_PROFILE.top
 
 local SNOW_FLOOR = Color3.fromRGB(236, 243, 252)
@@ -176,6 +178,10 @@ local function dressSegment(theme: number, rng: Random, cf: CFrame, len: number,
 			end
 		end
 
+		-- Воздушные шары в небе
+		if theme ~= 2 and rng:NextNumber() < 0.12 * density then
+			Props.balloon(rng, at(rng:NextNumber(40, 110), zr(0)) * CFrame.new(0, rng:NextNumber(45, 85), 0), m)
+		end
 		-- Горы на горизонте
 		if rng:NextNumber() < 0.6 * density then
 			Props.mountain(rng, at(rng:NextNumber(140, 200), zr(0)), theme == 3, m)
@@ -255,9 +261,23 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 
 	add("start", 7, 110)
 	local nextForced = 1
+	local nextRoad = 1
+	local roads = Config.roadCount(level)
+	local railDone = false
 	while h < L do
 		local forcedAt = Config.FORCED_KICKERS[nextForced]
-		if forceNext == "landing" then
+		local roadAt = if nextRoad <= roads then Config.ROAD_AT[nextRoad] else nil
+		if forceNext ~= "landing" and roadAt and h >= L * roadAt then
+			-- в городе одна из дорог — железнодорожный переезд
+			local theme = ((level - 1) % #Config.THEMES) + 1
+			if theme == 2 and not railDone and nextRoad == 2 then
+				add("rail", 3, 60)
+				railDone = true
+			else
+				add("road", 3, 60)
+			end
+			nextRoad += 1
+		elseif forceNext == "landing" then
 			add("landing", 18, 90)
 			forceNext = nil
 		elseif forcedAt and h >= L * forcedAt then
@@ -282,15 +302,15 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	if forceNext == "landing" then
 		add("landing", 18, 90)
 	end
-	add("runout", 1, 120)
-	add("runout", -4, 80)
+	add("lake", 0.5, 300) -- ледяное озеро: после финиша катимся до остановки
 	return segs, L
 end
 
 ------------------------------------------------------------------ класс
-function Track.new(slot: number, level: number)
+function Track.new(slot: number, level: number, bestH: number?)
 	local self = setmetatable({}, Track)
 	self.level = level
+	self.bestH = bestH or 0
 	self.theme = ((level - 1) % #Config.THEMES) + 1
 	self.origin = CFrame.new(Config.TRACKS_ORIGIN + Vector3.new(slot * Config.SLOT_SPACING, 0, 0))
 	self.segments, self.length = buildProfile(self.origin, level)
@@ -344,16 +364,18 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 	-- соседние куски чуть сдвинуты по высоте, чтобы перекрытия не мерцали
 	local overlap = if chute then 8 else 2
 	cf = cf * CFrame.new(0, alt * 0.03, 0)
+	local floorW = prof.floorW or W
+	local lake = prof == LAKE_PROFILE
 	part("Part", {
 		Name = "Floor",
-		Size = Vector3.new(W, 4, len + overlap),
+		Size = Vector3.new(floorW, 4, len + overlap),
 		CFrame = cf * CFrame.new(0, -2, -len / 2),
-		Material = if chute then Enum.Material.Glacier else Enum.Material.Snow,
-		Color = if chute then ICE_FLOOR else SNOW_FLOOR,
-		Reflectance = if chute then 0.1 else 0,
+		Material = if chute or lake then Enum.Material.Glacier else Enum.Material.Snow,
+		Color = if lake then Color3.fromRGB(175, 220, 250) elseif chute then ICE_FLOOR else SNOW_FLOOR,
+		Reflectance = if chute or lake then 0.12 else 0,
 	}, m)
 	for _, side in { -1, 1 } do
-		local x, y = W / 2, 0
+		local x, y = floorW / 2, 0
 		for k, b in prof.banks do
 			local a = math.rad(b.angle)
 			part("Part", {
@@ -411,13 +433,28 @@ function Track:buildSegment(i: number)
 	end
 	local rng = Random.new(self.level * 104729 + i * 31)
 	local cf, len = seg.cf, seg.length
-	local prof = if seg.chute then CHUTE_PROFILE else SNOW_PROFILE
+	local prof = if seg.chute then CHUTE_PROFILE
+		elseif seg.kind == "road" or seg.kind == "rail" then ROAD_PROFILE
+		elseif seg.kind == "lake" then LAKE_PROFILE
+		else SNOW_PROFILE
 	local m = Instance.new("Model")
 	m.Name = "Segment_" .. i
 
 	buildCrossSection(cf, len, prof, seg.chute, m, i % 2)
 
-	if not seg.chute then
+	if seg.kind == "road" or seg.kind == "rail" then
+		self:buildRoad(seg, rng, m, seg.kind == "rail")
+	elseif seg.kind == "lake" then
+		-- трещинки и блики на льду
+		for _ = 1, 14 do
+			deco({
+				Size = Vector3.new(rng:NextNumber(6, 20), 0.05, 0.4),
+				CFrame = cf * CFrame.new(rng:NextNumber(-W * 1.3, W * 1.3), 0.03, -rng:NextNumber(10, len - 10)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
+				Color = Color3.new(1, 1, 1),
+				Transparency = 0.4,
+			}, m)
+		end
+	elseif not seg.chute then
 		-- Ледяные проплешины на снегу
 		for _ = 1, rng:NextInteger(2, 4) do
 			local patch = deco({
@@ -443,7 +480,66 @@ function Track:buildSegment(i: number)
 		end
 	end
 
-	dressSegment(self.theme, rng, cf, len, m, prof)
+	if seg.kind ~= "road" and seg.kind ~= "rail" then
+		dressSegment(self.theme, rng, cf, len, m, prof)
+	end
+
+	-- Канатная дорога над местом приземления: кабинки едут поперёк трассы
+	if seg.kind == "landing" and self.theme ~= 2 and rng:NextNumber() < Config.GONDOLA_CHANCE then
+		local z = 42
+		local cableY = 34
+		local center = cf * CFrame.new(0, 0, -z)
+		local flat = CFrame.lookAt(center.Position, center.Position + Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z))
+		for _, side in { -1, 1 } do
+			Props.pylon(flat * CFrame.new(side * (BANK_OUT + 8), BANK_TOP, 0), cableY - BANK_TOP, m)
+		end
+		local cable = flat * CFrame.new(0, cableY, 0)
+		deco({ Size = Vector3.new(Config.ROAD_LOOP + 40, 0.3, 0.3), CFrame = cable, Color = Color3.fromRGB(50, 50, 60) }, m)
+		local count = 2
+		for k = 1, count do
+			local g = Props.gondola(rng, cable, m)
+			self:setMover(g, cable, 0, if k % 2 == 0 then 1 else -1, 18, Config.ROAD_LOOP, (k - 1) * Config.ROAD_LOOP / count + rng:NextNumber(0, 40))
+			tagObstacle(g)
+		end
+	end
+
+	-- Арка-тоннель над ледяным жёлобом (как в Roblox-референсе)
+	if seg.kind == "curve" and i % 9 == 0 then
+		local r = prof.out + 3
+		for k = 0, 10 do
+			local a = math.pi * k / 10
+			deco({
+				Size = Vector3.new(5, 5, 4),
+				CFrame = cf * CFrame.new(math.cos(a) * r, prof.top * 0.3 + math.sin(a) * r * 0.75, -len / 2) * CFrame.Angles(0, 0, a),
+				Material = Enum.Material.Ice,
+				Color = Color3.fromRGB(120, 170, 225),
+			}, m)
+		end
+	end
+
+	-- Флаг рекорда: где игрок остановился в лучшей попытке
+	if self.bestH > 0 and self.bestH >= seg.hStart and self.bestH < seg.hStart + seg.hLen then
+		local z = (self.bestH - seg.hStart) / math.cos(math.rad(seg.angle))
+		local at = cf * CFrame.new(W / 2 - 4, 0, -z)
+		deco({ Size = Vector3.new(0.5, 12, 0.5), CFrame = at * CFrame.new(0, 6, 0), Color = Color3.fromRGB(240, 240, 240) }, m)
+		local flag = deco({ Size = Vector3.new(0.2, 3, 5), CFrame = at * CFrame.new(-2.6, 10.3, 0) * CFrame.Angles(0, math.rad(90), 0), Color = Color3.fromRGB(255, 200, 40) }, m)
+		local sg = Instance.new("BillboardGui")
+		sg.Size = UDim2.fromOffset(120, 40)
+		sg.StudsOffset = Vector3.new(0, 3, 0)
+		sg.AlwaysOnTop = false
+		sg.Parent = flag
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.Text = "★ BEST"
+		t.TextScaled = true
+		t.Font = Enum.Font.FredokaOne
+		t.TextColor3 = Color3.fromRGB(255, 220, 60)
+		t.TextStrokeTransparency = 0.3
+		t.Parent = sg
+		-- линия рекорда поперёк трассы
+		deco({ Size = Vector3.new(W, 0.08, 1.2), CFrame = cf * CFrame.new(0, 0.05, -z), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 210, 60), Transparency = 0.2 }, m)
+	end
 
 	-- Обрыв: жёлтый трамплин в конце + обрыв вниз
 	if seg.kind == "kicker" then
@@ -545,7 +641,7 @@ function Track:buildSegment(i: number)
 	if i == #self.segments - 1 then
 		part("Part", {
 			Name = "EndWall",
-			Size = Vector3.new(BANK_OUT * 2 + 4, 30, 4),
+			Size = Vector3.new(prof.out * 2 + 4, 30, 4),
 			CFrame = cf * CFrame.new(0, 15, -len),
 			Material = Enum.Material.Snow,
 			Color = SNOW,
@@ -554,6 +650,83 @@ function Track:buildSegment(i: number)
 
 	m.Parent = self.folder
 	self.built[i] = m
+end
+
+-- Движущийся объект (машина, поезд, кабинка). Двигает клиент по серверному времени —
+-- плавно и одинаково у всех. Позиция: path * (s * dir, 0, laneZ), s бежит по кольцу длины loop.
+function Track:setMover(model: Model, path: CFrame, laneZ: number, dir: number, speed: number, loop: number, phase: number)
+	local yaw = if dir > 0 then -math.pi / 2 else math.pi / 2
+	model:SetAttribute("Path", path)
+	model:SetAttribute("LaneZ", laneZ)
+	model:SetAttribute("Dir", dir)
+	model:SetAttribute("Yaw", yaw)
+	model:SetAttribute("Speed", speed)
+	model:SetAttribute("Loop", loop)
+	model:SetAttribute("Phase", phase)
+	local t = workspace:GetServerTimeNow()
+	local sPos = ((t * speed + phase) % loop) - loop / 2
+	model:PivotTo(path * CFrame.new(sPos * dir, 0, laneZ) * CFrame.Angles(0, yaw, 0))
+	CollectionService:AddTag(model, "Mover")
+end
+
+-- Дорога поперёк трассы с машинами в обе стороны (или ж/д переезд с поездом)
+local ASPHALT = Color3.fromRGB(70, 74, 82)
+function Track:buildRoad(seg, rng: Random, m: Instance, rail: boolean)
+	local cf, len = seg.cf, seg.length
+	local road = cf * CFrame.new(0, 0, -len / 2) -- центр дороги; ось X дороги = поперёк трассы
+	local span = Config.ROAD_LOOP + 120
+	if rail then
+		deco({ Size = Vector3.new(span, 0.15, 14), CFrame = road * CFrame.new(0, 0.08, 0), Color = Color3.fromRGB(120, 105, 90), Material = Enum.Material.Pebble }, m)
+		for x = -span / 2, span / 2, 3 do
+			deco({ Size = Vector3.new(1.2, 0.25, 10), CFrame = road * CFrame.new(x, 0.2, 0), Color = Color3.fromRGB(110, 80, 55), Material = Enum.Material.Wood }, m)
+		end
+		for _, z in { -3, 3 } do
+			deco({ Size = Vector3.new(span, 0.5, 0.5), CFrame = road * CFrame.new(0, 0.5, z), Color = Color3.fromRGB(150, 150, 160), Material = Enum.Material.Metal }, m)
+		end
+		local train = Props.train(road, m)
+		local dir = if rng:NextNumber() < 0.5 then 1 else -1
+		self:setMover(train, road, 0, dir, Config.TRAIN_SPEED, Config.TRAIN_LOOP, rng:NextNumber(0, Config.TRAIN_LOOP))
+		tagObstacle(train)
+		for _, side in { -1, 1 } do
+			for _, zz in { -1, 1 } do
+				Props.railGate(road * CFrame.new(side * (W / 2 + 4), 0, zz * 9) * CFrame.Angles(0, if zz > 0 then 0 else math.pi, 0), m)
+			end
+		end
+	else
+		deco({ Size = Vector3.new(span, 0.15, 22), CFrame = road * CFrame.new(0, 0.08, 0), Color = ASPHALT, Material = Enum.Material.Asphalt }, m)
+		for _, z in { -10.4, 10.4 } do
+			deco({ Size = Vector3.new(span, 0.18, 0.5), CFrame = road * CFrame.new(0, 0.1, z), Color = Color3.fromRGB(245, 245, 245) }, m)
+		end
+		for x = -span / 2, span / 2, 9 do
+			deco({ Size = Vector3.new(4.5, 0.18, 0.5), CFrame = road * CFrame.new(x, 0.1, 0), Color = Color3.fromRGB(250, 205, 50) }, m)
+		end
+		-- зебра там, где проходит трасса
+		for x = -W / 2 + 3, W / 2 - 3, 4 do
+			deco({ Size = Vector3.new(2, 0.2, 7), CFrame = road * CFrame.new(x, 0.11, 13 + 3.5), Color = Color3.fromRGB(245, 245, 245), Transparency = 0.15 }, m)
+		end
+		local perLane = Config.carsPerLane(self.level)
+		for _, lane in { { z = -5.2, dir = 1 }, { z = 5.2, dir = -1 } } do
+			local speed = rng:NextNumber(Config.CAR_SPEED[1], Config.CAR_SPEED[2])
+			local phase0 = rng:NextNumber(0, Config.ROAD_LOOP)
+			for k = 1, perLane do
+				local car = Props.traffic(self.theme, rng, road, m)
+				local gap = Config.ROAD_LOOP / perLane
+				self:setMover(car, road, lane.z, lane.dir, speed, Config.ROAD_LOOP, phase0 + (k - 1) * gap + rng:NextNumber(-gap * 0.2, gap * 0.2))
+				tagObstacle(car)
+			end
+		end
+	end
+	-- Знаки перед дорогой: стрелки-предупреждения и светофор
+	local before = cf * CFrame.new(0, 0, -(len / 2 - 20))
+	Props.arrowSign(before * CFrame.new(-(W / 2 + 3), 0, 0) * CFrame.Angles(0, math.pi, 0), -1, m)
+	Props.arrowSign(before * CFrame.new(W / 2 + 3, 0, 0) * CFrame.Angles(0, math.pi, 0), 1, m)
+	if not rail then
+		Props.trafficLight(before * CFrame.new(W / 2 + 6, 0, 4) * CFrame.Angles(0, math.pi, 0), m)
+	end
+	-- монеты по центру перед дорогой
+	for k = 1, 4 do
+		makeCoin(cf * CFrame.new(0, 3, -(len / 2 - 6 - k * 5)), m)
+	end
 end
 
 -- Строим куски впереди игрока и убираем далеко позади (по пройденному пути h)

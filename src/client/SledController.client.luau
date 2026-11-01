@@ -144,6 +144,10 @@ local trickPopup = Instance.new("BindableEvent")
 trickPopup.Name = "TrickPopup" -- (текст) — HUD показывает всплывашку
 trickPopup.Parent = script
 
+local overlapParams = OverlapParams.new()
+overlapParams.CollisionGroup = "Riders" -- не видит себя и других райдеров
+overlapParams.RespectCanCollide = false
+
 local rayParams = RaycastParams.new()
 rayParams.CollisionGroup = "Riders" -- луч не видит райдеров
 rayParams.RespectCanCollide = true -- и проходит сквозь монеты/препятствия
@@ -340,11 +344,68 @@ local function crash()
 	Remotes.Crash:FireServer()
 end
 
+-- Лёгкие препятствия (снеговик, бочки, конусы…) разлетаются, если врезаться с ракетой или на ускорении
+local smashed: { [Instance]: boolean } = {}
+local function breakableOf(hit: BasePart): Model?
+	local node: Instance? = hit.Parent
+	while node and node ~= workspace do
+		if node:GetAttribute("Breakable") then
+			return node :: Model
+		end
+		node = node.Parent
+	end
+	return nil
+end
+local function smash(model: Model)
+	if smashed[model] then
+		return
+	end
+	smashed[model] = true
+	local s = sled
+	for _, p in model:GetDescendants() do
+		if p:IsA("BasePart") then
+			p.LocalTransparencyModifier = 1
+			p.CanTouch = false
+			p.CanQuery = false
+			-- обломки
+			if p.Size.Magnitude > 1.5 and s then
+				local chunk = Instance.new("Part")
+				chunk.Size = p.Size * 0.45
+				chunk.Color = p.Color
+				chunk.Material = p.Material
+				chunk.CFrame = p.CFrame
+				chunk.CanCollide = true
+				chunk.CanQuery = false
+				chunk.CanTouch = false
+				chunk.CollisionGroup = "Riders"
+				chunk.Parent = workspace
+				chunk.AssemblyLinearVelocity = fwd * (speed * 0.8 + 10) + Vector3.new(math.random(-18, 18), math.random(15, 35), math.random(-18, 18))
+				chunk.AssemblyAngularVelocity = Vector3.new(math.random(-12, 12), math.random(-12, 12), math.random(-12, 12))
+				game:GetService("Debris"):AddItem(chunk, 2.5)
+			end
+		end
+	end
+	speed *= 0.92
+	trickPopup:Fire("💥 Удар!  +" .. Config.SMASH_COINS)
+	sfx:Fire("smash")
+	Remotes.Smash:FireServer()
+end
+
 local function onTouched(hit: BasePart)
 	local now = os.clock()
 	if CollectionService:HasTag(hit, "Obstacle") then
 		if crashed or not started or now - lastObstacle < 0.5 then
 			return
+		end
+		local breakable = breakableOf(hit)
+		if breakable then
+			if smashed[breakable] then
+				return
+			end
+			if rocketOn.Value or now - lastBoost < 1.5 then
+				smash(breakable)
+				return
+			end
 		end
 		lastObstacle = now
 		crash()
@@ -542,6 +603,16 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 	rocketOn.Value = useRocket
 	fuelValue.Value = fuel
+
+	-- Подстраховка к Touched: машины и кабинки двигаются кадрами (CFrame), касание может не прийти
+	if started and not crashed then
+		for _, p in workspace:GetPartBoundsInBox(s.CFrame * CFrame.new(0, 1.5, 0), Vector3.new(6, 4, 7), overlapParams) do
+			if CollectionService:HasTag(p, "Obstacle") then
+				onTouched(p)
+				break
+			end
+		end
+	end
 
 	local hit = workspace:Raycast(s.Position, Vector3.new(0, -4, 0), rayParams)
 	local vel = s.AssemblyLinearVelocity
