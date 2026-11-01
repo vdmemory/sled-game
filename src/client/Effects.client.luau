@@ -99,10 +99,13 @@ local function addSnowTrail(sled: Instance)
 
 	-- Ракетные сопла (горят, когда у этих санок включена ракета; видно только своему игроку)
 	if sled:GetAttribute("Owner") == player.UserId then
+		-- сопла боковых ракет: координаты отдаёт сервер (SledModels.extras)
+		local np = sled:GetAttribute("RocketNozzle")
+		local n = if typeof(np) == "Vector3" then np else Vector3.new(2.2, 0.6, 3.6)
 		for _, side in { -1, 1 } do
 			local nozzle = Instance.new("Attachment")
 			nozzle.Name = "RocketNozzle"
-			nozzle.Position = Vector3.new(side * 2.2, 0.6, 3.6)
+			nozzle.Position = Vector3.new(side * math.abs(n.X), n.Y, n.Z)
 			nozzle.Parent = sled
 			local fire = Instance.new("ParticleEmitter")
 			fire.Name = "RocketFire"

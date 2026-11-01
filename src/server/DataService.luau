@@ -16,7 +16,7 @@ local DEFAULT = {
 	Gems = 0,
 	Skin = "classic", -- надетый скин
 	OwnedSkins = { classic = true },
-	Settings = { Sfx = true, Snow = true, Shadows = true },
+	Settings = { Sfx = true, Music = true, Snow = true, Shadows = true },
 	Sled = "tube", -- модель саней
 	SledRarity = 1,
 	OwnedSleds = { ["tube:1"] = true },
@@ -64,6 +64,14 @@ function Data.load(player: Player)
 	if ok and type(saved) == "table" then
 		for k, v in saved do
 			data[k] = v
+		end
+		-- новые ключи настроек (например, Music) у старых профилей
+		if type(data.Settings) == "table" then
+			for k, v in DEFAULT.Settings do
+				if data.Settings[k] == nil then
+					data.Settings[k] = v
+				end
+			end
 		end
 	end
 	-- Если загрузка не удалась, не сохраняем — иначе затрём реальный прогресс пустым

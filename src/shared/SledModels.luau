@@ -260,6 +260,138 @@ local function buildPlane(b, look: Look)
 	end
 end
 
+------------------------------------------------------------------ ракеты (апгрейд «Ракета»)
+-- Боковые ракеты как в оригинале: корпус, обтекатель-нос, пояски, стабилизаторы, сопло.
+-- Каждый тир — свой дизайн: петарда → ракета → турбо → мега → бласт → гиперджет.
+local ROCKETS = {
+	[0] = { name = "Петарда", body = Color3.fromRGB(215, 55, 45), nose = Color3.fromRGB(245, 235, 210), fin = Color3.fromRGB(245, 235, 210), band = Color3.fromRGB(245, 235, 210), nozzle = Color3.fromRGB(90, 70, 55), d = 0.75, len = 2.3, fins = 2, wick = true },
+	[1] = { name = "Ракета", body = Color3.fromRGB(225, 45, 45), nose = WHITE, fin = Color3.fromRGB(55, 110, 225), band = WHITE, nozzle = Color3.fromRGB(55, 110, 225), d = 0.95, len = 2.9, fins = 3 },
+	[2] = { name = "Турбо-ракета", body = Color3.fromRGB(205, 210, 220), bodyMat = Enum.Material.Metal, nose = Color3.fromRGB(225, 45, 45), fin = Color3.fromRGB(225, 45, 45), band = Color3.fromRGB(225, 45, 45), nozzle = STEEL, d = 1.05, len = 3.2, fins = 4, intake = true },
+	[3] = { name = "Мега-двигатель", body = Color3.fromRGB(45, 95, 215), nose = WHITE, fin = Color3.fromRGB(255, 200, 40), band = WHITE, nozzle = STEEL, d = 1.15, len = 3.5, fins = 4, intake = true, glow = Color3.fromRGB(90, 220, 255), canards = true },
+	[4] = { name = "Бласт-двигатель", body = Color3.fromRGB(240, 190, 55), bodyMat = Enum.Material.SmoothPlastic, shine = 0.25, nose = BLACK, fin = BLACK, band = BLACK, nozzle = Color3.fromRGB(60, 60, 70), d = 1.2, len = 3.7, fins = 4, intake = true, glow = Color3.fromRGB(255, 150, 40), canards = true },
+	[5] = { name = "Гиперджет", body = Color3.fromRGB(40, 32, 70), nose = Color3.fromRGB(170, 90, 255), fin = Color3.fromRGB(90, 230, 255), finMat = Enum.Material.Neon, band = Color3.fromRGB(90, 230, 255), bandMat = Enum.Material.Neon, nozzle = BLACK, d = 1.25, len = 3.9, fins = 4, intake = true, glow = Color3.fromRGB(190, 110, 255), canards = true },
+}
+SledModels.ROCKETS = ROCKETS
+
+-- Одна ракета: центр at, нос смотрит по −Z. Возвращает позицию среза сопла (для огня).
+local function buildRocket(b, at: Vector3, tier: number): Vector3
+	local r = ROCKETS[math.clamp(tier, 0, 5)]
+	local d, len = r.d, r.len
+	local back = at.Z + len / 2
+	-- корпус
+	local body = b:cyl(d, len, at, Vector3.zAxis, r.body, r.bodyMat)
+	body.Reflectance = r.shine or 0
+	-- нос: вытянутый обтекатель + наконечник
+	b:ellipsoid(Vector3.new(d, d, d * 1.7), CFrame.new(at.X, at.Y, at.Z - len / 2), r.nose, if r.nose == BLACK then Enum.Material.Metal else nil)
+	b:ball(d * 0.22, CFrame.new(at.X, at.Y, at.Z - len / 2 - d * 0.82), r.band, r.bandMat)
+	-- пояски
+	for _, k in { -0.28, 0.12 } do
+		b:cyl(d * 1.04, 0.16, at + Vector3.new(0, 0, len * k), Vector3.zAxis, r.band, r.bandMat)
+	end
+	if r.wick then -- фитиль у петарды
+		b:rod({ at + Vector3.new(0, d * 0.4, len * 0.3), at + Vector3.new(0, d * 0.75, len * 0.38), at + Vector3.new(0, d * 0.85, len * 0.5) }, 0.08, Color3.fromRGB(60, 50, 40), Enum.Material.Fabric)
+	end
+	if r.intake then -- воздухозаборник сверху
+		b:block(Vector3.new(d * 0.35, d * 0.22, len * 0.35), CFrame.new(at.X, at.Y + d * 0.52, at.Z - len * 0.05), BLACK, Enum.Material.Metal)
+	end
+	-- сопло: раструб + тёмная дыра + (у старших тиров) светящееся кольцо
+	b:cyl(d * 0.82, 0.55, Vector3.new(at.X, at.Y, back + 0.22), Vector3.zAxis, r.nozzle, Enum.Material.Metal)
+	b:cyl(d * 0.95, 0.18, Vector3.new(at.X, at.Y, back + 0.5), Vector3.zAxis, r.nozzle, Enum.Material.Metal)
+	b:cyl(d * 0.6, 0.06, Vector3.new(at.X, at.Y, back + 0.6), Vector3.zAxis, BLACK)
+	if r.glow then
+		b:cyl(d * 0.42, 0.07, Vector3.new(at.X, at.Y, back + 0.62), Vector3.zAxis, r.glow, Enum.Material.Neon)
+	end
+	-- стабилизаторы: треугольные крылышки в хвосте
+	local h = d * 0.75
+	local start = if r.fins == 3 then 0 elseif r.fins == 2 then 90 else 45
+	for i = 0, r.fins - 1 do
+		local a = math.rad(start + i * 360 / r.fins)
+		local cf = CFrame.new(at.X, at.Y, back - 0.55) * CFrame.Angles(0, 0, a) * CFrame.new(0, d / 2 + h / 2 - 0.05, 0)
+		b:wedge(Vector3.new(0.12, h, 1.1), cf, r.fin, r.finMat)
+	end
+	if r.canards then -- маленькие передние крылышки
+		for _, sx in { -1, 1 } do
+			b:wedge(Vector3.new(0.1, d * 0.35, 0.6), CFrame.new(at.X, at.Y, at.Z - len * 0.3) * CFrame.Angles(0, 0, sx * math.rad(90)) * CFrame.new(0, d / 2 + d * 0.15, 0), r.fin, r.finMat)
+		end
+	end
+	return Vector3.new(at.X, at.Y, back + 0.6)
+end
+
+-- Где у каждой модели саней крепятся ракеты и фары
+local MOUNTS = {
+	tube = { x = 3.95, y = 0.3, z = 0.6, lights = Vector3.new(1.15, 0.85, -3.3) },
+	classic = { x = 2.25, y = 0.45, z = 0.6, lights = Vector3.new(1.4, 0.9, -2.55) },
+	board = { x = 1.5, y = -0.15, z = 0.3, lights = Vector3.new(0.85, -0.05, -3.15) },
+	plane = { x = 2.75, y = -0.2, z = 0.3, lights = Vector3.new(2.2, -0.3, -1.3), onWing = true },
+}
+
+-- Одна ракета отдельно (витрина апгрейда «Ракета»)
+function SledModels.rocket(parent: Instance, base: CFrame, tier: number): Vector3
+	local b = newBuilder(parent, base, nil)
+	return buildRocket(b, Vector3.zero, tier)
+end
+
+-- Детали апгрейдов на санках: боковые ракеты по тиру «Ракеты» + обвес по тиру «Саней».
+-- Возвращает { x, y, z } сопла правой ракеты (для огня в Effects).
+function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier: number, rocketTier: number, accent: Color3, weldTo: BasePart?): Vector3
+	local b = newBuilder(parent, base, weldTo)
+	local m = MOUNTS[id] or MOUNTS.tube
+	local r = ROCKETS[math.clamp(rocketTier, 0, 5)]
+	local x = if m.onWing then m.x else m.x + r.d / 2 + 0.12
+	local y = if m.onWing then m.y + r.d / 2 else m.y
+	local nozzle = Vector3.zero
+	for _, sx in { -1, 1 } do
+		nozzle = buildRocket(b, Vector3.new(sx * x, y, m.z), rocketTier)
+		-- кронштейн к корпусу
+		if not m.onWing then
+			b:block(Vector3.new(0.5, 0.28, 0.9), CFrame.new(sx * (x - r.d / 2 - 0.1), y, m.z), STEEL, Enum.Material.Metal)
+		end
+	end
+	-- Тиры «Саней»: 1 фары, 2 аэро-хвост, 3 обтекатель, 4 золотая отделка, 5 неон
+	if sledTier >= 1 then
+		for _, sx in { -1, 1 } do
+			local p = m.lights * Vector3.new(sx, 1, 1)
+			b:ball(0.62, CFrame.new(p), if sledTier >= 4 then Color3.fromRGB(240, 195, 60) else STEEL, Enum.Material.Metal)
+			b:ball(0.46, CFrame.new(p + Vector3.new(0, 0, -0.12)), Color3.fromRGB(255, 245, 200), Enum.Material.Neon)
+		end
+	end
+	if sledTier >= 2 and id ~= "plane" then
+		local z = if id == "tube" then 3.9 elseif id == "classic" then 3.7 else 3.3
+		local yy = if id == "tube" then 1.2 elseif id == "classic" then 1.0 else 0.0
+		-- спойлер: две стойки + крыло
+		for _, sx in { -1, 1 } do
+			b:block(Vector3.new(0.18, 0.7, 0.4), CFrame.new(sx * 0.9, yy, z), BLACK)
+		end
+		b:block(Vector3.new(2.6, 0.14, 0.7), CFrame.new(0, yy + 0.4, z + 0.1) * CFrame.Angles(math.rad(-10), 0, 0), accent)
+		for _, sx in { -1, 1 } do
+			b:block(Vector3.new(0.1, 0.45, 0.8), CFrame.new(sx * 1.3, yy + 0.45, z + 0.1), accent)
+		end
+	end
+	if sledTier >= 3 and id ~= "plane" then
+		local z = if id == "tube" then -3.4 elseif id == "classic" then -2.5 else -2.4
+		local yy = if id == "tube" then 1.4 elseif id == "classic" then 1.25 else 0.35
+		local glass = b:block(Vector3.new(3.6, 1.4, 0.18), CFrame.new(0, yy, z) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(170, 220, 255), Enum.Material.Glass)
+		glass.Transparency = 0.35
+		b:block(Vector3.new(3.7, 0.16, 0.24), CFrame.new(0, yy + 0.66, z + 0.3) * CFrame.Angles(math.rad(-25), 0, 0), BLACK)
+	end
+	if sledTier >= 4 then -- золотой пояс/бампер
+		local gold = Color3.fromRGB(240, 195, 60)
+		if id == "tube" then
+			b:torus(Vector3.new(0, 0.05, 0), 3.95, 0.22, 26, gold, Enum.Material.SmoothPlastic)
+		else
+			local z = if id == "classic" then -3.0 elseif id == "board" then -3.6 else -2.9
+			local yy = if id == "board" then -0.25 else 0.0
+			b:rod({ Vector3.new(-1.6, yy, z + 0.4), Vector3.new(-0.8, yy, z), Vector3.new(0.8, yy, z), Vector3.new(1.6, yy, z + 0.4) }, 0.22, gold, Enum.Material.SmoothPlastic)
+		end
+	end
+	if sledTier >= 5 then -- неоновая подсветка снизу
+		for _, sx in { -1, 1 } do
+			b:block(Vector3.new(0.12, 0.12, 4.5), CFrame.new(sx * (if id == "tube" then 3.0 else 1.6), -0.55, 0.2), accent, Enum.Material.Neon)
+		end
+	end
+	return nozzle
+end
+
 function SledModels.build(parent: Instance, base: CFrame, id: string, look: Look, weldTo: BasePart?, painted: boolean?): number
 	local b = newBuilder(parent, base, weldTo)
 	b.main = look.main

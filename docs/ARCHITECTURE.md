@@ -21,9 +21,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 | Папка | Куда в игре | Что там |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс), `UIKit` (стиль интерфейса), `SledModels` (3D-модели саней) |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс), `UIKit` (стиль интерфейса), `SledModels` (3D-модели саней, боковые ракеты по тирам, обвес `extras`) |
 | `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты), `Track` (генерация трассы и лобби), `Props` (low-poly модели), `DataService` (DataStore), `Rewards` (задания, подарки, сундук) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `Effects`, `Sounds`, `Traffic` (движение машин) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `Effects`, `Sounds` (эффекты + фоновая музыка), `Traffic` (движение машин), `Reveal` (анимация нового тира апгрейда) |
 
 ## Как устроен заезд
 

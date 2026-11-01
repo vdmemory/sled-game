@@ -519,7 +519,7 @@ local setWin = UI.new("Frame", {
 	Name = "Panel_Settings",
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(420, 260),
+	Size = UDim2.fromOffset(470, 260),
 	BackgroundColor3 = Color3.fromRGB(26, 44, 86),
 	BackgroundTransparency = 0.05,
 	Visible = false,
@@ -560,9 +560,10 @@ local function toggle(key: string, icon: string, caption: string, x: number)
 	player:GetAttributeChangedSignal("Set" .. key):Connect(paint)
 	paint()
 end
-toggle("Sfx", "🔊", "Звуки", -120)
-toggle("Snow", "❄", "Снегопад", 0)
-toggle("Shadows", "🌗", "Тени", 120)
+toggle("Sfx", "🔊", "Звуки", -159)
+toggle("Music", "🎵", "Музыка", -53)
+toggle("Snow", "❄", "Снегопад", 53)
+toggle("Shadows", "🌗", "Тени", 159)
 gear.Activated:Connect(function()
 	open(setWin)
 end)

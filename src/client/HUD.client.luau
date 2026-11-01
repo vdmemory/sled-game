@@ -18,6 +18,11 @@ local state = controller:WaitForChild("State")
 local TOUCH = UserInputService.TouchEnabled
 local C = UI.C
 
+-- Анимацию нового тира рисует Reveal.client
+local upgradeReveal = Instance.new("BindableEvent")
+upgradeReveal.Name = "UpgradeReveal"
+upgradeReveal.Parent = script
+
 local gui = Instance.new("ScreenGui")
 gui.Name = "HUD"
 gui.ResetOnSpawn = false

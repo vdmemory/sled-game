@@ -368,4 +368,20 @@ function UI.money(n: number): string
 	return (string.gsub(s, "%.0([KM])", "%1"))
 end
 
+-- ВЕРХНИЙ РЕГИСТР с кириллицей (string.upper в Roblox меняет только латиницу)
+function UI.upper(s: string): string
+	local out = {}
+	for _, c in utf8.codes(s) do
+		if c >= 0x430 and c <= 0x44F then
+			c -= 0x20
+		elseif c == 0x451 then
+			c = 0x401
+		elseif c >= 97 and c <= 122 then
+			c -= 32
+		end
+		table.insert(out, utf8.char(c))
+	end
+	return table.concat(out)
+end
+
 return UI

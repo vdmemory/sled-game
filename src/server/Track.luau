@@ -909,13 +909,16 @@ local function showcaseSled(at: CFrame, sledId: string, rarityIdx: number, capti
 	local ring = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 13.6, 13.6), CFrame = at * CFrame.new(0, 1.9, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = col }, parent)
 	local holder = Instance.new("Model")
 	holder.Name = "Showcase"
-	SledModels.build(holder, at * CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-10), math.rad(30), 0), sledId, {
+	local showCF = at * CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-10), math.rad(30), 0)
+	SledModels.build(holder, showCF, sledId, {
 		main = col,
 		accent = Color3.new(1, 1, 1):Lerp(col, 0.35),
 		material = rarity.material,
 		glow = rarityIdx == 5,
 		shine = rarity.shine,
 	}, nil, true)
+	-- прокачанная витрина: топовые ракеты и обвес
+	SledModels.extras(holder, showCF, sledId, 4, if rarityIdx == 5 then 5 else 3, Color3.new(1, 1, 1):Lerp(col, 0.35), nil)
 	holder.Parent = parent
 	local glow = Instance.new("PointLight")
 	glow.Color = col

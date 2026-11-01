@@ -11,6 +11,7 @@ local player = Players.LocalPlayer
 local controller = script.Parent:WaitForChild("SledController")
 local state = controller:WaitForChild("State")
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local function sound(file: string, volume: number, pitch: number?, looped: boolean?): Sound
 	local s = Instance.new("Sound")
@@ -80,4 +81,73 @@ RunService.RenderStepped:Connect(function(dt)
 	wind.PlaybackSpeed = 0.8 + math.clamp(speed / 140, 0, 1) * 0.6
 	local targetJet = if state.RocketOn.Value and not muted then 0.5 else 0
 	jet.Volume += (targetJet - jet.Volume) * math.min(1, dt * 10)
+end)
+
+------------------------------------------------------------------ фоновая музыка
+-- Тихий трек по кругу. ID из Config.MUSIC_IDS пробуем по очереди (аудио могут закрыть
+-- для чужих игр); если ни один не загрузился — играет тихая «музыкальная шкатулка»
+-- из встроенного звука. Кнопка «Музыка» в настройках (атрибут SetMusic).
+local music = Instance.new("Sound")
+music.Name = "Music"
+music.Looped = true
+music.Volume = 0
+music.Parent = SoundService
+local musicReady = false
+
+local function musicVolume(): number
+	if player:GetAttribute("SetMusic") == false then
+		return 0
+	end
+	-- в заезде чуть тише, чтобы не спорить с ветром и эффектами
+	return Config.MUSIC_VOLUME * (if player:GetAttribute("Launched") == true then 0.6 else 1)
+end
+
+local function musicBox()
+	-- пентатоника до-мажор, спокойные арпеджио: 4 такта по 8 нот
+	local notes = {
+		0, 4, 7, 12, 7, 4, 0, 4,
+		-3, 0, 4, 9, 4, 0, -3, 0,
+		-7, -3, 0, 5, 0, -3, -7, -3,
+		-5, -1, 2, 7, 2, -1, -5, 2,
+	}
+	local pool = {}
+	for i = 1, 4 do
+		pool[i] = sound("electronicpingshort.wav", 0, 1)
+	end
+	local k = 0
+	while true do
+		for _, n in notes do
+			k = k % #pool + 1
+			local s = pool[k]
+			s.PlaybackSpeed = 0.5 * 2 ^ (n / 12)
+			s.Volume = musicVolume() * 0.45
+			if s.Volume > 0 then
+				s:Play()
+			end
+			task.wait(0.42)
+		end
+	end
+end
+
+task.spawn(function()
+	for _, id in Config.MUSIC_IDS do
+		music.SoundId = "rbxassetid://" .. tostring(id)
+		local t0 = os.clock()
+		while not music.IsLoaded and os.clock() - t0 < 8 do
+			task.wait(0.25)
+		end
+		if music.IsLoaded and music.TimeLength > 5 then
+			musicReady = true
+			music:Play()
+			return
+		end
+	end
+	music.SoundId = ""
+	musicBox()
+end)
+
+RunService.Heartbeat:Connect(function(dt)
+	if musicReady then
+		music.Volume += (musicVolume() - music.Volume) * math.min(1, dt * 2)
+	end
 end)
