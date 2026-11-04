@@ -128,11 +128,11 @@ local function tile(col: Frame, order: number, icon: string): TextButton
 	local t = UI.tile(col, icon, { LayoutOrder = order, Size = UDim2.fromOffset(84, 84) })
 	return t
 end
-local worldsBtn = tile(left, 1, "🌍")
-local tasksBtn = tile(left, 2, "📋")
-local sledsBtn = tile(left, 3, "🛷")
-local trailsBtn = tile(left, 4, "✨")
-local giftBtn = tile(left, 5, "🎁")
+local worldsBtn = tile(left, 1, "globe")
+local tasksBtn = tile(left, 2, "tasks")
+local sledsBtn = tile(left, 3, "sled")
+local trailsBtn = tile(left, 4, "sparkles")
+local giftBtn = tile(left, 5, "gift")
 local tasksBadge = UI.badge(tasksBtn, "!")
 tasksBadge.Visible = false
 local trailsNew = UI.badge(trailsBtn, "NEW", "green")
@@ -145,9 +145,9 @@ local gear = UI.new("TextButton", { Text = "", LayoutOrder = 0, Size = UDim2.fro
 local gearBg = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.navy, BackgroundTransparency = 0.35, Parent = gear })
 UI.corner(gearBg, 1000)
 UI.stroke(gearBg, 2.5, C.white, 0.3)
-UI.text({ Text = "⚙", Position = UDim2.fromScale(0.16, 0.12), Size = UDim2.fromScale(0.68, 0.72), Parent = gearBg })
+UI.icon("gear", { Position = UDim2.fromScale(0.14, 0.14), Size = UDim2.fromScale(0.72, 0.72), Parent = gearBg })
 UI.bounce(gear)
-local colorsBtn = tile(right, 1, "🎨")
+local colorsBtn = tile(right, 1, "palette")
 
 -- Жёлтая плашка сундука под заголовком
 local chestPill = UI.new("TextButton", {
@@ -232,7 +232,7 @@ local function drawWorlds()
 		local col = Config.WORLD_COLORS[theme]
 		UI.grad(pic, col:Lerp(Color3.new(1, 1, 1), 0.35), col)
 		UI.corner(pic, 12)
-		UI.text({ Text = Config.WORLD_ICONS[theme], Position = UDim2.fromScale(0.25, 0.1), Size = UDim2.fromScale(0.5, 0.8), Outline = 0, ZIndex = 35, Parent = pic })
+		UI.icon(({ "tree", "city", "cactus" })[theme] or "tree", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromScale(0.62, 0.86), ZIndex = 35, Parent = pic })
 		local num = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(40, 40), BackgroundTransparency = 0, ZIndex = 36, Parent = card })
 		UI.grad(num, UI.KIND.yellow[1], UI.KIND.yellow[2])
 		UI.corner(num, 1000)
@@ -261,7 +261,7 @@ local function drawWorlds()
 		elseif w == current + 1 then
 			kind, text, action = "purple", "ПРОПУСК R$" .. Config.PRODUCTS.SkipWorld.price, "skip"
 		else
-			kind, text = "grey", "🔒 Пройди мир " .. (w - 1)
+			kind, text = "grey", "Пройди мир " .. (w - 1)
 		end
 		if w < current and farm ~= w then
 			-- подсказка: в пройденном мире уровень не растёт, только монеты
@@ -301,7 +301,8 @@ local tasksWin, tasksBody = panel("ЗАДАНИЯ ДНЯ", 540, 540)
 UI.text({ Text = "ВЫПОЛНИ ВСЕ ЗАДАНИЯ,\nЧТОБЫ ПОЛУЧИТЬ СУНДУК!", Position = UDim2.fromOffset(10, 22), Size = UDim2.new(1, -100, 0, 46), ZIndex = 33, Parent = tasksBody })
 local _, setTasksBar = UI.progress(tasksBody, { Position = UDim2.fromOffset(12, 74), Size = UDim2.new(1, -100, 0, 24), ZIndex = 33 })
 local chestClaim = UI.new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 34), Size = UDim2.fromOffset(72, 72), BackgroundTransparency = 1, ZIndex = 34, Parent = tasksBody })
-local chestIcon = UI.text({ Text = "🧰", Size = UDim2.fromScale(1, 1), Outline = 0, ZIndex = 35, Parent = chestClaim })
+local chestIcon = UI.chest(chestClaim, { Position = UDim2.fromOffset(2, 6), Size = UDim2.fromOffset(68, 60), ZIndex = 35 })
+local chestDone = UI.icon("check", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(32, 32), Visible = false, ZIndex = 45, Parent = chestClaim })
 UI.bounce(chestClaim)
 chestClaim.Activated:Connect(function()
 	act("taskChest")
@@ -313,7 +314,7 @@ tl.SortOrder = Enum.SortOrder.LayoutOrder
 tl.Parent = taskRows
 local resetLabel = UI.ink({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0, 30), ZIndex = 33, Parent = tasksBody })
 
-local TASK_ICONS = { runs = "🛷", coins = "💰", distance = "🏔", air = "🪂", flips = "🔄", smash = "💥", best = "🏆" }
+local TASK_ICONS = { runs = "sled", coins = "coin", distance = "mountain", air = "parachute", flips = "flip", smash = "smash", best = "trophy" }
 local function drawTasks()
 	for _, c in taskRows:GetChildren() do
 		if c:IsA("GuiObject") then
@@ -346,7 +347,7 @@ local function drawTasks()
 		local iconBox = UI.new("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(76, 76), BackgroundColor3 = C.white, BackgroundTransparency = 0.2, ZIndex = 34, Parent = row })
 		UI.corner(iconBox, 12)
 		local id = t.id
-		UI.text({ Text = if t.claimed then "✅" elseif done then "✔" else (TASK_ICONS[id or ""] or "📋"), Position = UDim2.fromScale(0.12, 0.12), Size = UDim2.fromScale(0.76, 0.76), Outline = 0, ZIndex = 35, Parent = iconBox })
+		UI.icon(if t.claimed or done then "check" else (TASK_ICONS[id or ""] or "tasks"), { Position = UDim2.fromScale(0.1, 0.1), Size = UDim2.fromScale(0.8, 0.8), ZIndex = 35, Parent = iconBox })
 		if done and not t.claimed then
 			UI.ink({ Text = t.text, Position = UDim2.fromOffset(96, 10), Size = UDim2.new(1, -200, 0, 28), ZIndex = 34, Parent = row })
 			UI.text({ Text = "ЗАБРАТЬ НАГРАДУ!", Position = UDim2.fromOffset(96, 44), Size = UDim2.new(1, -200, 0, 34), ZIndex = 34, Parent = row })
@@ -355,11 +356,17 @@ local function drawTasks()
 			local _, set = UI.progress(row, { Position = UDim2.fromOffset(100, 50), Size = UDim2.new(1, -210, 0, 26), ZIndex = 34 })
 			set(t.progress / t.target, t.progress .. "/" .. t.target)
 		end
-		UI.text({ Text = if t.claimed then "✔" else "💎 " .. t.gems, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(86, 40), ZIndex = 34, Parent = row })
+		local _, setReward = UI.iconText({ AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(86, 34), ZIndex = 34, Parent = row })
+		if t.claimed then
+			setReward("", "check")
+		else
+			setReward(tostring(t.gems), "gem")
+		end
 	end
 	local total = #rewards.tasks
 	setTasksBar(claimed / total, claimed .. "/" .. total)
-	chestIcon.Text = if rewards.chestClaimed then "✅" else "🧰"
+	chestDone.Visible = rewards.chestClaimed == true
+	local _ = chestIcon
 	chestClaim.Active = claimed == total and not rewards.chestClaimed
 	tasksBadge.Text = tostring(ready)
 	tasksBadge.Visible = ready > 0
@@ -377,18 +384,21 @@ end)
 local giftsWin, giftsBody = panel("ПОДАРКИ", 640, 470)
 local giftsArea = scroller(giftsBody, false, 6)
 grid(giftsArea, 128, 112)
-type GiftCell = { status: TextButton, reward: TextLabel }
+type GiftCell = { status: TextButton, setCoins: (string, string?) -> (), setGems: (string, string?) -> (), rows: { Frame } }
 local giftCells: { GiftCell } = {}
 for i, g in Config.PLAYTIME_GIFTS do
 	local cell = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = giftsArea })
 	UI.corner(cell, 14)
 	UI.stroke(cell, 2.5, Color3.fromRGB(120, 170, 225))
-	local reward = UI.ink({ Text = "", Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 52), ZIndex = 34, Parent = cell })
+	-- награда: крупно одна строка, либо две (монеты + гемы)
+	local both = g.coins ~= nil and g.gems ~= nil
+	local rowCoins, setCoins = UI.iconText({ Position = UDim2.fromOffset(6, if both then 6 else 12), Size = UDim2.new(1, -12, 0, if both then 24 else 40), Color = C.ink, ZIndex = 34, Parent = cell })
+	local rowGems, setGems = UI.iconText({ Position = UDim2.fromOffset(6, if both then 32 else 12), Size = UDim2.new(1, -12, 0, if both then 24 else 40), Color = C.ink, ZIndex = 34, Parent = cell })
 	local st = UI.button("blue", "", { Position = UDim2.new(0, 8, 1, -46), Size = UDim2.new(1, -16, 0, 38), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = cell })
 	st.Activated:Connect(function()
 		act("gift", i)
 	end)
-	giftCells[i] = { status = st, reward = reward }
+	giftCells[i] = { status = st, setCoins = setCoins, setGems = setGems, rows = { rowCoins, rowGems } }
 end
 giftBtn.Activated:Connect(function()
 	open(giftsWin)
@@ -409,7 +419,7 @@ for mi, model in Config.SLEDS do
 	local head = UI.new("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.new(0, 150, 1, -16), BackgroundTransparency = 0, ZIndex = 34, Parent = row })
 	UI.grad(head, Color3.fromRGB(250, 252, 255), Color3.fromRGB(205, 225, 245))
 	UI.corner(head, 12)
-	UI.text({ Text = model.icon, Position = UDim2.fromOffset(35, 4), Size = UDim2.fromOffset(80, 66), Outline = 0, ZIndex = 35, Parent = head })
+	UI.icon(model.img, { Position = UDim2.fromOffset(37, 4), Size = UDim2.fromOffset(76, 66), ZIndex = 35, Parent = head })
 	UI.ink({ Text = model.name, Position = UDim2.fromOffset(6, 72), Size = UDim2.new(1, -12, 0, 28), ZIndex = 35, Parent = head })
 	if model.bonus > 0 then
 		local tag = UI.button("green", "+" .. model.bonus .. "% скорости", { Position = UDim2.fromOffset(8, 104), Size = UDim2.new(1, -16, 0, 30), Radius = 8, StrokeThickness = 2, ZIndex = 35, Parent = head })
@@ -426,7 +436,7 @@ for mi, model in Config.SLEDS do
 		local sw = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 30), Size = UDim2.fromOffset(50, 50), BackgroundColor3 = rar.color or Color3.fromRGB(240, 70, 120), BackgroundTransparency = 0, ZIndex = 35, Parent = cell })
 		UI.corner(sw, 1000)
 		UI.stroke(sw, 2)
-		UI.text({ Text = model.icon, Position = UDim2.fromScale(0.15, 0.15), Size = UDim2.fromScale(0.7, 0.7), Outline = 0, ZIndex = 36, Parent = sw })
+		UI.icon(model.img, { Position = UDim2.fromScale(0.12, 0.12), Size = UDim2.fromScale(0.76, 0.76), ZIndex = 36, Parent = sw })
 		local total = model.bonus + rar.bonus
 		UI.ink({ Text = if total > 0 then "+" .. total .. "%" else "базовые", Position = UDim2.fromOffset(6, 82), Size = UDim2.new(1, -12, 0, 18), TextColor3 = Color3.fromRGB(60, 150, 70), ZIndex = 35, Parent = cell })
 		local status = UI.button("blue", "", { Position = UDim2.new(0, 6, 1, -40), Size = UDim2.new(1, -12, 0, 34), Radius = 10, StrokeThickness = 2, ZIndex = 35, Parent = cell })
@@ -444,20 +454,22 @@ local function drawSleds()
 	for _, c in sledCells do
 		local key = c.model.id .. ":" .. c.rarity
 		local kind, text
+		local icon: string? = nil
 		if c.model.id == cur and c.rarity == curR then
 			kind, text = "green", "✔ НАДЕТО"
 		elseif owned[key] then
 			kind, text = "blue", "НАДЕТЬ"
 		elseif world < c.model.world then
-			kind, text = "grey", "🔒 мир " .. c.model.world
+			kind, text, icon = "grey", "мир " .. c.model.world, "lock"
 		elseif c.rarity > 1 and not owned[c.model.id .. ":" .. (c.rarity - 1)] then
-			kind, text = "grey", "🔒 " .. UI.money(c.model.prices[c.rarity])
+			kind, text, icon = "grey", UI.money(c.model.prices[c.rarity]), "lock"
 		else
 			local price = c.model.prices[c.rarity]
-			kind, text = if coins >= price then "yellow" else "grey", "💰 " .. UI.money(price)
+			kind, text = if coins >= price then "yellow" else "grey", UI.money(price)
+			icon = "coin"
 		end
 		UI.setKind(c.status, kind)
-		UI.setText(c.status, text)
+		UI.setText(c.status, text, icon)
 	end
 end
 sledsBtn.Activated:Connect(function()
@@ -511,7 +523,7 @@ local function drawTrails()
 			UI.setText(st, "НАДЕТЬ")
 		else
 			UI.setKind(st, if coins >= t.price then "yellow" else "grey")
-			UI.setText(st, "💰 " .. UI.money(t.price))
+			UI.setText(st, UI.money(t.price), "coin")
 		end
 	end
 end
@@ -554,7 +566,7 @@ local function drawColors()
 			UI.setText(st, "НАДЕТЬ")
 		else
 			UI.setKind(st, if coins >= skin.price then "yellow" else "grey")
-			UI.setText(st, "💰 " .. UI.money(skin.price))
+			UI.setText(st, UI.money(skin.price), "coin")
 		end
 	end
 end
@@ -590,7 +602,7 @@ local function toggle(key: string, icon: string, caption: string, x: number)
 	UI.corner(b, 1000)
 	UI.stroke(b, 3, C.white, 0.2)
 	UI.bounce(b)
-	UI.text({ Text = icon, Position = UDim2.fromScale(0.18, 0.18), Size = UDim2.fromScale(0.64, 0.64), Outline = 0, ZIndex = 32, Parent = b })
+	UI.icon(icon, { Position = UDim2.fromScale(0.17, 0.17), Size = UDim2.fromScale(0.66, 0.66), ZIndex = 32, Parent = b })
 	local slash = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1.05, 0, 0, 8), Rotation = -45, BackgroundColor3 = Color3.fromRGB(235, 60, 60), BackgroundTransparency = 0, ZIndex = 33, Parent = b })
 	UI.corner(slash, 1000)
 	UI.stroke(slash, 2, C.white)
@@ -610,10 +622,10 @@ local function toggle(key: string, icon: string, caption: string, x: number)
 	player:GetAttributeChangedSignal("Set" .. key):Connect(paint)
 	paint()
 end
-toggle("Sfx", "🔊", "Звуки", -159)
-toggle("Music", "🎵", "Музыка", -53)
-toggle("Snow", "❄", "Снегопад", 53)
-toggle("Shadows", "🌗", "Тени", 159)
+toggle("Sfx", "speaker", "Звуки", -159)
+toggle("Music", "music", "Музыка", -53)
+toggle("Snow", "snowflake", "Снегопад", 53)
+toggle("Shadows", "moon", "Тени", 159)
 gear.Activated:Connect(function()
 	open(setWin)
 end)
@@ -645,8 +657,15 @@ local function refreshRewards()
 	end
 	local level = player:GetAttribute("Level") or 1
 	for i, g in Config.PLAYTIME_GIFTS do
-		giftCells[i].reward.Text = (if g.coins then "💰 " .. UI.money(Config.rewardCoins(g.coins, level)) else "")
-			.. (if g.gems then (if g.coins then "\n" else "") .. "💎 " .. g.gems else "")
+		local cell = giftCells[i]
+		cell.rows[1].Visible = g.coins ~= nil
+		cell.rows[2].Visible = g.gems ~= nil
+		if g.coins then
+			cell.setCoins(UI.money(Config.rewardCoins(g.coins, level)), "coin")
+		end
+		if g.gems then
+			cell.setGems(tostring(g.gems), "gem")
+		end
 	end
 	drawTasks()
 end
@@ -669,7 +688,7 @@ RunService.Heartbeat:Connect(function(dt)
 		local leftSec = g.min * 60 - elapsed
 		if rewards.gifts[i] then
 			UI.setKind(cell.status, "grey")
-			UI.setText(cell.status, "✔")
+			UI.setText(cell.status, "ПОЛУЧЕНО")
 		elseif leftSec <= 0 then
 			ready += 1
 			UI.setKind(cell.status, "green")
@@ -685,7 +704,7 @@ RunService.Heartbeat:Connect(function(dt)
 	giftTimer.Text = if ready > 0 then "" elseif nextIn then clock(nextIn) else ""
 	local chestLeft = rewards.chestAt - now
 	chestText.Text = if chestLeft <= 0 then "ОТКРЫТЬ!" else clock(chestLeft)
-	resetLabel.Text = "Обновятся через: 🕒 " .. clock(rewards.resetAt - now)
+	resetLabel.Text = "Обновятся через " .. clock(rewards.resetAt - now)
 end)
 
 -- В заезде все окна закрываем

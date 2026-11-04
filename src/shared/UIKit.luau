@@ -5,6 +5,7 @@
 --  • тёмно-синие полупрозрачные плашки валют с иконкой, вылезающей за край.
 
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local UI = {}
 
@@ -35,7 +36,7 @@ UI.KIND = {
 	ice = { Color3.fromRGB(245, 251, 255), Color3.fromRGB(190, 222, 250) },
 }
 
-local CUSTOM = { Outline = true, Radius = true, StrokeThickness = true }
+local CUSTOM = { Outline = true, Radius = true, StrokeThickness = true, Align = true, Color = true }
 
 function UI.new(class: string, props: { [string]: any }?): any
 	local o = Instance.new(class)
@@ -173,10 +174,34 @@ function UI.setKind(b: GuiObject, kind: string)
 		g.Color = ColorSequence.new(k[1], k[2])
 	end
 end
-function UI.setText(b: GuiObject, text: string)
+-- Текст кнопки; с icon — иконка + текст в строку (цены «[монета] 600» вместо «💰 600»)
+local iconSetters = setmetatable({}, { __mode = "k" })
+function UI.setText(b: GuiObject, text: string, icon: string?)
 	local l = b:FindFirstChild("Label") :: TextLabel?
-	if l then
-		l.Text = text
+	local set = iconSetters[b]
+	if icon and not set then
+		local h = if b.Size.Y.Offset > 0 then b.Size.Y.Offset - 14 else 22
+		local _, setter = UI.iconText({ Name = "IconText", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -12, 0, h), ZIndex = b.ZIndex + 2, Parent = b })
+		iconSetters[b] = setter
+		set = setter
+	end
+	local holder = b:FindFirstChild("IconText")
+	if icon and set then
+		set(text, icon)
+		if holder then
+			holder.Visible = true
+		end
+		if l then
+			l.Visible = false
+		end
+	else
+		if holder then
+			holder.Visible = false
+		end
+		if l then
+			l.Visible = true
+			l.Text = text
+		end
 	end
 end
 
@@ -365,11 +390,7 @@ function UI.currency(parent: Instance, icon: string, props: { [string]: any }): 
 	f.Parent = parent
 	local h = if props.Size and props.Size.Y.Offset > 0 then props.Size.Y.Offset else 38
 	local d = math.floor(h * 1.25)
-	if icon == "coin" then
-		UI.coin(f, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(d, d), ZIndex = f.ZIndex + 2 })
-	else
-		UI.text({ Text = icon, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(d + 4, d + 4), Outline = 0, ZIndex = f.ZIndex + 2, Parent = f })
-	end
+	UI.icon(icon, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(d + 6, d + 6), ZIndex = f.ZIndex + 2, Parent = f })
 	return UI.text({ Text = "0", Position = UDim2.new(0, d / 2 + 12, 0, 5), Size = UDim2.new(1, -(d / 2 + 22), 1, -10), Outline = 2.5, ZIndex = f.ZIndex + 1, Parent = f })
 end
 
@@ -394,7 +415,7 @@ function UI.tile(parent: Instance, icon: string, props: { [string]: any }): Text
 	sg.Rotation = 90
 	sg.Transparency = NumberSequence.new(0.1, 1)
 	sg.Parent = shine
-	UI.text({ Name = "Icon", Text = icon, Position = UDim2.fromScale(0.1, 0.08), Size = UDim2.fromScale(0.8, 0.8), Outline = 0, ZIndex = b.ZIndex + 2, Parent = b })
+	UI.icon(icon, { Name = "Icon", Position = UDim2.fromScale(0.1, 0.08), Size = UDim2.fromScale(0.8, 0.8), ZIndex = b.ZIndex + 2, Parent = b })
 	UI.bounce(b)
 	return b
 end
@@ -460,6 +481,120 @@ function UI.upper(s: string): string
 		table.insert(out, utf8.char(c))
 	end
 	return table.concat(out)
+end
+
+------------------------------------------------------------------ 3D-иконки (Fluent Emoji)
+-- Картинки грузит деплой (assets/ui → декали), сервер отдаёт ID в ReplicatedStorage.UIImages.
+-- Пока картинки нет или она не загрузилась — показываем эмодзи-заглушку (или нарисованную монету).
+UI.EMOJI = {
+	coin = "💰", gem = "💎", globe = "🌍", tasks = "📋", sled = "🛷", sparkles = "✨", gift = "🎁",
+	gear = "⚙", palette = "🎨", bullseye = "🎯", moneybag = "💰", rocket = "🚀", fire = "🔥",
+	flip = "🔄", flag = "🏁", magnet = "🧲", trophy = "🏆", check = "✅", lock = "🔒", party = "🎉",
+	tree = "🌲", city = "🏙", cactus = "🌵", mountain = "🏔", parachute = "🪂", smash = "💥",
+	speaker = "🔊", music = "🎵", snowflake = "❄", moon = "🌗", donut = "🍩", snowboard = "🏂",
+	plane = "✈", star = "⭐", bolt = "⚡", stopwatch = "⏱", hourglass = "⏳", ice = "🧊", ringbuoy = "🛟",
+}
+local imagesFolder: Folder? = nil
+local waiting: { () -> () } = {}
+task.spawn(function()
+	local f = ReplicatedStorage:WaitForChild("UIImages", 60)
+	if f then
+		imagesFolder = f :: Folder
+		for _, fn in waiting do
+			fn()
+		end
+		f.AttributeChanged:Connect(function()
+			for _, fn in waiting do
+				fn()
+			end
+		end)
+	end
+end)
+
+function UI.icon(name: string, props: { [string]: any }): Frame
+	local f = UI.new("Frame", props)
+	f.BackgroundTransparency = 1
+	local z = f.ZIndex
+	local fallback: GuiObject
+	if name == "coin" then
+		fallback = UI.coin(f, { Name = "Fallback", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.86, 0.86), ZIndex = z })
+	else
+		fallback = UI.new("TextLabel", { Name = "Fallback", Text = UI.EMOJI[name] or "", Size = UDim2.fromScale(1, 1), ZIndex = z, Parent = f })
+	end
+	local img = UI.new("ImageLabel", { Name = "Image", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ScaleType = Enum.ScaleType.Fit, Visible = false, ZIndex = z, Parent = f })
+	f:SetAttribute("Icon", name)
+	local function apply()
+		local n = f:GetAttribute("Icon")
+		local id = imagesFolder and n and imagesFolder:GetAttribute(n)
+		if typeof(id) == "string" then
+			if img.Image ~= id then
+				img.Image = id
+			end
+		else
+			img.Image = ""
+		end
+		-- показываем картинку только когда она реально загрузилась
+		local ready = img.Image ~= "" and img.IsLoaded
+		img.Visible = ready
+		fallback.Visible = not ready
+		if fallback:IsA("TextLabel") then
+			fallback.Text = UI.EMOJI[n] or ""
+		end
+	end
+	img:GetPropertyChangedSignal("IsLoaded"):Connect(apply)
+	f:GetAttributeChangedSignal("Icon"):Connect(apply)
+	table.insert(waiting, apply)
+	f.Destroying:Connect(function()
+		local i = table.find(waiting, apply)
+		if i then
+			table.remove(waiting, i)
+		end
+	end)
+	apply()
+	f.Parent = props.Parent
+	return f
+end
+function UI.setIcon(f: Instance, name: string)
+	f:SetAttribute("Icon", name)
+end
+
+-- Иконка + число в строку, по центру (цены, награды): set(текст, иконка?)
+function UI.iconText(props: { [string]: any }): (Frame, (string, string?) -> ())
+	local f = UI.new("Frame", props)
+	f.BackgroundTransparency = 1
+	local h = if props.Size then props.Size.Y.Offset else 24
+	local row = Instance.new("UIListLayout")
+	row.FillDirection = Enum.FillDirection.Horizontal
+	row.HorizontalAlignment = props.Align or Enum.HorizontalAlignment.Center
+	row.VerticalAlignment = Enum.VerticalAlignment.Center
+	row.Padding = UDim.new(0, 4)
+	row.SortOrder = Enum.SortOrder.LayoutOrder
+	row.Parent = f
+	local icon = UI.icon("coin", { LayoutOrder = 1, Size = UDim2.fromOffset(h + 2, h + 2), ZIndex = f.ZIndex + 1, Parent = f })
+	local label = UI.new("TextLabel", {
+		LayoutOrder = 2,
+		Text = "",
+		TextScaled = false,
+		TextSize = math.floor(h * 0.86),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, h),
+		TextColor3 = props.Color or UI.C.white,
+		ZIndex = f.ZIndex + 1,
+		Parent = f,
+	})
+	if (props.Color or UI.C.white) == UI.C.white then
+		UI.outline(label, props.Outline or 2)
+	end
+	local function set(text: string, iconName: string?)
+		label.Text = text
+		icon.Visible = iconName ~= nil
+		if iconName then
+			UI.setIcon(icon, iconName)
+		end
+	end
+	set("", "coin")
+	f.Parent = props.Parent
+	return f, set
 end
 
 return UI

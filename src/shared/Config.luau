@@ -288,10 +288,10 @@ Config.RARITIES = {
 	{ name = "Galaxy", bonus = 10, color = Color3.fromRGB(95, 45, 200), material = Enum.Material.SmoothPlastic, shine = 0.2 },
 }
 Config.SLEDS = {
-	{ id = "tube", name = "Ватрушка", icon = "🍩", world = 1, bonus = 0, prices = { 0, 300, 900, 2400, 6000 } },
-	{ id = "board", name = "Доска", icon = "🏂", world = 1, bonus = 3, prices = { 700, 1500, 3500, 8000, 18000 } },
-	{ id = "classic", name = "Деревянные санки", icon = "🛷", world = 2, bonus = 6, prices = { 4000, 8000, 16000, 32000, 60000 } },
-	{ id = "plane", name = "Сани-самолёт", icon = "✈", world = 3, bonus = 10, prices = { 15000, 30000, 60000, 120000, 240000 } },
+	{ id = "tube", name = "Ватрушка", icon = "🍩", img = "donut", world = 1, bonus = 0, prices = { 0, 300, 900, 2400, 6000 } },
+	{ id = "board", name = "Доска", icon = "🏂", img = "snowboard", world = 1, bonus = 3, prices = { 700, 1500, 3500, 8000, 18000 } },
+	{ id = "classic", name = "Деревянные санки", icon = "🛷", img = "sled", world = 2, bonus = 6, prices = { 4000, 8000, 16000, 32000, 60000 } },
+	{ id = "plane", name = "Сани-самолёт", icon = "✈", img = "plane", world = 3, bonus = 10, prices = { 15000, 30000, 60000, 120000, 240000 } },
 }
 function Config.sled(id: string?)
 	for _, s in Config.SLEDS do

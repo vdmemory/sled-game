@@ -58,7 +58,7 @@ local currencyRow = UI.new("Frame", {
 	Parent = root,
 })
 local coinsLabel = UI.currency(currencyRow, "coin", { Position = UDim2.fromOffset(20, 0), Size = UDim2.fromOffset(140, 40) })
-local gemsLabel = UI.currency(currencyRow, "💎", { Position = UDim2.fromOffset(190, 0), Size = UDim2.fromOffset(140, 40) })
+local gemsLabel = UI.currency(currencyRow, "gem", { Position = UDim2.fromOffset(190, 0), Size = UDim2.fromOffset(140, 40) })
 
 -- «УРОВЕНЬ N» + мир
 local levelTitle = UI.text({
@@ -92,13 +92,13 @@ TweenService:Create(tapScale, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.Eas
 
 -- Карточки апгрейдов: Рогатка / Сани / Доход внизу, Ракета — справа (как в оригинале)
 local CARD_STYLE = {
-	Launch = { title = "РОГАТКА", pip = Color3.fromRGB(235, 70, 70), btn = { Color3.fromRGB(150, 60, 80), Color3.fromRGB(105, 35, 55) }, art = "🎯" },
-	Sled = { title = "САНИ", pip = Color3.fromRGB(80, 190, 250), btn = { Color3.fromRGB(60, 110, 170), Color3.fromRGB(35, 75, 125) }, art = "🛷" },
-	Income = { title = "ДОХОД", pip = Color3.fromRGB(250, 190, 50), btn = { Color3.fromRGB(150, 120, 70), Color3.fromRGB(105, 80, 45) }, art = "💰" },
-	Rocket = { title = "РАКЕТА", pip = Color3.fromRGB(110, 200, 255), btn = { Color3.fromRGB(110, 190, 255), Color3.fromRGB(50, 130, 230) }, art = "🚀" },
+	Launch = { title = "РОГАТКА", pip = Color3.fromRGB(235, 70, 70), btn = { Color3.fromRGB(150, 60, 80), Color3.fromRGB(105, 35, 55) }, art = "bullseye" },
+	Sled = { title = "САНИ", pip = Color3.fromRGB(80, 190, 250), btn = { Color3.fromRGB(60, 110, 170), Color3.fromRGB(35, 75, 125) }, art = "sled" },
+	Income = { title = "ДОХОД", pip = Color3.fromRGB(250, 190, 50), btn = { Color3.fromRGB(150, 120, 70), Color3.fromRGB(105, 80, 45) }, art = "moneybag" },
+	Rocket = { title = "РАКЕТА", pip = Color3.fromRGB(110, 200, 255), btn = { Color3.fromRGB(110, 190, 255), Color3.fromRGB(50, 130, 230) }, art = "rocket" },
 }
 local notice: (string, number?) -> ()
-type Card = { root: TextButton, badge: TextLabel, pips: { Frame }, price: TextLabel, priceBtn: Frame, effect: TextLabel, style: any }
+type Card = { root: TextButton, badge: TextLabel, pips: { Frame }, setPrice: (string, string?) -> (), priceBtn: Frame, effect: TextLabel, style: any }
 local cards: { [string]: Card } = {}
 
 local cardsRow = UI.new("Frame", {
@@ -141,7 +141,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	local art = UI.new("Frame", { Position = UDim2.fromOffset(8, artTop), Size = UDim2.new(1, -16, 0, artH), BackgroundTransparency = 0, ZIndex = 2, Parent = card })
 	UI.grad(art, Color3.fromRGB(250, 252, 255), Color3.fromRGB(205, 225, 245))
 	UI.corner(art, 10)
-	UI.text({ Text = st.art, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromScale(0.62, 0.7), Outline = 0, ZIndex = 3, Parent = art })
+	UI.icon(st.art, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.44), Size = UDim2.fromScale(0.62, 0.74), ZIndex = 3, Parent = art })
 	local effect = UI.text({ Text = "", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, -2), Size = UDim2.new(0.8, 0, 0, if compact then 18 else 28), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = art })
 	-- деления тира
 	local pips = {}
@@ -173,8 +173,8 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	local btnShine = UI.new("Frame", { Position = UDim2.new(0, 6, 0, 3), Size = UDim2.new(1, -12, 0, 4), BackgroundColor3 = C.white, BackgroundTransparency = 0.6, ZIndex = 3, Parent = priceBtn })
 	UI.corner(btnShine, 1000)
 	UI.text({ Text = "УЛУЧШИТЬ", Position = UDim2.new(0, 6, 0, 4), Size = UDim2.new(1, -12, 0.45, -2), ZIndex = 3, Parent = priceBtn })
-	local price = UI.text({ Text = "", Position = UDim2.new(0, 6, 0.48, 0), Size = UDim2.new(1, -12, 0.48, -4), ZIndex = 3, Parent = priceBtn })
-	local c = { root = card, badge = badge, pips = pips, price = price, priceBtn = priceBtn, effect = effect, style = st }
+	local _, setPrice = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.5, -1), Size = UDim2.new(1, -12, 0, math.floor(btnH * 0.42)), ZIndex = 3, Parent = priceBtn })
+	local c = { root = card, badge = badge, pips = pips, setPrice = setPrice, priceBtn = priceBtn, effect = effect, style = st }
 	cards[name] = c
 	card.Activated:Connect(function()
 		local ok, msg = Remotes.BuyUpgrade:InvokeServer(name)
@@ -237,7 +237,7 @@ local runUi = UI.new("Frame", { Name = "Run", BackgroundTransparency = 1, Size =
 -- Монеты и гемы за заезд — слева сверху (под кнопками Roblox)
 local runCoins = UI.currency(runUi, "coin", { Position = UDim2.fromOffset(34, 64), Size = UDim2.fromOffset(130, 38) })
 local gemPill = UI.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(34, 110), Size = UDim2.fromOffset(100, 34), Visible = false, Parent = runUi })
-local runGems = UI.currency(gemPill, "💎", { Size = UDim2.fromScale(1, 1) })
+local runGems = UI.currency(gemPill, "gem", { Size = UDim2.fromScale(1, 1) })
 
 -- Дистанция крупно сверху, рекорд и комбо под ней
 local distLabel = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(300, 56), Outline = 3, Parent = runUi })
@@ -258,7 +258,7 @@ local restartBtn = UI.new("TextButton", {
 })
 UI.corner(restartBtn, 1000)
 UI.stroke(restartBtn, 3, C.white, 0.3)
-UI.text({ Text = "🔄", Position = UDim2.fromScale(0.18, 0.18), Size = UDim2.fromScale(0.64, 0.64), Outline = 0, Parent = restartBtn })
+UI.icon("flip", { Position = UDim2.fromScale(0.16, 0.16), Size = UDim2.fromScale(0.68, 0.68), Parent = restartBtn })
 UI.bounce(restartBtn)
 restartBtn.Activated:Connect(function()
 	Remotes.Restart:FireServer()
@@ -307,7 +307,7 @@ local rocketBtn = UI.new("TextButton", {
 local rocketFill = UI.grad(rocketBtn, UI.KIND.orange[1], UI.KIND.orange[2])
 UI.corner(rocketBtn, 1000)
 UI.stroke(rocketBtn, 3, C.white)
-UI.text({ Text = "🔥", Position = UDim2.fromScale(0.18, 0.1), Size = UDim2.fromScale(0.64, 0.58), Outline = 0, Parent = rocketBtn })
+UI.icon("fire", { Position = UDim2.fromScale(0.18, 0.08), Size = UDim2.fromScale(0.64, 0.62), ZIndex = 2, Parent = rocketBtn })
 local fuelTrack = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(0.7, 0, 0, 8), BackgroundColor3 = C.track, BackgroundTransparency = 0, Parent = rocketBtn })
 UI.corner(fuelTrack, 1000)
 local fuelFill = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 230, 90), BackgroundTransparency = 0, Parent = fuelTrack })
@@ -338,9 +338,9 @@ UI.stroke(progress, 2, C.white, 0.3)
 local progressFill = UI.new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0), BackgroundTransparency = 0, Parent = progress })
 UI.grad(progressFill, Color3.fromRGB(120, 230, 255), Color3.fromRGB(40, 170, 240))
 UI.corner(progressFill, 1000)
-UI.text({ Text = "🏁", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -2), Size = UDim2.fromOffset(32, 32), Outline = 0, Parent = progress })
+UI.icon("flag", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -2), Size = UDim2.fromOffset(34, 34), Parent = progress })
 for _, f in Config.GEMS_ON_TRACK do
-	UI.text({ Text = "💎", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 1 - f), Size = UDim2.fromOffset(24, 24), Outline = 0, ZIndex = 3, Parent = progress })
+	UI.icon("gem", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 1 - f), Size = UDim2.fromOffset(26, 26), ZIndex = 3, Parent = progress })
 end
 local bestMark = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = C.white, BackgroundTransparency = 0, Visible = false, ZIndex = 3, Parent = progress })
 UI.corner(bestMark, 1000)
@@ -348,7 +348,8 @@ UI.text({ Text = "BEST", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new
 local pctBubble = UI.text({ Text = "0%", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 1, 0), Size = UDim2.fromOffset(56, 24), TextXAlignment = Enum.TextXAlignment.Right, Parent = progress })
 
 -- Магнит и всплывающие «+N»
-local magnetIcon = UI.text({ Text = "🧲", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.6, 0), Size = UDim2.fromOffset(90, 44), Visible = false, Parent = runUi })
+local magnetIcon, setMagnet = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.6, 0), Size = UDim2.fromOffset(120, 40), Parent = runUi })
+magnetIcon.Visible = false
 local function floater(text: string, color: Color3)
 	local f = UI.text({
 		Text = text,
@@ -486,12 +487,12 @@ local function refresh()
 		end
 		local fill = c.priceBtn:FindFirstChild("Fill") :: UIGradient
 		if lvl >= u.MaxLevel then
-			c.price.Text = "MAX"
+			c.setPrice("MAX")
 			fill.Color = ColorSequence.new(UI.KIND.grey[1], UI.KIND.grey[2])
 		else
 			local cost, currency = Config.upgradePrice(name, lvl)
 			local have = if currency == "Gems" then gems else coins
-			c.price.Text = (if currency == "Gems" then "💎 " else "💰 ") .. UI.money(cost)
+			c.setPrice(UI.money(cost), if currency == "Gems" then "gem" else "coin")
 			if have < cost then
 				fill.Color = ColorSequence.new(UI.KIND.grey[1], UI.KIND.grey[2])
 			elseif currency == "Gems" and name ~= "Rocket" then
@@ -609,7 +610,7 @@ RunService.RenderStepped:Connect(function()
 	local ml = state.MagnetLeft.Value
 	magnetIcon.Visible = ml > 0
 	if ml > 0 then
-		magnetIcon.Text = "🧲 " .. math.ceil(ml)
+		setMagnet(tostring(math.ceil(ml)), "magnet")
 	end
 	ring.Visible = launched and stick.On.Value
 	if ring.Visible then
@@ -646,13 +647,20 @@ resultScale.Parent = result
 local resultTitle = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.fromOffset(460, 52), Outline = 3, ZIndex = 22, Parent = result })
 local bestBanner = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -58), Size = UDim2.fromOffset(420, 40), TextColor3 = Color3.fromRGB(255, 215, 60), Rotation = -3, ZIndex = 22, Parent = result })
 UI.outline(bestBanner, 3)
-local sheet = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 220), BackgroundColor3 = Color3.fromRGB(95, 106, 126), BackgroundTransparency = 0.12, ZIndex = 20, Parent = result })
+-- Лист итогов: тёмно-синяя карточка с крупной суммой монет, строками бонуса и гемов
+local sheet = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 220), BackgroundTransparency = 0, ZIndex = 20, Parent = result })
+UI.grad(sheet, Color3.fromRGB(56, 78, 124), Color3.fromRGB(32, 46, 82))
 UI.corner(sheet, 20)
-UI.text({ Text = "Ты получил:", Position = UDim2.fromOffset(20, 12), Size = UDim2.new(1, -40, 0, 32), ZIndex = 21, Parent = sheet })
-local rCoins = UI.text({ Text = "", Position = UDim2.fromOffset(20, 52), Size = UDim2.new(1, -40, 0, 40), ZIndex = 21, Parent = sheet })
-local rBonus = UI.text({ Text = "", Position = UDim2.fromOffset(20, 98), Size = UDim2.new(1, -40, 0, 30), ZIndex = 21, Parent = sheet })
-local rGems = UI.text({ Text = "", Position = UDim2.fromOffset(20, 134), Size = UDim2.new(1, -40, 0, 30), ZIndex = 21, Parent = sheet })
-local rDist = UI.text({ Text = "", Position = UDim2.fromOffset(20, 176), Size = UDim2.new(1, -40, 0, 28), TextColor3 = Color3.fromRGB(215, 235, 255), ZIndex = 21, Parent = sheet })
+UI.stroke(sheet, 3, C.ink)
+local sheetShine = UI.new("Frame", { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -24, 0, 5), BackgroundColor3 = C.white, BackgroundTransparency = 0.7, ZIndex = 21, Parent = sheet })
+UI.corner(sheetShine, 1000)
+UI.text({ Text = "ТЫ ПОЛУЧИЛ:", Position = UDim2.fromOffset(20, 14), Size = UDim2.new(1, -40, 0, 28), TextColor3 = Color3.fromRGB(190, 215, 250), ZIndex = 21, Parent = sheet })
+local _, setRCoins = UI.iconText({ Position = UDim2.fromOffset(20, 50), Size = UDim2.new(1, -40, 0, 46), Outline = 3, ZIndex = 21, Parent = sheet })
+local divider = UI.new("Frame", { Position = UDim2.fromOffset(24, 104), Size = UDim2.new(1, -48, 0, 2), BackgroundColor3 = C.white, BackgroundTransparency = 0.8, ZIndex = 21, Parent = sheet })
+local _ = divider
+local _, setRBonus = UI.iconText({ Position = UDim2.fromOffset(20, 114), Size = UDim2.new(1, -40, 0, 26), ZIndex = 21, Parent = sheet })
+local _, setRGems = UI.iconText({ Position = UDim2.fromOffset(20, 146), Size = UDim2.new(1, -40, 0, 26), ZIndex = 21, Parent = sheet })
+local rDist = UI.text({ Text = "", Position = UDim2.fromOffset(20, 182), Size = UDim2.new(1, -40, 0, 24), TextColor3 = Color3.fromRGB(190, 215, 250), ZIndex = 21, Parent = sheet })
 UI.outline(rDist, 2)
 local continueBtn = UI.button("blue", "ПРОДОЛЖИТЬ", {
 	AnchorPoint = Vector2.new(0.5, 0),
@@ -679,9 +687,9 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 		elseif r.reason == "stopped" then "ОСТАНОВИЛСЯ"
 		else "ЗАЕЗД ОКОНЧЕН"
 	bestBanner.Text = if finished then "🎉 ФИНИШ!" elseif r.newBest then "🏆 НОВЫЙ РЕКОРД!" else ""
-	rCoins.Text = UI.money(r.coins) .. " 💰" .. (if (r.mult or 1) > 1 then "  (x" .. r.mult .. ")" else "")
-	rBonus.Text = "Бонус за полёт и трюки: +" .. math.floor(r.bonus or 0) .. " 💰"
-	rGems.Text = "+" .. (r.gems or 0) .. " 💎"
+	setRCoins(UI.money(r.coins) .. (if (r.mult or 1) > 1 then "  x" .. r.mult else ""), "coin")
+	setRBonus("Бонус за полёт и трюки: +" .. math.floor(r.bonus or 0), "coin")
+	setRGems("+" .. (r.gems or 0), "gem")
 	rDist.Text = (r.distance or 0) .. " м  ·  " .. r.percent .. "% уровня"
 	result.Visible = true
 	resultScale.Scale = 0.7
