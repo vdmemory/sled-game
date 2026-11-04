@@ -85,12 +85,46 @@ Config.THEMES = {
 		wall = Color3.fromRGB(110, 170, 230),
 		ground = Color3.fromRGB(225, 195, 155),
 	},
+	{
+		name = "Ледяные пещеры",
+		floor = Color3.fromRGB(150, 215, 245),
+		wall = Color3.fromRGB(90, 175, 235),
+		ground = Color3.fromRGB(200, 230, 248),
+	},
+	{
+		name = "Северное сияние",
+		floor = Color3.fromRGB(125, 170, 225),
+		wall = Color3.fromRGB(80, 120, 200),
+		ground = Color3.fromRGB(205, 220, 240),
+	},
+	{
+		name = "Снежный вулкан",
+		floor = Color3.fromRGB(150, 190, 230),
+		wall = Color3.fromRGB(110, 150, 210),
+		ground = Color3.fromRGB(70, 66, 72),
+	},
+	{
+		name = "Конфетная гора",
+		floor = Color3.fromRGB(245, 185, 220),
+		wall = Color3.fromRGB(230, 130, 195),
+		ground = Color3.fromRGB(255, 232, 245),
+	},
 }
 
--- Мир = LEVELS_PER_WORLD уровней одной темы (Снежный лес → Ледяной город → Каньон → по кругу)
+-- Мир = LEVELS_PER_WORLD уровней одной темы. 7 миров: лес → город → каньон → пещеры →
+-- северное сияние → вулкан → конфетная гора, дальше по кругу («Снежный лес II» и т. д.)
 Config.LEVELS_PER_WORLD = 5
-Config.WORLD_ICONS = { "🌲", "🏙", "🌵" }
-Config.WORLD_COLORS = { Color3.fromRGB(70, 150, 220), Color3.fromRGB(120, 110, 220), Color3.fromRGB(225, 135, 60) }
+Config.WORLD_ICONS = { "🌲", "🏙", "🌵", "🧊", "🌌", "🌋", "🍭" }
+Config.WORLD_IMAGES = { "tree", "city", "cactus", "ice", "aurora", "volcano", "candy" } -- 3D-иконки (UI.icon)
+Config.WORLD_COLORS = {
+	Color3.fromRGB(70, 150, 220),
+	Color3.fromRGB(120, 110, 220),
+	Color3.fromRGB(225, 135, 60),
+	Color3.fromRGB(80, 190, 230),
+	Color3.fromRGB(40, 60, 130),
+	Color3.fromRGB(200, 70, 50),
+	Color3.fromRGB(235, 110, 190),
+}
 function Config.worldOf(level: number): number
 	return (level - 1) // Config.LEVELS_PER_WORLD + 1
 end
@@ -110,6 +144,13 @@ end
 Config.NEXT_UPDATE = os.time({ year = 2026, month = 11, day = 15, hour = 12 })
 
 ------------------------------------------------------------------ БОНУСЫ НА ТРАССЕ
+-- Подбираемые бонусы (тег PowerUp, атрибут Kind): шанс появиться на прямом участке
+Config.POWERUPS = {
+	shield = { chance = 0.07, name = "Щит" }, -- одно столкновение без аварии
+	x2 = { chance = 0.07, name = "x2 монеты", time = 10 }, -- монеты на трассе ×2 на 10 с
+	fuel = { chance = 0.09, name = "Канистра" }, -- полный бак ракеты
+	rings = { chance = 0.12, name = "Кольца", coins = 10 }, -- 3 золотых кольца подряд, +10 за каждое
+}
 Config.MAGNET_CHANCE = 0.12 -- магнит на прямом участке
 Config.MAGNET_TIME = 8 -- сек
 Config.MAGNET_RADIUS = 32 -- studs
@@ -258,24 +299,6 @@ end
 
 ------------------------------------------------------------------ СКИНЫ ВАТРУШЕК (за монеты)
 -- tube — основной цвет, rim — бортик, neon — светится
-Config.SKINS = {
-	{ id = "classic", name = "Классика", price = 0, tube = Color3.fromRGB(240, 70, 120), rim = Color3.fromRGB(255, 130, 170) },
-	{ id = "ice", name = "Льдинка", price = 150, tube = Color3.fromRGB(90, 170, 240), rim = Color3.fromRGB(200, 235, 255) },
-	{ id = "lime", name = "Лайм", price = 300, tube = Color3.fromRGB(120, 210, 60), rim = Color3.fromRGB(230, 255, 120) },
-	{ id = "melon", name = "Арбуз", price = 600, tube = Color3.fromRGB(235, 60, 70), rim = Color3.fromRGB(50, 150, 60) },
-	{ id = "night", name = "Ночь", price = 900, tube = Color3.fromRGB(35, 40, 70), rim = Color3.fromRGB(120, 140, 255), neon = true },
-	{ id = "lava", name = "Лава", price = 1500, tube = Color3.fromRGB(60, 20, 15), rim = Color3.fromRGB(255, 110, 20), neon = true },
-	{ id = "gold", name = "Золото", price = 3000, tube = Color3.fromRGB(240, 190, 50), rim = Color3.fromRGB(255, 240, 150), metal = true },
-	{ id = "galaxy", name = "Галактика", price = 6000, tube = Color3.fromRGB(80, 30, 140), rim = Color3.fromRGB(255, 120, 255), neon = true },
-}
-function Config.skin(id: string?)
-	for _, s in Config.SKINS do
-		if s.id == id then
-			return s
-		end
-	end
-	return Config.SKINS[1]
-end
 
 ------------------------------------------------------------------ САНИ С РЕДКОСТЯМИ (как в Roblox-референсе)
 -- Модель открывается с миром; у каждой 5 редкостей. Редкость покупается по порядку и даёт +% скорости.
@@ -287,11 +310,17 @@ Config.RARITIES = {
 	-- Galaxy: тёмно-фиолетовый глянец, светятся только акценты (иначе неон «съедает» детали модели)
 	{ name = "Galaxy", bonus = 10, color = Color3.fromRGB(95, 45, 200), material = Enum.Material.SmoothPlastic, shine = 0.2 },
 }
+-- Сани: модель открывается с миром; main/accent — цвета обычной редкости
 Config.SLEDS = {
-	{ id = "tube", name = "Ватрушка", icon = "🍩", img = "donut", world = 1, bonus = 0, prices = { 0, 300, 900, 2400, 6000 } },
-	{ id = "board", name = "Доска", icon = "🏂", img = "snowboard", world = 1, bonus = 3, prices = { 700, 1500, 3500, 8000, 18000 } },
-	{ id = "classic", name = "Деревянные санки", icon = "🛷", img = "sled", world = 2, bonus = 6, prices = { 4000, 8000, 16000, 32000, 60000 } },
-	{ id = "plane", name = "Сани-самолёт", icon = "✈", img = "plane", world = 3, bonus = 10, prices = { 15000, 30000, 60000, 120000, 240000 } },
+	{ id = "tube", name = "Ватрушка", icon = "🍩", img = "donut", world = 1, bonus = 0, prices = { 0, 300, 900, 2400, 6000 }, main = Color3.fromRGB(240, 70, 120), accent = Color3.fromRGB(255, 160, 195) },
+	{ id = "saucer", name = "Ледянка", icon = "🥏", img = "saucer", world = 1, bonus = 2, prices = { 250, 700, 1800, 4500, 10000 }, main = Color3.fromRGB(60, 150, 245), accent = Color3.fromRGB(255, 220, 70) },
+	{ id = "board", name = "Доска", icon = "🏂", img = "snowboard", world = 1, bonus = 3, prices = { 700, 1500, 3500, 8000, 18000 }, main = Color3.fromRGB(70, 130, 230), accent = Color3.fromRGB(255, 200, 60) },
+	{ id = "toboggan", name = "Тобоган", icon = "🪵", img = "toboggan", world = 2, bonus = 5, prices = { 2500, 5500, 12000, 25000, 50000 }, main = Color3.fromRGB(196, 132, 76), accent = Color3.fromRGB(200, 50, 50) },
+	{ id = "classic", name = "Деревянные санки", icon = "🛷", img = "sled", world = 2, bonus = 6, prices = { 4000, 8000, 16000, 32000, 60000 }, main = Color3.fromRGB(186, 128, 74), accent = Color3.fromRGB(190, 40, 40) },
+	{ id = "kayak", name = "Снежный каяк", icon = "🛶", img = "canoe", world = 3, bonus = 8, prices = { 9000, 18000, 36000, 72000, 140000 }, main = Color3.fromRGB(250, 170, 40), accent = Color3.fromRGB(40, 60, 90) },
+	{ id = "plane", name = "Сани-самолёт", icon = "✈", img = "plane", world = 3, bonus = 10, prices = { 15000, 30000, 60000, 120000, 240000 }, main = Color3.fromRGB(225, 55, 55), accent = Color3.fromRGB(245, 245, 250) },
+	{ id = "bobsled", name = "Бобслей", icon = "🏎", img = "racecar", world = 4, bonus = 13, prices = { 30000, 60000, 120000, 240000, 480000 }, main = Color3.fromRGB(40, 90, 210), accent = Color3.fromRGB(240, 240, 250) },
+	{ id = "snowmobile", name = "Снегоход", icon = "🛵", img = "scooter", world = 5, bonus = 17, prices = { 70000, 140000, 280000, 560000, 1100000 }, main = Color3.fromRGB(230, 200, 30), accent = Color3.fromRGB(30, 32, 40) },
 }
 function Config.sled(id: string?)
 	for _, s in Config.SLEDS do

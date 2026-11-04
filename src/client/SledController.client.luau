@@ -124,6 +124,8 @@ local rocketOn = value("RocketOn", "BoolValue")
 local meterValue = value("Meter") -- шкала силы рогатки 0..1
 local awaitingLaunch = value("AwaitingLaunch", "BoolValue")
 local magnetLeft = value("MagnetLeft") -- сек до конца магнита (HUD показывает иконку)
+local shieldOn = value("ShieldOn", "BoolValue") -- щит: одно столкновение без аварии
+local x2Left = value("X2Left") -- сек до конца «x2 монеты»
 state.Parent = script
 
 -- Звуковые события для Sounds-скрипта: sfx:Fire("launch" | "land" | "hit" | "boost" | "coin" | "flip")
@@ -393,6 +395,7 @@ local function smash(model: Model)
 end
 
 local magnetUntil = 0
+local x2Until = 0
 local magnetScan = 0
 local function hideLocal(p: BasePart)
 	p.LocalTransparencyModifier = 1
@@ -451,6 +454,40 @@ local function onTouched(hit: BasePart)
 			sfx:Fire("gem")
 		end
 		return
+	elseif CollectionService:HasTag(hit, "PowerUp") then
+		-- Бонусы: щит, x2 монеты, канистра, кольца (монеты и x2 засчитывает сервер)
+		if hit.LocalTransparencyModifier < 1 and started and not crashed then
+			hideLocal(hit)
+			local kind = hit:GetAttribute("Kind")
+			local holder = hit.Parent :: Instance
+			if kind ~= "ring" then
+				for _, d in holder:GetChildren() do
+					if d:IsA("BasePart") and (d.Position - hit.Position).Magnitude < 5 then
+						d.LocalTransparencyModifier = 1
+					end
+				end
+			end
+			if kind == "shield" then
+				shieldOn.Value = true
+				trickPopup:Fire("🛡 Щит!")
+				sfx:Fire("reward")
+			elseif kind == "fuel" then
+				fuel = fuelMaxValue.Value
+				fuelValue.Value = fuel
+				trickPopup:Fire("⛽ Полный бак!")
+				sfx:Fire("boost")
+			elseif kind == "x2" then
+				x2Until = now + Config.POWERUPS.x2.time
+				trickPopup:Fire("✖2 Монеты x2!")
+				sfx:Fire("record")
+				Remotes.PowerUp:FireServer(hit)
+			elseif kind == "ring" then
+				trickPopup:Fire("💍 Кольцо! +" .. Config.POWERUPS.rings.coins)
+				sfx:Fire("coin")
+				Remotes.PowerUp:FireServer(hit)
+			end
+		end
+		return
 	elseif CollectionService:HasTag(hit, "Magnet") then
 		if hit.LocalTransparencyModifier < 1 then
 			hideLocal(hit)
@@ -480,6 +517,24 @@ local function onTouched(hit: BasePart)
 			end
 		end
 		lastObstacle = now
+		if shieldOn.Value then
+			-- щит принимает удар: препятствие исчезает, скорость немного падает
+			shieldOn.Value = false
+			local model = hit:FindFirstAncestorOfClass("Model") or hit
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.LocalTransparencyModifier = 1
+					d.CanCollide = false -- только у себя: санки (их считает клиент) проезжают сквозь
+				end
+			end
+			if model:IsA("BasePart") then
+				hideLocal(model)
+			end
+			speed *= 0.75
+			trickPopup:Fire("🛡 Щит спас!")
+			sfx:Fire("smash")
+			return
+		end
 		crash()
 	elseif CollectionService:HasTag(hit, "Boost") then
 		if now - lastBoost < 0.4 then
@@ -546,6 +601,9 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	flipAngle = 0
 	magnetUntil = 0
 	magnetLeft.Value = 0
+	x2Until = 0
+	x2Left.Value = 0
+	shieldOn.Value = false
 	fuel = Config.rocketFuel(player:GetAttribute("RocketLevel") or 0)
 	fuelMaxValue.Value = fuel
 	fuelValue.Value = fuel
@@ -683,6 +741,7 @@ RunService.Heartbeat:Connect(function(dt)
 	-- Магнит: притягиваем монеты рядом (анимация у себя, засчитывает сервер)
 	local mLeft = math.max(0, magnetUntil - os.clock())
 	magnetLeft.Value = mLeft
+	x2Left.Value = math.max(0, x2Until - os.clock())
 	if mLeft > 0 and not crashed then
 		magnetScan += dt
 		if magnetScan > 0.1 then

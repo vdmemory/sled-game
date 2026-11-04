@@ -14,8 +14,6 @@ local DEFAULT = {
 	SledLevel = 0,
 	IncomeLevel = 0,
 	Gems = 0,
-	Skin = "classic", -- надетый скин
-	OwnedSkins = { classic = true },
 	FarmWorld = 0, -- 0 = текущий мир; N = фарм пройденного мира N
 	Receipts = {}, -- ID обработанных покупок Robux (защита от повторной выдачи)
 	Settings = { Sfx = true, Music = true, Snow = true, Shadows = true },
@@ -66,6 +64,15 @@ function Data.load(player: Player)
 	if ok and type(saved) == "table" then
 		for k, v in saved do
 			data[k] = v
+		end
+		-- Палитра «Цвета ватрушки» убрана: купленные цвета возвращаем монетами (один раз)
+		if type(data.OwnedSkins) == "table" then
+			local PRICES = { ice = 150, lime = 300, melon = 600, night = 900, lava = 1500, gold = 3000, galaxy = 6000 }
+			for id in data.OwnedSkins do
+				data.Coins += PRICES[id] or 0
+			end
+			data.OwnedSkins = nil
+			data.Skin = nil
 		end
 		-- новые ключи настроек (например, Music) у старых профилей
 		if type(data.Settings) == "table" then

@@ -133,6 +133,59 @@ local function makeMagnet(at: CFrame, parent: Instance)
 	CollectionService:AddTag(hit, "Magnet")
 end
 
+-- Бонусы (тег PowerUp, атрибут Kind). Невидимый куб-«датчик» + декоративная модель вокруг.
+local function powerHit(kind: string, at: CFrame, size: Vector3, parent: Instance): BasePart
+	local hit = part("Part", { Name = "PowerUp", Size = size, CFrame = at, Transparency = 1, CanCollide = false, CanQuery = false }, parent)
+	hit:SetAttribute("Kind", kind)
+	CollectionService:AddTag(hit, "PowerUp")
+	return hit
+end
+local function makeShield(at: CFrame, parent: Instance)
+	powerHit("shield", at, Vector3.new(4.5, 4.5, 4.5), parent)
+	deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 4.2, CFrame = at, Material = Enum.Material.ForceField, Color = Color3.fromRGB(90, 200, 255) }, parent)
+	-- щит-эмблема: синий щиток с белой полосой
+	local plate = deco({ Size = Vector3.new(2.2, 2.6, 0.4), CFrame = at, Color = Color3.fromRGB(50, 120, 230) }, parent)
+	deco({ Size = Vector3.new(0.5, 2.0, 0.45), CFrame = at, Color = Color3.new(1, 1, 1) }, parent)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(90, 200, 255)
+	light.Range = 12
+	light.Parent = plate
+end
+local function makeX2(at: CFrame, parent: Instance)
+	powerHit("x2", at, Vector3.new(4.5, 4.5, 4.5), parent)
+	local coin = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, 3.8, 3.8), CFrame = at * CFrame.Angles(0, math.rad(90), 0), Material = Enum.Material.SmoothPlastic, Color = Color3.fromRGB(255, 200, 40), Reflectance = 0.2 }, parent)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(90, 60)
+	bb.AlwaysOnTop = false
+	bb.LightInfluence = 0
+	bb.Parent = coin
+	local t = Instance.new("TextLabel")
+	t.BackgroundTransparency = 1
+	t.Size = UDim2.fromScale(1, 1)
+	t.Font = Enum.Font.FredokaOne
+	t.TextScaled = true
+	t.Text = "x2"
+	t.TextColor3 = Color3.new(1, 1, 1)
+	t.TextStrokeTransparency = 0
+	t.Parent = bb
+end
+local function makeFuel(at: CFrame, parent: Instance)
+	powerHit("fuel", at, Vector3.new(4.5, 4.5, 4.5), parent)
+	local can = deco({ Size = Vector3.new(2.6, 3.2, 1.3), CFrame = at, Color = Color3.fromRGB(220, 40, 40) }, parent)
+	deco({ Size = Vector3.new(1.4, 0.35, 0.5), CFrame = at * CFrame.new(-0.3, 1.8, 0), Color = Color3.fromRGB(40, 40, 45) }, parent) -- ручка
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, 0.6, 0.6), CFrame = at * CFrame.new(0.85, 1.85, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(255, 210, 50) }, parent) -- крышка
+	deco({ Size = Vector3.new(1.8, 1.0, 1.35), CFrame = at * CFrame.new(0, -0.2, 0), Color = Color3.fromRGB(255, 210, 50) }, parent) -- полоса
+end
+-- Золотое кольцо поперёк полосы: проезжаешь сквозь — монеты
+local function makeRing(at: CFrame, parent: Instance)
+	powerHit("ring", at * CFrame.new(0, 0.5, 0), Vector3.new(5, 6, 1.5), parent)
+	local r, n = 4, 16
+	for k = 0, n - 1 do
+		local a = k / n * math.pi * 2
+		deco({ Size = Vector3.new(0.7, 1.75, 0.7), CFrame = at * CFrame.new(math.cos(a) * r, math.sin(a) * r + 1.5, 0) * CFrame.Angles(0, 0, a), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 205, 60) }, parent)
+	end
+end
+
 local function makeCrystal(at: CFrame, rng: Random, parent: Instance)
 	local m = Instance.new("Model")
 	m.Name = "Crystal"
@@ -219,6 +272,71 @@ local function dressSegment(theme: number, rng: Random, cf: CFrame, len: number,
 			if rng:NextNumber() < 0.4 * density then
 				Props.hydrant(at(9.5, zr(0)), m)
 			end
+		elseif theme == 4 then
+			-- Ледяные пещеры: ледяные скалы со сосульками, друзы светящихся кристаллов, сталагмиты
+			if rng:NextNumber() < len / 26 then
+				Props.iceCliff(rng, at(rng:NextNumber(14, 24), zr(0)), side, m)
+			end
+			if rng:NextNumber() < 0.9 * density then
+				Props.crystalCluster(rng, at(rng:NextNumber(5, 14), zr(0)), m)
+			end
+			if rng:NextNumber() < 1.0 * density then
+				Props.stalagmite(rng, at(rng:NextNumber(4, 12), zr(0)), m, false)
+			end
+			if rng:NextNumber() < 0.3 * density then
+				Props.pine(rng, at(rng:NextNumber(26, 40), zr(0)), m)
+			end
+		elseif theme == 5 then
+			-- Северное сияние: ночная тундра, иглу, фонари, редкие ёлки, ленты сияния в небе
+			for z = 10, len, 24 do
+				if rng:NextNumber() < 0.6 then
+					Props.pine(rng, at(rng:NextNumber(12, 45), z + rng:NextNumber(-4, 4)), m)
+				end
+			end
+			if rng:NextNumber() < 0.35 * density then
+				Props.igloo(rng, at(rng:NextNumber(22, 32), zr(12)), m)
+			end
+			if rng:NextNumber() < len / 45 then
+				Props.lantern(at(5, zr(0)), m)
+			end
+			if rng:NextNumber() < 0.5 * density then
+				Props.boulder(rng, at(rng:NextNumber(6, 10), zr(0)), m, false, 1.2, false)
+			end
+			if rng:NextNumber() < 0.35 * density then
+				Props.aurora(rng, at(rng:NextNumber(90, 160), zr(0)) * CFrame.new(0, rng:NextNumber(110, 150), 0), m)
+			end
+		elseif theme == 6 then
+			-- Снежный вулкан: базальтовые столбы, лавовые озёра, обгоревшие деревья, вулкан вдали
+			if rng:NextNumber() < 1.0 * density then
+				Props.basalt(rng, at(rng:NextNumber(6, 14), zr(0)), m, false)
+			end
+			if rng:NextNumber() < 0.45 * density then
+				Props.lavaPool(rng, at(rng:NextNumber(26, 40), zr(10)), m)
+			end
+			for z = 8, len, 18 do
+				if rng:NextNumber() < 0.5 then
+					Props.charredTree(rng, at(rng:NextNumber(10, 40), z), m)
+				end
+			end
+			if rng:NextNumber() < 0.12 * density then
+				Props.volcano(rng, at(rng:NextNumber(170, 230), zr(0)), m)
+			end
+		elseif theme == 7 then
+			-- Конфетная гора: леденцовые трости, леденцы, пряничные домики, мармелад
+			for z = 8, len, 14 do
+				local p = at(rng:NextNumber(8, 40), z + rng:NextNumber(-3, 3))
+				if rng:NextNumber() < 0.5 then
+					Props.candyCane(rng, p, m)
+				else
+					Props.lollipop(rng, p, m)
+				end
+			end
+			if rng:NextNumber() < 0.3 * density then
+				Props.gingerHouse(rng, at(26, zr(15)), side, m)
+			end
+			if rng:NextNumber() < 0.6 * density then
+				Props.gumdrop(rng, at(rng:NextNumber(5, 9), zr(0)), m)
+			end
 		else
 			-- Каньон: слоистые скалы, акации, лагерь с костром, ветряк, водонапорная башня, кактусы
 			if rng:NextNumber() < len / 28 then
@@ -243,12 +361,13 @@ local function dressSegment(theme: number, rng: Random, cf: CFrame, len: number,
 		end
 
 		-- Воздушные шары в небе
-		if theme ~= 2 and rng:NextNumber() < 0.12 * density then
+		if (theme == 1 or theme == 3 or theme == 7) and rng:NextNumber() < 0.12 * density then
 			Props.balloon(rng, at(rng:NextNumber(40, 110), zr(0)) * CFrame.new(0, rng:NextNumber(45, 85), 0), m)
 		end
 		-- Горы на горизонте
 		if rng:NextNumber() < 0.6 * density then
-			Props.mountain(rng, at(rng:NextNumber(140, 200), zr(0)), theme == 3, m)
+			local tint = ({ [4] = Color3.fromRGB(150, 200, 235), [5] = Color3.fromRGB(70, 85, 120), [6] = Color3.fromRGB(60, 56, 62), [7] = Color3.fromRGB(235, 160, 210) })[theme]
+			Props.mountain(rng, at(rng:NextNumber(140, 200), zr(0)), theme == 3, m, tint)
 		end
 	end
 end
@@ -429,19 +548,24 @@ end
 -- Поперечное сечение: дно + пояса сугроба/льда, полка и невидимые стенки
 local ICE_FLOOR = Color3.fromRGB(165, 210, 245)
 local ICE_WALL = Color3.fromRGB(130, 190, 240)
-local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, m: Instance, alt: number)
+local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, m: Instance, alt: number, theme: number)
 	-- Куски перекрываются, чтобы на поворотах не было щелей по внешнему краю;
 	-- соседние куски чуть сдвинуты по высоте, чтобы перекрытия не мерцали
 	local overlap = if chute then 8 else 2
 	cf = cf * CFrame.new(0, alt * 0.03, 0)
 	local floorW = prof.floorW or W
 	local lake = prof == LAKE_PROFILE
+	-- цвета мира: в конфетной горе снег розоватый, у вулкана земля — тёмный базальт
+	local themeCfg = Config.THEMES[theme] or Config.THEMES[1]
+	local snowFloor = if theme == 7 then SNOW_FLOOR:Lerp(Color3.fromRGB(255, 170, 215), 0.35) else SNOW_FLOOR
+	local snowBank = if theme == 7 then SNOW_BANK:Lerp(Color3.fromRGB(255, 170, 215), 0.3) else SNOW_BANK
+	local groundMat = if theme == 3 then Enum.Material.Sand elseif theme == 6 then Enum.Material.Basalt else Enum.Material.Snow
 	part("Part", {
 		Name = "Floor",
 		Size = Vector3.new(floorW, 4, len + overlap),
 		CFrame = cf * CFrame.new(0, -2, -len / 2),
 		Material = if chute or lake then Enum.Material.Glacier else Enum.Material.Snow,
-		Color = if lake then Color3.fromRGB(175, 220, 250) elseif chute then ICE_FLOOR else SNOW_FLOOR,
+		Color = if lake then Color3.fromRGB(175, 220, 250) elseif chute then ICE_FLOOR else snowFloor,
 		Reflectance = if chute or lake then 0.12 else 0,
 	}, m)
 	for _, side in { -1, 1 } do
@@ -453,7 +577,7 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 				Size = Vector3.new(b.width, 2, len + overlap),
 				CFrame = cf * CFrame.new(side * x, y, -len / 2) * CFrame.Angles(0, 0, side * a) * CFrame.new(side * b.width / 2, -1, 0),
 				Material = if chute then Enum.Material.Glacier else Enum.Material.Snow,
-				Color = if chute then ICE_WALL:Lerp(Color3.new(1, 1, 1), (k - 1) * 0.12) else SNOW_BANK,
+				Color = if chute then ICE_WALL:Lerp(Color3.new(1, 1, 1), (k - 1) * 0.12) else snowBank,
 				Reflectance = if chute then 0.1 else 0,
 			}, m)
 			x += b.width * math.cos(a)
@@ -471,8 +595,8 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 			Name = "Ground",
 			Size = Vector3.new(150, 2, len + overlap),
 			CFrame = cf * CFrame.new(side * (prof.out + 75), prof.top - 1, -len / 2),
-			Material = Enum.Material.Snow,
-			Color = SNOW,
+			Material = groundMat,
+			Color = if theme == 1 or theme == 2 then SNOW else themeCfg.ground,
 			CanCollide = false,
 		}, m)
 		part("Part", {
@@ -510,7 +634,7 @@ function Track:buildSegment(i: number)
 	local m = Instance.new("Model")
 	m.Name = "Segment_" .. i
 
-	buildCrossSection(cf, len, prof, seg.chute, m, i % 2)
+	buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme)
 
 	if seg.kind == "road" or seg.kind == "rail" then
 		self:buildRoad(seg, rng, m, seg.kind == "rail")
@@ -618,8 +742,8 @@ function Track:buildSegment(i: number)
 		deco({
 			Size = Vector3.new(BANK_OUT * 2 + 300, Config.KICKER_DROP + 4, 3),
 			CFrame = CFrame.lookAt(endPos, endPos + Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)) * CFrame.new(0, -Config.KICKER_DROP / 2 - 2, 1.5),
-			Material = if self.theme == 3 then Enum.Material.Sandstone else Enum.Material.Snow,
-			Color = if self.theme == 3 then Color3.fromRGB(205, 150, 110) else Color3.fromRGB(230, 238, 248),
+			Material = if self.theme == 3 then Enum.Material.Sandstone elseif self.theme == 6 then Enum.Material.Basalt else Enum.Material.Snow,
+			Color = if self.theme == 3 then Color3.fromRGB(205, 150, 110) elseif self.theme == 6 then Color3.fromRGB(70, 66, 72) elseif self.theme == 7 then Color3.fromRGB(255, 225, 240) else Color3.fromRGB(230, 238, 248),
 		}, m)
 	end
 
@@ -702,6 +826,25 @@ function Track:buildSegment(i: number)
 	end
 	if (seg.kind == "gentle" or seg.kind == "steep") and seg.hStart > Config.SAFE_START and rng:NextNumber() < Config.MAGNET_CHANCE then
 		makeMagnet(cf * CFrame.new(laneX(rng:NextInteger(1, Config.LANES)), 3, -len * 0.15), m)
+	end
+	-- Бонусы: щит, x2, канистра — по одному на кусок; кольца — тройкой по одной полосе
+	if (seg.kind == "gentle" or seg.kind == "steep") and seg.hStart > Config.SAFE_START then
+		local P = Config.POWERUPS
+		local roll = rng:NextNumber()
+		local at = cf * CFrame.new(laneX(rng:NextInteger(1, Config.LANES)), 3, -len * 0.55)
+		if roll < P.shield.chance then
+			makeShield(at, m)
+		elseif roll < P.shield.chance + P.x2.chance then
+			makeX2(at, m)
+		elseif roll < P.shield.chance + P.x2.chance + P.fuel.chance then
+			makeFuel(at, m)
+		end
+		if rng:NextNumber() < P.rings.chance and len > 60 then
+			local lane = rng:NextInteger(1, Config.LANES)
+			for k = 0, 2 do
+				makeRing(cf * CFrame.new(laneX(lane), 0, -(len * 0.3 + k * 14)), m)
+			end
+		end
 	end
 
 	-- Финиш: клетчатая арка

@@ -26,12 +26,12 @@ end
 local function buildModel(kind: string, level: number): Model
 	local m = Instance.new("Model")
 	local tier = Config.tierOf(level)
-	local skin = Config.skin(player:GetAttribute("Skin"))
-	local sledId = Config.sled(player:GetAttribute("Sled")).id
+	local sledModel = Config.sled(player:GetAttribute("Sled"))
+	local sledId = sledModel.id
 	local rarityIdx = math.clamp(player:GetAttribute("SledRarity") or 1, 1, #Config.RARITIES)
 	local rarity = Config.RARITIES[rarityIdx]
-	local main = rarity.color or skin.tube
-	local accent = if rarityIdx > 1 then Color3.new(1, 1, 1):Lerp(rarity.color :: Color3, 0.35) else skin.rim
+	local main = rarity.color or sledModel.main
+	local accent = if rarityIdx > 1 then Color3.new(1, 1, 1):Lerp(rarity.color :: Color3, 0.35) else sledModel.accent
 	local look = {
 		main = main,
 		accent = accent,

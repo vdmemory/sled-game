@@ -304,6 +304,14 @@ local LOOKS = {
 	{ clock = 16.2, atmo = { Color = Color3.fromRGB(205, 215, 240), Decay = Color3.fromRGB(120, 130, 185), Density = 0.32, Haze = 1.3 }, cc = { TintColor = Color3.fromRGB(232, 238, 255), Saturation = 0.15 } },
 	-- 3 Каньон: тёплый закатный свет и пыльная оранжевая дымка
 	{ clock = 16.9, atmo = { Color = Color3.fromRGB(255, 222, 185), Decay = Color3.fromRGB(215, 140, 90), Density = 0.3, Haze = 1.1 }, cc = { TintColor = Color3.fromRGB(255, 240, 222), Saturation = 0.32 } },
+	-- 4 Ледяные пещеры: голубая плотная дымка, холодный кадр
+	{ clock = 15, atmo = { Color = Color3.fromRGB(175, 225, 255), Decay = Color3.fromRGB(80, 160, 230), Density = 0.38, Haze = 1.6 }, cc = { TintColor = Color3.fromRGB(225, 242, 255), Saturation = 0.2 } },
+	-- 5 Северное сияние: сумерки, фиолетово-зелёное небо
+	{ clock = 18.6, atmo = { Color = Color3.fromRGB(150, 140, 220), Decay = Color3.fromRGB(60, 160, 140), Density = 0.3, Haze = 1.4 }, cc = { TintColor = Color3.fromRGB(225, 225, 255), Saturation = 0.3 } },
+	-- 6 Снежный вулкан: багровый вечер и дым
+	{ clock = 17.6, atmo = { Color = Color3.fromRGB(235, 180, 160), Decay = Color3.fromRGB(150, 60, 40), Density = 0.36, Haze = 1.8 }, cc = { TintColor = Color3.fromRGB(255, 232, 220), Saturation = 0.25 } },
+	-- 7 Конфетная гора: розовый солнечный день
+	{ clock = 13, atmo = { Color = Color3.fromRGB(255, 210, 235), Decay = Color3.fromRGB(240, 140, 200), Density = 0.26, Haze = 0.8 }, cc = { TintColor = Color3.fromRGB(255, 240, 248), Saturation = 0.35 } },
 }
 
 local function applyWorldLook()

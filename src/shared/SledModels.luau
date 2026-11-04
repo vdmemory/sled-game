@@ -296,6 +296,132 @@ local function buildPlane(b, look: Look)
 	end
 end
 
+------------------------------------------------------------------ ледянка
+-- Круглая пластиковая «тарелка»: выпуклое дно, толстый бортик, полоска, две ручки-прорези
+local function buildSaucer(b, look: Look)
+	local mat = look.material or Enum.Material.SmoothPlastic
+	b:cyl(5.4, 0.3, Vector3.new(0, -0.5, 0), Vector3.yAxis, look.main, mat)
+	b:cyl(4.2, 0.12, Vector3.new(0, -0.62, 0), Vector3.yAxis, look.main:Lerp(BLACK, 0.25), mat) -- выпуклость дна
+	b:torus(Vector3.new(0, -0.3, 0), 2.62, 0.5, 26, look.main, mat)
+	b:cyl(4.3, 0.04, Vector3.new(0, -0.33, 0), Vector3.yAxis, look.main:Lerp(WHITE, 0.25), mat) -- светлая чаша
+	b:torus(Vector3.new(0, -0.3, 0), 1.75, 0.12, 22, look.accent, if look.glow then Enum.Material.Neon else mat)
+	for _, sx in { -1, 1 } do
+		-- ручка: петля над бортиком
+		b:rod({ Vector3.new(sx * 2.55, -0.15, -0.7), Vector3.new(sx * 2.85, 0.25, -0.35), Vector3.new(sx * 2.85, 0.25, 0.35), Vector3.new(sx * 2.55, -0.15, 0.7) }, 0.2, look.accent:Lerp(BLACK, 0.2))
+	end
+end
+
+------------------------------------------------------------------ тобоган
+-- Длинные дощатые сани без полозьев с закрученным носом, верёвочные поручни и подушка
+local function buildToboggan(b, look: Look, painted: boolean)
+	local wood = if painted then look.main else WOOD
+	local mat = if painted then (look.material or Enum.Material.SmoothPlastic) else Enum.Material.Wood
+	for k = -2, 2 do
+		b:block(Vector3.new(0.5, 0.16, 6.4), CFrame.new(k * 0.53, -0.48, 0.1), if k % 2 == 0 then wood else wood:Lerp(WOOD_DARK, 0.35), mat)
+	end
+	-- закрученный нос: доски по дуге
+	for k = 1, 8 do
+		local a = math.rad(k * 26)
+		local r = 0.95
+		local cf = CFrame.new(0, -0.48 + r - math.cos(a) * r, -3.1 - math.sin(a) * r) * CFrame.Angles(a, 0, 0)
+		b:block(Vector3.new(2.66, 0.16, 0.42), cf, wood, mat)
+	end
+	-- поперечины
+	for _, z in { -2.4, -0.6, 1.2, 2.9 } do
+		b:block(Vector3.new(2.8, 0.14, 0.3), CFrame.new(0, -0.36, z), WOOD_DARK, Enum.Material.Wood)
+	end
+	-- верёвочные поручни вдоль бортов
+	for _, sx in { -1, 1 } do
+		local x = sx * 1.38
+		b:rod({ Vector3.new(x, 0.05, -2.6), Vector3.new(x, 0.22, -1.2), Vector3.new(x, 0.05, 0.2), Vector3.new(x, 0.22, 1.6), Vector3.new(x, 0.05, 3.0) }, 0.14, look.accent, Enum.Material.Fabric)
+		for _, z in { -2.6, 0.2, 3.0 } do
+			b:block(Vector3.new(0.12, 0.45, 0.12), CFrame.new(x, -0.2, z), WOOD_DARK, Enum.Material.Wood)
+		end
+	end
+	-- мягкая подушка-сиденье
+	b:block(Vector3.new(2.3, 0.22, 2.6), CFrame.new(0, -0.3, 0.6), look.accent:Lerp(WHITE, 0.15), Enum.Material.Fabric)
+end
+
+------------------------------------------------------------------ снежный каяк
+-- Обтекаемый корпус, полоса по палубе, кокпит с юбкой, весло поперёк, ручки на носу и корме
+local function buildKayak(b, look: Look)
+	local mat = look.material or Enum.Material.SmoothPlastic
+	b:ellipsoid(Vector3.new(2.5, 1.2, 8.2), CFrame.new(0, -0.15, 0), look.main, mat)
+	b:ellipsoid(Vector3.new(2.3, 0.6, 7.6), CFrame.new(0, -0.5, 0), look.main:Lerp(BLACK, 0.2), mat) -- киль
+	b:block(Vector3.new(0.35, 0.05, 6.4), CFrame.new(0, 0.44, 0), look.accent, if look.glow then Enum.Material.Neon else mat)
+	-- кокпит: тёмный проём + ободок
+	b:cyl(1.9, 0.08, Vector3.new(0, 0.42, 0.4), Vector3.yAxis, BLACK)
+	b:torus(Vector3.new(0, 0.46, 0.4), 0.95, 0.18, 18, look.accent:Lerp(BLACK, 0.3))
+	-- ручки-петли на носу и корме
+	for _, z in { -3.9, 3.9 } do
+		b:rod({ Vector3.new(-0.25, 0.1, z), Vector3.new(0, 0.3, z + (if z < 0 then -0.25 else 0.25)), Vector3.new(0.25, 0.1, z) }, 0.1, BLACK)
+	end
+	-- весло поперёк: древко + лопасти
+	b:cyl(0.14, 5.6, Vector3.new(0, 0.95, -0.4), Vector3.xAxis, STEEL, Enum.Material.Metal)
+	for _, sx in { -1, 1 } do
+		b:ellipsoid(Vector3.new(0.12, 0.55, 1.1), CFrame.new(sx * 2.85, 0.95, -0.4) * CFrame.Angles(0, 0, sx * math.rad(15)), look.accent)
+	end
+end
+
+------------------------------------------------------------------ бобслей
+-- Обтекаемая капсула: нос-обтекатель, борта, задняя стенка, полозья, ручки для разгона, номер
+local function buildBobsled(b, look: Look)
+	local mat = look.material or Enum.Material.SmoothPlastic
+	b:block(Vector3.new(2.9, 0.28, 6.2), CFrame.new(0, -0.45, 0.2), look.main:Lerp(BLACK, 0.3), mat) -- дно
+	for _, sx in { -1, 1 } do
+		b:block(Vector3.new(0.26, 1.05, 5.8), CFrame.new(sx * 1.38, 0.1, 0.3), look.main, mat)
+		b:block(Vector3.new(0.28, 0.2, 5.8), CFrame.new(sx * 1.39, 0.2, 0.3), look.accent, if look.glow then Enum.Material.Neon else mat) -- полоса
+		-- номер на борту
+		b:part(Enum.PartType.Cylinder, Vector3.new(0.05, 0.85, 0.85), CFrame.new(sx * 1.53, 0.05, 1.4), WHITE)
+	end
+	b:ellipsoid(Vector3.new(2.98, 1.4, 3.0), CFrame.new(0, 0.05, -2.75), look.main, mat) -- нос
+	b:block(Vector3.new(2.9, 0.95, 0.25), CFrame.new(0, 0.05, 3.15), look.main, mat) -- корма
+	b:wedge(Vector3.new(2.2, 0.5, 0.9), CFrame.new(0, 0.85, -1.7) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(170, 215, 245), Enum.Material.Glass).Transparency = 0.35
+	-- стальные полозья
+	for _, sx in { -1, 1 } do
+		for _, z in { -2.0, 2.0 } do
+			b:rod({ Vector3.new(sx * 1.05, -0.62, z - 1.1), Vector3.new(sx * 1.05, -0.68, z + 1.0), Vector3.new(sx * 1.05, -0.55, z + 1.25) }, 0.16, STEEL, Enum.Material.Metal)
+		end
+		-- ручки для разгона сзади
+		b:rod({ Vector3.new(sx * 1.38, 0.55, 2.6), Vector3.new(sx * 1.75, 0.6, 2.75), Vector3.new(sx * 1.75, 0.6, 3.35) }, 0.13, STEEL, Enum.Material.Metal)
+	end
+end
+
+------------------------------------------------------------------ снегоход
+-- Капот с фарой, ветровое стекло, руль, сиденье, две лыжи спереди и гусеница сзади
+local function buildSnowmobile(b, look: Look)
+	local mat = look.material or Enum.Material.SmoothPlastic
+	-- капот
+	b:ellipsoid(Vector3.new(2.3, 1.3, 3.0), CFrame.new(0, 0.25, -2.1), look.main, mat)
+	b:block(Vector3.new(2.2, 0.7, 2.2), CFrame.new(0, 0.0, -0.9), look.main, mat)
+	b:block(Vector3.new(2.25, 0.18, 2.2), CFrame.new(0, 0.1, -0.9), look.accent, if look.glow then Enum.Material.Neon else mat)
+	b:ball(0.55, CFrame.new(0, 0.45, -3.55), Color3.fromRGB(255, 245, 200), Enum.Material.Neon) -- фара
+	-- ветровое стекло и руль
+	b:wedge(Vector3.new(1.8, 0.9, 0.5), CFrame.new(0, 1.15, -1.55) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(170, 215, 245), Enum.Material.Glass).Transparency = 0.35
+	b:rod({ Vector3.new(-0.95, 1.1, -0.95), Vector3.new(-0.4, 1.0, -1.1), Vector3.new(0.4, 1.0, -1.1), Vector3.new(0.95, 1.1, -0.95) }, 0.13, BLACK)
+	for _, sx in { -1, 1 } do
+		b:cyl(0.22, 0.4, Vector3.new(sx * 1.1, 1.1, -0.95), Vector3.xAxis, BLACK, Enum.Material.Rubber)
+	end
+	-- сиденье
+	b:block(Vector3.new(1.3, 0.45, 3.0), CFrame.new(0, 0.05, 1.0), BLACK, Enum.Material.Fabric)
+	-- гусеница: корпус + протектор
+	b:block(Vector3.new(1.7, 0.6, 3.4), CFrame.new(0, -0.45, 1.2), Color3.fromRGB(45, 46, 52), Enum.Material.Rubber)
+	for k = 0, 7 do
+		b:block(Vector3.new(1.72, 0.12, 0.14), CFrame.new(0, -0.77, -0.35 + k * 0.45), Color3.fromRGB(25, 25, 30), Enum.Material.Rubber)
+	end
+	-- боковые панели с полосой
+	for _, sx in { -1, 1 } do
+		b:block(Vector3.new(0.12, 0.55, 3.4), CFrame.new(sx * 0.92, -0.2, 1.1), look.main, mat)
+		b:block(Vector3.new(0.13, 0.12, 3.4), CFrame.new(sx * 0.93, -0.05, 1.1), look.accent)
+		-- лыжи спереди на стойках
+		local x = sx * 1.15
+		b:block(Vector3.new(0.45, 0.12, 2.6), CFrame.new(x, -0.72, -2.3), BLACK)
+		b:wedge(Vector3.new(0.45, 0.45, 0.6), CFrame.new(x, -0.5, -3.85) * CFrame.Angles(0, math.pi, 0), BLACK)
+		b:rod({ Vector3.new(x, -0.65, -2.2), Vector3.new(x * 0.75, 0.0, -1.9) }, 0.14, STEEL, Enum.Material.Metal)
+	end
+	b:block(Vector3.new(1.2, 0.2, 0.12), CFrame.new(0, 0.05, 2.92), Color3.fromRGB(255, 50, 50), Enum.Material.Neon) -- стоп-сигнал
+end
+
 ------------------------------------------------------------------ ракеты (апгрейд «Ракета»)
 -- Боковые ракеты как в оригинале: корпус, обтекатель-нос, пояски, стабилизаторы, сопло.
 -- Каждый тир — свой дизайн: петарда → ракета → турбо → мега → бласт → гиперджет.
@@ -394,6 +520,26 @@ local MOUNTS = {
 	classic = { x = 2.25, y = 0.45, z = 0.6, lights = Vector3.new(1.4, 0.9, -2.55) },
 	board = { x = 1.5, y = -0.15, z = 0.3, lights = Vector3.new(0.85, -0.05, -3.15) },
 	plane = { x = 2.75, y = -0.2, z = 0.3, lights = Vector3.new(2.2, -0.3, -1.3), onWing = true },
+	saucer = { x = 2.85, y = -0.15, z = 0.3, lights = Vector3.new(0.9, -0.05, -2.6) },
+	toboggan = { x = 1.45, y = -0.15, z = 0.8, lights = Vector3.new(0.8, 0.95, -3.75) },
+	kayak = { x = 1.25, y = -0.05, z = 1.0, lights = Vector3.new(0.45, 0.3, -3.2) },
+	bobsled = { x = 1.55, y = 0.05, z = 0.8, lights = Vector3.new(0.8, 0.25, -4.0) },
+	snowmobile = { x = 1.0, y = -0.1, z = 1.3, lights = Vector3.new(0.6, 0.3, -3.3) },
+}
+
+-- Где у моделей спойлер (тир 2), обтекатель (тир 3) и золотой бампер (тир 4): { z, y }.
+-- Нет записи — деталь этой модели не нужна (у самолёта и снегохода своё стекло и хвост).
+local SPOILER = {
+	tube = { 3.9, 1.2 }, classic = { 3.7, 1.0 }, board = { 3.3, 0.0 }, saucer = { 2.9, 0.1 },
+	toboggan = { 3.3, 0.3 }, kayak = { 3.7, 0.5 }, bobsled = { 3.4, 0.7 }, snowmobile = { 3.0, 0.5 },
+}
+local SHIELD = {
+	tube = { -3.4, 1.4 }, classic = { -2.5, 1.25 }, board = { -2.4, 0.35 }, saucer = { -2.4, 0.45 },
+	toboggan = { -2.5, 0.65 }, kayak = { -1.3, 1.05 },
+}
+local BUMPER = {
+	classic = { -3.0, 0.0 }, board = { -3.6, -0.25 }, saucer = { -2.95, -0.3 }, toboggan = { -3.15, -0.3 },
+	kayak = { -4.2, -0.2 }, bobsled = { -4.25, -0.3 }, snowmobile = { -3.75, -0.35 }, plane = { -2.9, 0.0 },
 }
 
 -- Одна ракета отдельно (витрина апгрейда «Ракета»)
@@ -426,9 +572,8 @@ function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier:
 			b:ball(0.46, CFrame.new(p + Vector3.new(0, 0, -0.12)), Color3.fromRGB(255, 245, 200), Enum.Material.Neon)
 		end
 	end
-	if sledTier >= 2 and id ~= "plane" then
-		local z = if id == "tube" then 3.9 elseif id == "classic" then 3.7 else 3.3
-		local yy = if id == "tube" then 1.2 elseif id == "classic" then 1.0 else 0.0
+	if sledTier >= 2 and SPOILER[id] then
+		local z, yy = SPOILER[id][1], SPOILER[id][2]
 		-- спойлер: две стойки + крыло
 		for _, sx in { -1, 1 } do
 			b:block(Vector3.new(0.18, 0.7, 0.4), CFrame.new(sx * 0.9, yy, z), BLACK)
@@ -440,9 +585,8 @@ function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier:
 			b:block(Vector3.new(0.14, 0.8, 0.85), CFrame.new(sx * 1.4, yy + 0.4, z + 0.2), Color3.fromRGB(50, 70, 190))
 		end
 	end
-	if sledTier >= 3 and id ~= "plane" then
-		local z = if id == "tube" then -3.4 elseif id == "classic" then -2.5 else -2.4
-		local yy = if id == "tube" then 1.4 elseif id == "classic" then 1.25 else 0.35
+	if sledTier >= 3 and SHIELD[id] then
+		local z, yy = SHIELD[id][1], SHIELD[id][2]
 		local glass = b:block(Vector3.new(3.6, 1.4, 0.18), CFrame.new(0, yy, z) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(170, 220, 255), Enum.Material.Glass)
 		glass.Transparency = 0.35
 		b:block(Vector3.new(3.7, 0.16, 0.24), CFrame.new(0, yy + 0.66, z + 0.3) * CFrame.Angles(math.rad(-25), 0, 0), BLACK)
@@ -452,8 +596,8 @@ function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier:
 		if id == "tube" then
 			b:torus(Vector3.new(0, 0.05, 0), 3.95, 0.22, 26, gold, Enum.Material.SmoothPlastic)
 		else
-			local z = if id == "classic" then -3.0 elseif id == "board" then -3.6 else -2.9
-			local yy = if id == "board" then -0.25 else 0.0
+			local bp = BUMPER[id] or { -2.9, 0.0 }
+			local z, yy = bp[1], bp[2]
 			b:rod({ Vector3.new(-1.6, yy, z + 0.4), Vector3.new(-0.8, yy, z), Vector3.new(0.8, yy, z), Vector3.new(1.6, yy, z + 0.4) }, 0.22, gold, Enum.Material.SmoothPlastic)
 		end
 	end
@@ -600,6 +744,16 @@ function SledModels.build(parent: Instance, base: CFrame, id: string, look: Look
 	b.shine = look.shine or 0
 	if id == "board" then
 		buildBoard(b, look)
+	elseif id == "saucer" then
+		buildSaucer(b, look)
+	elseif id == "toboggan" then
+		buildToboggan(b, look, painted == true)
+	elseif id == "kayak" then
+		buildKayak(b, look)
+	elseif id == "bobsled" then
+		buildBobsled(b, look)
+	elseif id == "snowmobile" then
+		buildSnowmobile(b, look)
 	elseif id == "classic" then
 		buildClassic(b, look, painted == true)
 	elseif id == "plane" then

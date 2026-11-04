@@ -350,6 +350,12 @@ local pctBubble = UI.text({ Text = "0%", AnchorPoint = Vector2.new(1, 0.5), Posi
 -- Магнит и всплывающие «+N»
 local magnetIcon, setMagnet = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.6, 0), Size = UDim2.fromOffset(120, 40), Parent = runUi })
 magnetIcon.Visible = false
+-- активные бонусы: щит (до удара) и «x2 монеты» (секунды)
+local shieldInd, setShieldInd = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, -130, 0.6, 0), Size = UDim2.fromOffset(110, 40), Parent = runUi })
+setShieldInd("Щит", "shield")
+shieldInd.Visible = false
+local x2Ind, setX2Ind = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 130, 0.6, 0), Size = UDim2.fromOffset(110, 40), Color = Color3.fromRGB(255, 215, 70), Outline = 2.5, Parent = runUi })
+x2Ind.Visible = false
 local function floater(text: string, color: Color3)
 	local f = UI.text({
 		Text = text,
@@ -611,6 +617,12 @@ RunService.RenderStepped:Connect(function()
 	magnetIcon.Visible = ml > 0
 	if ml > 0 then
 		setMagnet(tostring(math.ceil(ml)), "magnet")
+	end
+	shieldInd.Visible = state.ShieldOn.Value
+	local x2 = state.X2Left.Value
+	x2Ind.Visible = x2 > 0
+	if x2 > 0 then
+		setX2Ind("x2  " .. math.ceil(x2), "coin")
 	end
 	ring.Visible = launched and stick.On.Value
 	if ring.Visible then

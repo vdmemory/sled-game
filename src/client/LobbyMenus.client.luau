@@ -1,6 +1,6 @@
 -- Меню лобби в стиле мобильного оригинала:
 --  • слева колонка «ледяных» плиток-иконок (Миры, Задания, Сани, Следы, Подарки);
---  • справа шестерёнка и Цвета ватрушки;
+--  • справа шестерёнка (настройки);
 --  • под заголовком — жёлтая плашка сундука с таймером;
 --  • окна — голубые, с лентой-заголовком и круглым красным крестиком (Shared/UIKit).
 
@@ -140,14 +140,13 @@ local giftTimer = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Positi
 local giftBadge = UI.badge(giftBtn, "!")
 giftBadge.Visible = false
 
--- справа: шестерёнка (кружок), билет дня, цвета
+-- справа: шестерёнка (кружок) — настройки
 local gear = UI.new("TextButton", { Text = "", LayoutOrder = 0, Size = UDim2.fromOffset(84, 60), BackgroundTransparency = 1, Parent = right })
 local gearBg = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.navy, BackgroundTransparency = 0.35, Parent = gear })
 UI.corner(gearBg, 1000)
 UI.stroke(gearBg, 2.5, C.white, 0.3)
 UI.icon("gear", { Position = UDim2.fromScale(0.14, 0.14), Size = UDim2.fromScale(0.72, 0.72), Parent = gearBg })
 UI.bounce(gear)
-local colorsBtn = tile(right, 1, "palette")
 
 -- Жёлтая плашка сундука под заголовком
 local chestPill = UI.new("TextButton", {
@@ -223,7 +222,7 @@ local function drawWorlds()
 	local best = player:GetAttribute("LevelBest") or 0
 	local current = Config.worldOf(level)
 	local per = Config.LEVELS_PER_WORLD
-	for w = 1, math.max(current + 1, 4) do
+	for w = 1, math.max(current + 1, #Config.THEMES) do
 		local theme = Config.themeOfWorld(w)
 		local card = UI.new("Frame", { Size = UDim2.new(0, 200, 1, -6), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = worldsList })
 		UI.corner(card, 16)
@@ -232,7 +231,7 @@ local function drawWorlds()
 		local col = Config.WORLD_COLORS[theme]
 		UI.grad(pic, col:Lerp(Color3.new(1, 1, 1), 0.35), col)
 		UI.corner(pic, 12)
-		UI.icon(({ "tree", "city", "cactus" })[theme] or "tree", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromScale(0.62, 0.86), ZIndex = 35, Parent = pic })
+		UI.icon(Config.WORLD_IMAGES[theme] or "tree", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromScale(0.62, 0.86), ZIndex = 35, Parent = pic })
 		local num = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(40, 40), BackgroundTransparency = 0, ZIndex = 36, Parent = card })
 		UI.grad(num, UI.KIND.yellow[1], UI.KIND.yellow[2])
 		UI.corner(num, 1000)
@@ -533,48 +532,6 @@ trailsBtn.Activated:Connect(function()
 	open(trailWin)
 end)
 
------------------------------------------------------------------- Цвета ватрушки
-local colorWin, colorBody = panel("ЦВЕТА ВАТРУШКИ", 680, 460)
-local colorArea = scroller(colorBody, false, 6)
-grid(colorArea, 136, 160)
-local colorCells: { [string]: TextButton } = {}
-for _, skin in Config.SKINS do
-	local card = UI.new("Frame", { BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = colorArea })
-	UI.corner(card, 14)
-	UI.stroke(card, 2.5, Color3.fromRGB(120, 170, 225))
-	local disc = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Size = UDim2.fromOffset(62, 62), BackgroundColor3 = skin.tube, BackgroundTransparency = 0, ZIndex = 34, Parent = card })
-	UI.corner(disc, 1000)
-	UI.stroke(disc, 7, skin.rim)
-	UI.ink({ Text = skin.name, Position = UDim2.fromOffset(6, 82), Size = UDim2.new(1, -12, 0, 26), ZIndex = 34, Parent = card })
-	local st = UI.button("blue", "", { Position = UDim2.new(0, 8, 1, -46), Size = UDim2.new(1, -16, 0, 38), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = card })
-	st.Activated:Connect(function()
-		say(Remotes.SkinAction:InvokeServer(skin.id))
-	end)
-	colorCells[skin.id] = st
-end
-local function drawColors()
-	local owned = csvSet("OwnedSkins")
-	local coins = player:GetAttribute("Coins") or 0
-	local cur = player:GetAttribute("Skin") or "classic"
-	for _, skin in Config.SKINS do
-		local st = colorCells[skin.id]
-		if skin.id == cur then
-			UI.setKind(st, "green")
-			UI.setText(st, "✔ НАДЕТО")
-		elseif owned[skin.id] or skin.price == 0 then
-			UI.setKind(st, "blue")
-			UI.setText(st, "НАДЕТЬ")
-		else
-			UI.setKind(st, if coins >= skin.price then "yellow" else "grey")
-			UI.setText(st, UI.money(skin.price), "coin")
-		end
-	end
-end
-colorsBtn.Activated:Connect(function()
-	drawColors()
-	open(colorWin)
-end)
-
 ------------------------------------------------------------------ Настройки (как SETTINGS в оригинале: круглые кнопки-иконки)
 local setWin = UI.new("Frame", {
 	Name = "Panel_Settings",
@@ -636,16 +593,13 @@ player:GetAttributeChangedSignal("SetShadows"):Connect(applyShadows)
 applyShadows()
 
 ------------------------------------------------------------------ обновление
-for _, attr in { "Coins", "Level", "OwnedSleds", "Sled", "SledRarity", "OwnedTrails", "Trail", "OwnedSkins", "Skin" } do
+for _, attr in { "Coins", "Level", "OwnedSleds", "Sled", "SledRarity", "OwnedTrails", "Trail" } do
 	player:GetAttributeChangedSignal(attr):Connect(function()
 		if sledWin.Visible then
 			drawSleds()
 		end
 		if trailWin.Visible then
 			drawTrails()
-		end
-		if colorWin.Visible then
-			drawColors()
 		end
 	end)
 end

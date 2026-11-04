@@ -40,7 +40,7 @@ local CoinGrab: RemoteEvent = remote("RemoteEvent", "CoinGrab") -- монету 
 local SledAction: RemoteFunction = remote("RemoteFunction", "SledAction") -- купить/надеть сани (модель + редкость)
 local TrailAction: RemoteFunction = remote("RemoteFunction", "TrailAction") -- купить/надеть след
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
-local SkinAction: RemoteFunction = remote("RemoteFunction", "SkinAction")
+local PowerUp: RemoteEvent = remote("RemoteEvent", "PowerUp") -- подобрал бонус на трассе (x2 / кольцо)
 local WorldAction: RemoteFunction = remote("RemoteFunction", "WorldAction") -- фарм пройденного мира / пропуск мира за Robux
 remotes.Parent = ReplicatedStorage
 
@@ -110,12 +110,6 @@ local function syncPlayer(player: Player)
 	if not player:GetAttribute("InRun") then -- в заезде длину задаёт трасса (фарм — другой уровень)
 		player:SetAttribute("LevelLength", Config.levelLength(d.Level))
 	end
-	player:SetAttribute("Skin", d.Skin)
-	local owned = {}
-	for id in d.OwnedSkins do
-		table.insert(owned, id)
-	end
-	player:SetAttribute("OwnedSkins", table.concat(owned, ","))
 	player:SetAttribute("ThemeName", Config.worldName(Config.worldOf(d.Level)))
 	-- фарм: пройденный мир, в котором сейчас катаемся (0 — текущий)
 	if (d.FarmWorld or 0) >= Config.worldOf(d.Level) then
@@ -248,6 +242,7 @@ type Run = {
 	flips: number?,
 	gems: number?,
 	combo: number?,
+	x2Until: number?,
 	lastCoin: number?,
 	crystal: boolean?,
 	lastAir: number?,
@@ -363,7 +358,6 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	seat.Anchored = true
 
 	local d = Data.get(player)
-	local skin = Config.skin(d and d.Skin)
 	-- Тиры апгрейда «Сани»: санки обрастают деталями (как MEGA THRUSTER / AERO TAIL в оригинале)
 	local tier = Config.tierOf(d and d.SledLevel or 0)
 
@@ -371,14 +365,15 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	local model = Config.sled(d and d.Sled)
 	local rarityIdx = math.clamp(d and d.SledRarity or 1, 1, #Config.RARITIES)
 	local rarity = Config.RARITIES[rarityIdx]
-	local main = rarity.color or skin.tube
-	local accent = if rarityIdx > 1 then Color3.new(1, 1, 1):Lerp(rarity.color :: Color3, 0.35) else skin.rim
+	-- цвет: у обычной редкости — фирменные цвета модели, у редких — цвет редкости
+	local main = rarity.color or model.main
+	local accent = if rarityIdx > 1 then Color3.new(1, 1, 1):Lerp(rarity.color :: Color3, 0.35) else model.accent
 	-- Детализированная модель (Shared/SledModels): тор-ватрушка, деревянные санки, доска, самолёт
 	SledModels.build(seat, seat.CFrame, model.id, {
 		main = main,
 		accent = accent,
-		material = if rarityIdx > 1 then rarity.material else (if skin.metal then Enum.Material.Foil else nil),
-		glow = skin.neon or rarityIdx == 5,
+		material = if rarityIdx > 1 then rarity.material else nil,
+		glow = rarityIdx == 5,
 		shine = rarity.shine,
 	}, seat, rarityIdx > 1)
 	if rarityIdx == 5 then
@@ -400,7 +395,7 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	seat:SetAttribute("RocketNozzle", nozzle)
 	if tier >= 5 then -- неон
 		local glow = Instance.new("PointLight")
-		glow.Color = skin.rim
+		glow.Color = accent
 		glow.Range = 12
 		glow.Brightness = 2
 		glow.Parent = seat
@@ -877,27 +872,6 @@ MarketplaceService.ProcessReceipt = function(info)
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
--- Скины: купить (если не куплен) или надеть
-SkinAction.OnServerInvoke = function(player, id)
-	local d = Data.get(player)
-	if not d or typeof(id) ~= "string" or runs[player] then
-		return false, "Недоступно"
-	end
-	local skin = Config.skin(id)
-	if skin.id ~= id then
-		return false, "Нет такого скина"
-	end
-	if not d.OwnedSkins[id] then
-		if d.Coins < skin.price then
-			return false, "Не хватает монет"
-		end
-		d.Coins -= skin.price
-		d.OwnedSkins[id] = true
-	end
-	d.Skin = id
-	syncPlayer(player)
-	return true
-end
 
 ------------------------------------------------------------------ Монетки на трассе
 local function playerFromHit(hit: BasePart): Player?
@@ -915,6 +889,7 @@ local function awardCoin(player: Player, run: Run)
 	run.combo = if now - (run.lastCoin or 0) < Config.COMBO_WINDOW then (run.combo or 0) + 1 else 1
 	run.lastCoin = now
 	local value = Config.COIN_PICKUP_VALUE * Config.comboMult(run.combo or 1)
+		* (if (run.x2Until or 0) > now then 2 else 1)
 	run.bonusCoins += value
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + value)
 	player:SetAttribute("Combo", run.combo)
@@ -945,6 +920,29 @@ CoinGrab.OnServerEvent:Connect(function(player, coin)
 	end
 	takeCoin(coin)
 	awardCoin(player, run)
+end)
+
+-- Бонусы на трассе: x2 монеты (на время) и кольца (+монеты). Щит и канистра — только у клиента.
+PowerUp.OnServerEvent:Connect(function(player, part)
+	local run = runs[player]
+	if not run or run.ended or typeof(part) ~= "Instance" or not part:IsA("BasePart") then
+		return
+	end
+	if not CollectionService:HasTag(part, "PowerUp") or part:GetAttribute("Taken") then
+		return
+	end
+	if (part.Position - run.sled.Position).Magnitude > 30 then
+		return
+	end
+	part:SetAttribute("Taken", true)
+	local kind = part:GetAttribute("Kind")
+	if kind == "x2" then
+		run.x2Until = os.clock() + Config.POWERUPS.x2.time
+	elseif kind == "ring" then
+		local c = Config.POWERUPS.rings.coins
+		run.bonusCoins += c
+		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + c)
+	end
 end)
 
 -- Гем на трассе

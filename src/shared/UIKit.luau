@@ -493,6 +493,8 @@ UI.EMOJI = {
 	tree = "🌲", city = "🏙", cactus = "🌵", mountain = "🏔", parachute = "🪂", smash = "💥",
 	speaker = "🔊", music = "🎵", snowflake = "❄", moon = "🌗", donut = "🍩", snowboard = "🏂",
 	plane = "✈", star = "⭐", bolt = "⚡", stopwatch = "⏱", hourglass = "⏳", ice = "🧊", ringbuoy = "🛟",
+	shield = "🛡", saucer = "🥏", canoe = "🛶", racecar = "🏎", scooter = "🛵", aurora = "🌌", volcano = "🌋",
+	candy = "🍭", fuel = "⛽", toboggan = "🪵", ring = "💍",
 }
 local imagesFolder: Folder? = nil
 local waiting: { () -> () } = {}
@@ -587,7 +589,7 @@ function UI.iconText(props: { [string]: any }): (Frame, (string, string?) -> ())
 		ZIndex = f.ZIndex + 1,
 		Parent = f,
 	})
-	if (props.Color or UI.C.white) == UI.C.white then
+	if props.Outline or (props.Color or UI.C.white) == UI.C.white then
 		UI.outline(label, props.Outline or 2)
 	end
 	local function set(text: string, iconName: string?)
