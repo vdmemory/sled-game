@@ -41,6 +41,7 @@ local SledAction: RemoteFunction = remote("RemoteFunction", "SledAction") -- к�
 local TrailAction: RemoteFunction = remote("RemoteFunction", "TrailAction") -- купить/надеть след
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 local PowerUp: RemoteEvent = remote("RemoteEvent", "PowerUp") -- подобрал бонус на трассе (x2 / кольцо)
+local DevAction: RemoteFunction = remote("RemoteFunction", "DevAction") -- панель разработчика (только владелец)
 local WorldAction: RemoteFunction = remote("RemoteFunction", "WorldAction") -- фарм пройденного мира / пропуск мира за Robux
 remotes.Parent = ReplicatedStorage
 
@@ -867,6 +868,47 @@ WorldAction.OnServerInvoke = function(player, action, arg)
 		return true
 	end
 	return false, "Недоступно"
+end
+
+-- Панель разработчика: только владелец игры (game.CreatorId). Меняет свой прогресс для проверки
+-- уровней прокачки, миров, саней и наград. Обычным игрокам сервер всегда отказывает.
+DevAction.OnServerInvoke = function(player, action, a, b)
+	if player.UserId ~= game.CreatorId then
+		return false, "Только для владельца"
+	end
+	local d = Data.get(player)
+	if not d then
+		return false, "Профиль не загружен"
+	end
+	if runs[player] then
+		endRun(player, "back")
+	end
+	if action == "setLevel" and typeof(a) == "string" and Config.UPGRADES[a] and typeof(b) == "number" then
+		d[a .. "Level"] = math.clamp(math.floor(b), 0, Config.UPGRADES[a].MaxLevel)
+	elseif action == "add" and (a == "Coins" or a == "Gems") and typeof(b) == "number" then
+		d[a] = math.max(0, d[a] + math.floor(b))
+	elseif action == "setWorldLevel" and typeof(a) == "number" then
+		d.Level = math.clamp(math.floor(a), 1, 200)
+		d.LevelBest = 0
+		d.FarmWorld = 0
+		postLevel(player, d.Level)
+	elseif action == "giveSled" and typeof(a) == "string" and typeof(b) == "number" then
+		local model = Config.sled(a)
+		local r = math.clamp(math.floor(b), 1, #Config.RARITIES)
+		for k = 1, r do
+			d.OwnedSleds[model.id .. ":" .. k] = true
+		end
+		d.Sled, d.SledRarity = model.id, r
+	elseif action == "resetDaily" then
+		d.Daily = nil
+		d.ChestAt = 0
+		d.GiftsClaimed = {}
+		Rewards.sync(player)
+	else
+		return false, "Неизвестное действие"
+	end
+	syncPlayer(player)
+	return true, "Готово"
 end
 
 -- Покупки за Robux. Каждая покупка выдаётся ровно один раз: ID чека запоминаем в профиле.
