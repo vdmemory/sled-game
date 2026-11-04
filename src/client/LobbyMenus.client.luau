@@ -562,10 +562,11 @@ end)
 local setWin = UI.new("Frame", {
 	Name = "Panel_Settings",
 	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.42), -- выше карточек апгрейдов, чтобы их значки не налезали
+
 	Size = UDim2.fromOffset(470, 260),
 	BackgroundColor3 = Color3.fromRGB(26, 44, 86),
-	BackgroundTransparency = 0.05,
+	BackgroundTransparency = 0,
 	Visible = false,
 	ZIndex = 30,
 	Parent = hud,
