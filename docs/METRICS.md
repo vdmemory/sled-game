@@ -12,6 +12,7 @@
 | Журнал событий (релизы, реклама, ивенты, внешнее) | `analytics/events.csv` | дата, тип, описание, коммит/версия |
 | Отчёт с трендами и дельтами | `python3 scripts/metrics_report.py` → `analytics/REPORT.md` | генерируется, не править руками |
 | Гипотезы и их результат | `docs/BUSINESS.md` §6 | ставка → метрика → факт |
+| Автосбор раз в неделю | `scripts/fetch_metrics.py` (Open Cloud Analytics Query API) из GitHub Actions `weekly-metrics` | см. `docs/WEEKLY.md` |
 | Сырые данные Creator Hub | владелец присылает скриншоты/CSV из Analytics → `analytics/raw/<дата>/` | как есть |
 
 ## Колонки `metrics.csv`

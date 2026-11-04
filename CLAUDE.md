@@ -77,8 +77,8 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 | `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, DevAction), `Track` (генерация трассы, лобби), `Props` (модели ландшафта/препятствий), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (настройки на лету), `UIImages.server` (декали → картинки) |
 | `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика и ввод), `HUD`, `LobbyMenus`, `DevPanel` (владелец), `Effects`, `Sounds`, `Traffic`, `Reveal`, `ConfigSync` |
 | `assets/ui` | Decal-ы в Roblox | 50 иконок Fluent Emoji 3D (MIT), `decals.json` |
-| `scripts` | CI | `publish.sh` (сборка, загрузка иконок, публикация), `upload_ui_assets.py` |
-| `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `BUSINESS` (монетизация, KPI, гипотезы), `METRICS` (цифры во времени, события в игре), `ENGINEERING` (стандарт кода и доки), `CHANGELOG` |
+| `scripts` | CI | `publish.sh` (сборка, загрузка иконок, публикация), `upload_ui_assets.py`, `fetch_metrics.py` (Open Cloud Analytics → CSV), `metrics_report.py`, `weekly-metrics.yml.example` |
+| `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `BUSINESS` (монетизация, KPI, гипотезы), `METRICS` (цифры во времени, события в игре), `WEEKLY` (понедельничный авто-обзор), `ENGINEERING` (стандарт кода и доки), `CHANGELOG` |
 | `analytics` | — | `metrics.csv` (снимки метрик по датам), `events.csv` (релизы/реклама/ивенты), `REPORT.md` (генерируется `scripts/metrics_report.py`), `raw/` (экспорты Creator Hub) |
 
 Подробности: `docs/ARCHITECTURE.md`. Как собрать такую же игру на воде или суше: `docs/PLAYBOOK.md`.

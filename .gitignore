@@ -3,3 +3,5 @@ Packages/
 *.rbxlx
 *.lock
 sourcemap.json
+__pycache__/
+*.pyc

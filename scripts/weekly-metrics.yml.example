@@ -1,0 +1,37 @@
+# Скопировать в .github/workflows/weekly-metrics.yml ЧЕРЕЗ ВЕБ GitHub (Add file → Create new file):
+# у сессий Claude нет права менять workflows. Секрет ROBLOX_ANALYTICS_KEY — ключ с правом
+# universe-analytics: universe.analytics:read на production-опыт; UNIVERSE_ID берём из окружения production.
+name: weekly-metrics
+
+on:
+  schedule:
+    - cron: "17 5 * * 1" # понедельник 05:17 UTC = 07:17 Киев
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Забрать метрики из Open Cloud Analytics
+        env:
+          ROBLOX_ANALYTICS_KEY: ${{ secrets.ROBLOX_ANALYTICS_KEY }}
+          UNIVERSE_ID: ${{ vars.UNIVERSE_ID }}
+        run: python3 scripts/fetch_metrics.py
+      - name: Построить отчёт
+        run: python3 scripts/metrics_report.py
+      - name: Закоммитить
+        run: |
+          git config user.name "metrics-bot"
+          git config user.email "metrics-bot@users.noreply.github.com"
+          git add analytics/
+          git diff --cached --quiet && echo "нет изменений" && exit 0
+          git commit -m "analytics: метрики за неделю ($(date -u +%F))"
+          git push

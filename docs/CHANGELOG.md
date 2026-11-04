@@ -1,5 +1,12 @@
 # Журнал изменений
 
+## Еженедельный автоматический цикл
+- `scripts/fetch_metrics.py`: метрики (DAU, визиты, CCU, D1/D7/D30, сессия, выручка, платящие,
+  конверсия) из Open Cloud Analytics Query API → `analytics/metrics.csv`; пример workflow
+  `scripts/weekly-metrics.yml.example` (понедельник 07:17, владелец добавляет через веб).
+- Запланированная задача Claude «Недельный обзор игры» (пн 09:00): producer → idea-scout →
+  qa-tester (статика) → code-reviewer → сводка владельцу; шаги — `docs/WEEKLY.md`.
+
 ## Аналитика и история метрик
 - `server/Analytics.luau`: AnalyticsService — воронка онбординга (Joined → FirstRun → ThirdRun →
   FirstUpgrade → FinishedLevel → World2 → FirstPurchase), экономика Source/Sink монет и гемов с
