@@ -14,8 +14,12 @@ folder.Parent = ReplicatedStorage
 
 for name, decalId in decals do
 	task.spawn(function()
+		local lastErr = ""
 		for attempt = 1, 3 do
 			local ok, model = pcall(InsertService.LoadAsset, InsertService, decalId)
+			if not ok then
+				lastErr = tostring(model)
+			end
 			if ok and model then
 				local decal = model:FindFirstChildWhichIsA("Decal", true)
 				local tex = decal and decal.Texture or ""
@@ -28,6 +32,8 @@ for name, decalId in decals do
 			end
 			task.wait(attempt * 5)
 		end
-		warn("[UIImages] не удалось получить картинку для " .. name .. " (декаль " .. decalId .. ")")
+		warn("[UIImages] не удалось получить картинку для " .. name .. " (декаль " .. decalId .. "): " .. lastErr)
+		-- диагностика видна и на клиенте (F9 → лог клиента)
+		folder:SetAttribute("_err", name .. ": " .. string.sub(lastErr, 1, 200))
 	end)
 end

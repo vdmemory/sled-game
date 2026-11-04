@@ -500,6 +500,15 @@ task.spawn(function()
 	local f = ReplicatedStorage:WaitForChild("UIImages", 60)
 	if f then
 		imagesFolder = f :: Folder
+		task.delay(20, function()
+			local n = 0
+			for k in f:GetAttributes() do
+				if string.sub(k, 1, 1) ~= "_" then
+					n += 1
+				end
+			end
+			print("[UIImages] картинок:", n, "ошибка:", f:GetAttribute("_err"))
+		end)
 		for _, fn in waiting do
 			fn()
 		end
