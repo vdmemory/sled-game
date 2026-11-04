@@ -5,3 +5,4 @@ Packages/
 sourcemap.json
 __pycache__/
 *.pyc
+.claude/worktrees/
