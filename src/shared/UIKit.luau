@@ -529,7 +529,7 @@ function UI.icon(name: string, props: { [string]: any }): Frame
 	-- заглушки: нарисованная монета для "coin", эмодзи для остального (иконку можно менять на лету)
 	local drawnCoin = UI.coin(f, { Name = "FallbackCoin", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.86, 0.86), ZIndex = z })
 	local emoji = UI.new("TextLabel", { Name = "Fallback", Text = "", Size = UDim2.fromScale(1, 1), ZIndex = z, Parent = f })
-	local img = UI.new("ImageLabel", { Name = "Image", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ScaleType = Enum.ScaleType.Fit, Visible = false, ZIndex = z, Parent = f })
+	local img = UI.new("ImageLabel", { Name = "Image", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1, ZIndex = z, Parent = f })
 	f:SetAttribute("Icon", name)
 	local function apply()
 		local n = f:GetAttribute("Icon")
@@ -542,8 +542,9 @@ function UI.icon(name: string, props: { [string]: any }): Frame
 			img.Image = ""
 		end
 		-- показываем картинку только когда она реально загрузилась
+		-- скрытая (Visible = false) картинка не грузится вовсе, поэтому прячем прозрачностью
 		local ready = img.Image ~= "" and img.IsLoaded
-		img.Visible = ready
+		img.ImageTransparency = if ready then 0 else 1
 		drawnCoin.Visible = not ready and n == "coin"
 		emoji.Visible = not ready and n ~= "coin"
 		emoji.Text = UI.EMOJI[n] or ""
