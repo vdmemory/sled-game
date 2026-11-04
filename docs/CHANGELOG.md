@@ -1,5 +1,15 @@
 # Журнал изменений
 
+## Аналитика и история метрик
+- `server/Analytics.luau`: AnalyticsService — воронка онбординга (Joined → FirstRun → ThirdRun →
+  FirstUpgrade → FinishedLevel → World2 → FirstPurchase), экономика Source/Sink монет и гемов с
+  полями мир/уровень/категория (заезды, задания, подарки, сундуки, апгрейды, сани, следы),
+  custom-события (RunDistance, RunPercent, RunFinished/Crashed/Stopped, SessionMinutes,
+  RobuxPurchase). Счётчики в сейве `Stats`. Работает только на опубликованном плейсе.
+- `docs/METRICS.md` — где лежат цифры, колонки, откуда брать в Creator Hub, как читать;
+  `analytics/metrics.csv`, `analytics/events.csv`, `scripts/metrics_report.py` → `analytics/REPORT.md`
+  (дельты к предыдущему периоду и −7, цели из BUSINESS, события рядом с датами).
+
 ## Команда агентов и плейбук похожих игр
 - `.claude/agents/`: `track-architect` (трассы, миры, трафик; препятствия — карточка вида: роль,
   класс, читаемость, размещение, прогрессия), `vehicle-engineer` (чертёж и модель транспорта,

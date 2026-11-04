@@ -47,6 +47,9 @@ create.roblox.com (monetization, analytics) и DevForum Announcements, пров�
 - `Config.PRODUCTS`, геймпассы (`GAMEPASS_*`), `PLAYTIME_GIFTS`, `CHEST_*`, `TUNABLES` — ты
   задаёшь цены и моменты предложения, `game-designer` вписывает, владелец создаёт товары в
   Creator Hub (ID → `Config`).
+- `docs/METRICS.md` + `analytics/metrics.csv`, `events.csv` — история цифр и событий; после новых
+  данных запускай `python3 scripts/metrics_report.py` и читай `analytics/REPORT.md` (дельты,
+  цели, события рядом с датами). События в игре уже логируются (`server/Analytics.luau`).
 - Данные: Creator Hub → Analytics (retention, сессия, воронка, монетизация, источники
   трафика) — просишь владельца прислать цифры/скриншоты; сам в Creator Hub не ходишь. В игре:
   лидерборд, `Rewards`-статистика, события покупок (`ProcessReceipt`) — проси

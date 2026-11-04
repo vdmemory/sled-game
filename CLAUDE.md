@@ -51,7 +51,9 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
   смене правил/механик; `docs/ARCHITECTURE.md` при смене устройства (модули, ремоуты, данные);
   `docs/PLAYBOOK.md` если меняется то, что нужно знать при создании похожей игры;
   `docs/IDEAS.md` — статус идеи при принятии/реализации/отклонении; `docs/BUSINESS.md` — при
-  изменении цен, товаров, предложений и при получении новых цифр.
+  изменении цен, товаров, предложений и при получении новых цифр; **каждый деплой на production,
+  запуск рекламы или ивент — строка в `analytics/events.csv`**; цифры от владельца → строка в
+  `analytics/metrics.csv` + `python3 scripts/metrics_report.py`.
 - **Все числа — в `src/shared/Config.luau`**, не в коде модулей. Новый параметр баланса сразу
   добавляется в `Config.TUNABLES` (панель владельца «Настройка»).
 - **Синтаксис перед пушем:** `luau-compile --null <файл>` (или `luau-analyze`) для каждого
@@ -76,6 +78,7 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 | `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика и ввод), `HUD`, `LobbyMenus`, `DevPanel` (владелец), `Effects`, `Sounds`, `Traffic`, `Reveal`, `ConfigSync` |
 | `assets/ui` | Decal-ы в Roblox | 50 иконок Fluent Emoji 3D (MIT), `decals.json` |
 | `scripts` | CI | `publish.sh` (сборка, загрузка иконок, публикация), `upload_ui_assets.py` |
-| `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `BUSINESS` (монетизация, KPI, гипотезы), `ENGINEERING` (стандарт кода и доки), `CHANGELOG` |
+| `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `BUSINESS` (монетизация, KPI, гипотезы), `METRICS` (цифры во времени, события в игре), `ENGINEERING` (стандарт кода и доки), `CHANGELOG` |
+| `analytics` | — | `metrics.csv` (снимки метрик по датам), `events.csv` (релизы/реклама/ивенты), `REPORT.md` (генерируется `scripts/metrics_report.py`), `raw/` (экспорты Creator Hub) |
 
 Подробности: `docs/ARCHITECTURE.md`. Как собрать такую же игру на воде или суше: `docs/PLAYBOOK.md`.

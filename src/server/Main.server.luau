@@ -14,6 +14,7 @@ local Data = require(script.Parent.DataService)
 local Rewards = require(script.Parent.Rewards)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
 local Tuning = require(script.Parent.Tuning)
+local Analytics = require(script.Parent.Analytics)
 Tuning.init() -- настройки из панели разработчика (DataStore) — до постройки лобби и трасс
 
 ------------------------------------------------------------------ Remotes
@@ -193,6 +194,11 @@ local function onPlayerAdded(player: Player)
 	end
 
 	Data.load(player)
+	local d0 = Data.get(player)
+	if d0 then
+		Analytics.onboarding(player, d0, 1)
+		player:SetAttribute("JoinedAt", os.clock())
+	end
 	if Config.GAMEPASS_X2_COINS ~= 0 then
 		local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, Config.GAMEPASS_X2_COINS)
 		player:SetAttribute("X2Coins", ok and owns or false)
@@ -300,6 +306,29 @@ local function endRun(player: Player, reason: string)
 		end
 		gems += run.gems or 0
 		d.Gems += gems
+		-- аналитика: экономика и воронка (docs/METRICS.md)
+		d.Stats = d.Stats or {}
+		if reason ~= "back" and reason ~= "restart" then
+			d.Stats.Runs = (d.Stats.Runs or 0) + 1
+			local w = Config.worldOf(level)
+			Analytics.economy(player, "Source", "Coins", earned, d.Coins, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
+			Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
+			Analytics.custom(player, "RunDistance", math.floor(dist))
+			Analytics.custom(player, "RunPercent", pct)
+			Analytics.custom(player, if finished then "RunFinished" elseif reason == "crash" then "RunCrashed" else "RunStopped")
+			if d.Stats.Runs == 1 then
+				Analytics.onboarding(player, d, 2)
+			elseif d.Stats.Runs == 3 then
+				Analytics.onboarding(player, d, 3)
+			end
+			if finished and not run.farm then
+				d.Stats.Finishes = (d.Stats.Finishes or 0) + 1
+				Analytics.onboarding(player, d, 5)
+				if Config.worldOf(d.Level) >= 2 then
+					Analytics.onboarding(player, d, 6)
+				end
+			end
+		end
 		local done = Rewards.onRun(player, {
 			runs = if reason == "back" or reason == "restart" then 0 else 1,
 			coins = earned,
@@ -630,6 +659,7 @@ SledAction.OnServerInvoke = function(player, id, rarity)
 		end
 		d.Coins -= price
 		d.OwnedSleds[key] = true
+		Analytics.economy(player, "Sink", "Coins", price, d.Coins, Enum.AnalyticsEconomyTransactionType.Shop.Name, "Sled:" .. key, Analytics.fields(Config.worldOf(d.Level), nil, "Sled"))
 	end
 	d.Sled = id
 	d.SledRarity = rarity
@@ -651,6 +681,7 @@ TrailAction.OnServerInvoke = function(player, id)
 			return false, "Не хватает монет"
 		end
 		d.Coins -= t.price
+		Analytics.economy(player, "Sink", "Coins", t.price, d.Coins, Enum.AnalyticsEconomyTransactionType.Shop.Name, "Trail:" .. id, Analytics.fields(Config.worldOf(d.Level), nil, "Trail"))
 		d.OwnedTrails[id] = true
 	end
 	d.Trail = id
@@ -834,6 +865,8 @@ BuyUpgrade.OnServerInvoke = function(player, name)
 	end
 	d[currency] -= cost
 	d[field] = level + 1
+	Analytics.economy(player, "Sink", currency, cost, d[currency], Enum.AnalyticsEconomyTransactionType.Shop.Name, "Upgrade:" .. name, Analytics.fields(Config.worldOf(d.Level), level + 1, "Upgrade " .. name))
+	Analytics.onboarding(player, d, 4)
 	syncPlayer(player)
 	for _, text in Rewards.add(player, "upgrades") do
 		TaskDone:FireClient(player, text)
@@ -941,6 +974,10 @@ MarketplaceService.ProcessReceipt = function(info)
 	end
 	handler(player, d)
 	table.insert(d.Receipts, info.PurchaseId)
+	d.Stats = d.Stats or {}
+	d.Stats.Purchases = (d.Stats.Purchases or 0) + 1
+	Analytics.onboarding(player, d, 7)
+	Analytics.custom(player, "RobuxPurchase", info.CurrencySpent)
 	while #d.Receipts > 50 do
 		table.remove(d.Receipts, 1)
 	end
@@ -1178,6 +1215,14 @@ Players.PlayerRemoving:Connect(function(player)
 		slots[run.slot] = nil
 	end
 	Rewards.onLeave(player)
+	local d = Data.get(player)
+	local joined = player:GetAttribute("JoinedAt")
+	if d and typeof(joined) == "number" then
+		local minutes = math.floor((os.clock() - joined) / 60)
+		d.Stats = d.Stats or {}
+		d.Stats.Playtime = (d.Stats.Playtime or 0) + minutes
+		Analytics.custom(player, "SessionMinutes", minutes)
+	end
 	Data.release(player)
 end)
 

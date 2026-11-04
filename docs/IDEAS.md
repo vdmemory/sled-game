@@ -13,6 +13,6 @@
 | 4 | ProfileStore вместо голого DataStore (сессии, защита от дюпа) | README роадмап | 3 (надёжность) | 2 | 2 (миграция) | code-reviewer | новая |
 | 5 | Античит: серверная проверка скорости/дистанции заезда | README роадмап | 3 | 1 | 1 | game-designer, code-reviewer | новая |
 | 6 | Монетизация: паки монет/гемов, стартовая сделка, пропуск мира (#10) | GAME_DESIGN, BUSINESS §3 | 5 (деньги) | 2 | 3 (товары создаёт владелец) | producer → game-designer | принята |
-| 7 | Логирование воронки и экономики в AnalyticsService (funnel: 1-й заезд, 3-й заезд, 1-я покупка; economy events) | producer | 4 (без этого нет цифр) | 1 | 1 | game-designer, code-reviewer | новая |
+| 7 | Логирование воронки и экономики в AnalyticsService (funnel: 1-й заезд, 3-й заезд, 1-я покупка; economy events) | producer | 4 (без этого нет цифр) | 1 | 1 | game-designer, code-reviewer | сделана (2026-11-05, `server/Analytics.luau`) |
 | 8 | A/B-тест 2–3 иконок опыта по CTR перед первой рекламой | producer | 4 (приток) | 1 | 1 | art-director, владелец | новая |
 | 9 | Кросс-промо портал между своими играми (плейбук) в лобби | producer | 3 (приток) | 1 | 1 | track-architect | новая |

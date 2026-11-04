@@ -16,6 +16,7 @@ local DEFAULT = {
 	Gems = 0,
 	FarmWorld = 0, -- 0 = текущий мир; N = фарм пройденного мира N
 	Receipts = {}, -- ID обработанных покупок Robux (защита от повторной выдачи)
+	Stats = { Runs = 0, Finishes = 0, Onboard = 0, Purchases = 0, Playtime = 0 }, -- счётчики для аналитики (docs/METRICS.md)
 	Settings = { Sfx = true, Music = true, Snow = true, Shadows = true },
 	Sled = "tube", -- модель саней
 	SledRarity = 1,

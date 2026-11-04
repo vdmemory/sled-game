@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Data = require(script.Parent.DataService)
+local Analytics = require(script.Parent.Analytics)
 
 local Rewards = {}
 
@@ -115,12 +116,15 @@ function Rewards.add(player: Player, id: string, n: number?)
 	return done
 end
 
-local function grant(player: Player, d, coins: number?, gems: number?)
+local function grant(player: Player, d, coins: number?, gems: number?, what: string?)
 	if coins then
-		d.Coins += Config.rewardCoins(coins, d.Level)
+		local n = Config.rewardCoins(coins, d.Level)
+		d.Coins += n
+		Analytics.economy(player, "Source", "Coins", n, d.Coins, Enum.AnalyticsEconomyTransactionType.Reward.Name, what or "Reward")
 	end
 	if gems then
 		d.Gems += gems
+		Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.Reward.Name, what or "Reward")
 	end
 end
 
@@ -142,7 +146,7 @@ function Rewards.claimTask(player: Player, index: number): (boolean, any)
 		return false, "Ещё не выполнено"
 	end
 	d.Daily.claimed[tostring(index)] = true
-	grant(player, d, nil, t.gems)
+	grant(player, d, nil, t.gems, "Task")
 	Rewards.sync(player)
 	return true, "+" .. t.gems .. " 💎"
 end
@@ -162,7 +166,7 @@ function Rewards.claimTaskChest(player: Player): (boolean, any)
 		end
 	end
 	d.Daily.chest = true
-	grant(player, d, Config.TASK_CHEST_COINS, Config.TASK_CHEST_GEMS)
+	grant(player, d, Config.TASK_CHEST_COINS, Config.TASK_CHEST_GEMS, "TaskChest")
 	Rewards.sync(player)
 	return true, "+" .. Config.rewardCoins(Config.TASK_CHEST_COINS, d.Level) .. " 💰  +" .. Config.TASK_CHEST_GEMS .. " 💎"
 end
@@ -181,7 +185,7 @@ function Rewards.claimGift(player: Player, index: number): (boolean, any)
 		return false, "Ещё рано"
 	end
 	d.GiftsClaimed[tostring(index)] = true
-	grant(player, d, g.coins, g.gems)
+	grant(player, d, g.coins, g.gems, "Gift")
 	Rewards.add(player, "gifts")
 	local parts = {}
 	if g.coins then
@@ -203,7 +207,7 @@ function Rewards.openChest(player: Player): (boolean, any)
 		return false, "Сундук ещё закрыт"
 	end
 	d.ChestAt = os.time() + Config.CHEST_INTERVAL
-	grant(player, d, Config.CHEST_COINS, Config.CHEST_GEMS)
+	grant(player, d, Config.CHEST_COINS, Config.CHEST_GEMS, "LobbyChest")
 	Rewards.add(player, "chest")
 	return true, "+" .. Config.rewardCoins(Config.CHEST_COINS, d.Level) .. " 💰  +" .. Config.CHEST_GEMS .. " 💎"
 end

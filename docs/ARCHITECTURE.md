@@ -22,7 +22,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | Папка | Куда в игре | Что там |
 | --- | --- | --- |
 | `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
-| `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `Track` (генерация трассы и лобби), `Props` (low-poly модели), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
+| `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `Track` (генерация трассы и лобби), `Props` (low-poly модели), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
 | `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (свет миров, частицы, пламя ракеты), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира) |
 
 ## Как устроен заезд
@@ -92,6 +92,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LaunchLevel`, `SledLevel`, `IncomeLevel`, `RocketLevel`,
 `Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings` (`Sfx`, `Snow`, `Shadows`,
-`Music`), `Daily` (задания дня), `ChestAt`, `FarmWorld`, `Receipts` (дедуп покупок). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
+`Music`), `Daily` (задания дня), `ChestAt`, `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
+Onboard, Purchases, Playtime — для аналитики). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
 Если загрузка не удалась, сохранение для игрока отключается (чтобы не затереть прогресс).
 Доска лидеров — `OrderedDataStore` `BestLevel_v1`.
