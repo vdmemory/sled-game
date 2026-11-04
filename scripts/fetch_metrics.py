@@ -66,10 +66,17 @@ def query(metric, start, end):
     if code not in (200, 202):
         raise RuntimeError(f"{metric}: HTTP {code} {j.get('error', j)}")
     for _ in range(30):
-        if j.get("done"):
+        if j.get("done") or "response" in j:  # маленькие запросы приходят сразу, иногда без done
             break
+        path = j.get("path") or j.get("operationPath") or j.get("name")
+        if not path:
+            raise RuntimeError(f"{metric}: неожиданный ответ без path: {json.dumps(j)[:200]}")
         time.sleep(2)
-        code, j = http("GET", f"https://apis.roblox.com/{j['path'].lstrip('/')}")
+        code, j = http("GET", f"https://apis.roblox.com/{str(path).lstrip('/')}")
+        if code != 200:
+            raise RuntimeError(f"{metric}: опрос операции HTTP {code} {j.get('error', j)}")
+    if j.get("error"):
+        raise RuntimeError(f"{metric}: {json.dumps(j['error'])[:200]}")
     out = {}
     for series in (j.get("response") or {}).get("values", []):
         for p in series.get("dataPoints", []):
