@@ -248,18 +248,6 @@ function UI.panel(parent: Instance, title: string, w: number, h: number, z: numb
 	UI.grad(ribbon, Color3.fromRGB(85, 160, 250), UI.C.ribbon)
 	UI.corner(ribbon, 12)
 	UI.stroke(ribbon, 3)
-	for _, side in { -1, 1 } do -- «хвостики» ленты
-		local tail = UI.new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(if side < 0 then 0 else 1, side * 10, 0.5, 8),
-			Size = UDim2.fromOffset(30, 34),
-			BackgroundColor3 = Color3.fromRGB(35, 90, 180),
-			ZIndex = zi + 2,
-			Parent = ribbon,
-		})
-		UI.corner(tail, 6)
-		UI.stroke(tail, 3)
-	end
 	local titleLabel = UI.text({
 		Text = title,
 		Position = UDim2.new(0, 14, 0, 7),

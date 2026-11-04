@@ -32,6 +32,35 @@ local function panel(title: string, w: number, h: number): (Frame, Frame, TextLa
 	table.insert(panels, p)
 	return p, body, t
 end
+-- Прокручиваемая область внутри окна: всё содержимое обрезается рамкой окна,
+-- внутренний отступ не даёт обводкам и значкам карточек упираться в край
+local function scroller(body: GuiObject, horizontal: boolean?, top: number?): ScrollingFrame
+	local sf = UI.new("ScrollingFrame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, top or 0),
+		Size = UDim2.new(1, 0, 1, -(top or 0)),
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = if horizontal then Enum.AutomaticSize.X else Enum.AutomaticSize.Y,
+		ScrollingDirection = if horizontal then Enum.ScrollingDirection.X else Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 6,
+		ScrollBarImageColor3 = Color3.fromRGB(90, 130, 190),
+		ZIndex = 32,
+		Parent = body,
+	})
+	local pad = UI.pad(sf, 12)
+	pad.PaddingTop = UDim.new(0, 14) -- место под круглые номера/значки у верхнего края карточек
+	return sf
+end
+local function grid(parent: Instance, w: number, h: number): UIGridLayout
+	local g = Instance.new("UIGridLayout")
+	g.CellSize = UDim2.fromOffset(w, h)
+	g.CellPadding = UDim2.fromOffset(12, 12)
+	g.SortOrder = Enum.SortOrder.LayoutOrder
+	g.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	g.Parent = parent
+	return g
+end
+
 local function open(p: GuiObject)
 	local was = p.Visible
 	closeAll()
@@ -174,17 +203,7 @@ end)
 
 ------------------------------------------------------------------ Миры
 local worldsWin, worldsBody = panel("МИРЫ", 720, 400)
-local worldsList = UI.new("ScrollingFrame", {
-	BackgroundTransparency = 1,
-	Position = UDim2.fromOffset(0, 20),
-	Size = UDim2.new(1, 0, 1, -20),
-	ScrollingDirection = Enum.ScrollingDirection.X,
-	AutomaticCanvasSize = Enum.AutomaticSize.X,
-	CanvasSize = UDim2.new(),
-	ScrollBarThickness = 6,
-	ZIndex = 32,
-	Parent = worldsBody,
-})
+local worldsList = scroller(worldsBody, true, 6)
 local wl = Instance.new("UIListLayout")
 wl.FillDirection = Enum.FillDirection.Horizontal
 wl.Padding = UDim.new(0, 14)
@@ -201,7 +220,7 @@ local function drawWorlds()
 	local per = Config.LEVELS_PER_WORLD
 	for w = 1, math.max(current + 1, 4) do
 		local theme = Config.themeOfWorld(w)
-		local card = UI.new("Frame", { Size = UDim2.new(0, 200, 1, -14), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = worldsList })
+		local card = UI.new("Frame", { Size = UDim2.new(0, 200, 1, -6), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = worldsList })
 		UI.corner(card, 16)
 		UI.stroke(card, 3)
 		local pic = UI.new("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 130), BackgroundTransparency = 0, ZIndex = 34, Parent = card })
@@ -350,17 +369,13 @@ tasksBtn.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Подарки за время в игре
-local giftsWin, giftsBody = panel("ПОДАРКИ", 600, 470)
-local giftGrid = Instance.new("UIGridLayout")
-giftGrid.CellSize = UDim2.fromOffset(128, 112)
-giftGrid.CellPadding = UDim2.fromOffset(12, 12)
-giftGrid.SortOrder = Enum.SortOrder.LayoutOrder
-giftGrid.Parent = giftsBody
-UI.pad(giftsBody, 14)
+local giftsWin, giftsBody = panel("ПОДАРКИ", 640, 470)
+local giftsArea = scroller(giftsBody, false, 6)
+grid(giftsArea, 128, 112)
 type GiftCell = { status: TextButton, reward: TextLabel }
 local giftCells: { GiftCell } = {}
 for i, g in Config.PLAYTIME_GIFTS do
-	local cell = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = giftsBody })
+	local cell = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = giftsArea })
 	UI.corner(cell, 14)
 	UI.stroke(cell, 2.5, Color3.fromRGB(120, 170, 225))
 	local reward = UI.ink({ Text = "", Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 52), ZIndex = 34, Parent = cell })
@@ -375,15 +390,15 @@ giftBtn.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Сани: модели × редкости
-local sledWin, sledBody = panel("САНИ", 840, 520)
-local sledList = UI.new("ScrollingFrame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 20), Size = UDim2.new(1, 0, 1, -20), AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), ScrollBarThickness = 6, ZIndex = 32, Parent = sledBody })
+local sledWin, sledBody = panel("САНИ", 880, 520)
+local sledList = scroller(sledBody, false, 6)
 local sl = Instance.new("UIListLayout")
 sl.Padding = UDim.new(0, 12)
 sl.Parent = sledList
 type Cell = { status: TextButton, model: any, rarity: number }
 local sledCells: { Cell } = {}
 for mi, model in Config.SLEDS do
-	local row = UI.new("Frame", { LayoutOrder = mi, Size = UDim2.new(1, -12, 0, 156), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = sledList })
+	local row = UI.new("Frame", { LayoutOrder = mi, Size = UDim2.new(1, -8, 0, 156), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = sledList })
 	UI.corner(row, 16)
 	UI.stroke(row, 2.5, Color3.fromRGB(120, 170, 225))
 	local head = UI.new("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.new(0, 150, 1, -16), BackgroundTransparency = 0, ZIndex = 34, Parent = row })
@@ -446,13 +461,9 @@ sledsBtn.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Следы
-local trailWin, trailBody = panel("СЛЕДЫ", 660, 500)
-local trailGrid = Instance.new("UIGridLayout")
-trailGrid.CellSize = UDim2.fromOffset(142, 186)
-trailGrid.CellPadding = UDim2.fromOffset(12, 12)
-trailGrid.SortOrder = Enum.SortOrder.LayoutOrder
-trailGrid.Parent = trailBody
-UI.pad(trailBody, 14)
+local trailWin, trailBody = panel("СЛЕДЫ", 700, 500)
+local trailArea = scroller(trailBody, false, 6)
+grid(trailArea, 142, 176)
 local trailCells: { [string]: TextButton } = {}
 local RAINBOW = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 70)),
@@ -461,7 +472,7 @@ local RAINBOW = ColorSequence.new({
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 90, 255)),
 })
 for i, t in Config.TRAILS do
-	local card = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = trailBody })
+	local card = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = trailArea })
 	UI.corner(card, 14)
 	UI.stroke(card, 2.5, Color3.fromRGB(120, 170, 225))
 	local ribbon = UI.new("Frame", { Position = UDim2.fromOffset(14, 16), Size = UDim2.new(1, -28, 0, 46), BackgroundColor3 = t.color, BackgroundTransparency = 0, ZIndex = 34, Parent = card })
@@ -506,15 +517,12 @@ trailsBtn.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Цвета ватрушки
-local colorWin, colorBody = panel("ЦВЕТА ВАТРУШКИ", 640, 440)
-local colorGrid = Instance.new("UIGridLayout")
-colorGrid.CellSize = UDim2.fromOffset(136, 160)
-colorGrid.CellPadding = UDim2.fromOffset(12, 12)
-colorGrid.Parent = colorBody
-UI.pad(colorBody, 14)
+local colorWin, colorBody = panel("ЦВЕТА ВАТРУШКИ", 680, 460)
+local colorArea = scroller(colorBody, false, 6)
+grid(colorArea, 136, 160)
 local colorCells: { [string]: TextButton } = {}
 for _, skin in Config.SKINS do
-	local card = UI.new("Frame", { BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = colorBody })
+	local card = UI.new("Frame", { BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = colorArea })
 	UI.corner(card, 14)
 	UI.stroke(card, 2.5, Color3.fromRGB(120, 170, 225))
 	local disc = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Size = UDim2.fromOffset(62, 62), BackgroundColor3 = skin.tube, BackgroundTransparency = 0, ZIndex = 34, Parent = card })
