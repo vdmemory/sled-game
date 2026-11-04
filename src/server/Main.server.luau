@@ -112,7 +112,7 @@ local function syncPlayer(player: Player)
 	end
 	player:SetAttribute("ThemeName", Config.worldName(Config.worldOf(d.Level)))
 	-- фарм: пройденный мир, в котором сейчас катаемся (0 — текущий)
-	if (d.FarmWorld or 0) >= Config.worldOf(d.Level) then
+	if (d.FarmWorld or 0) >= Config.worldOf(d.Level) and player.UserId ~= game.CreatorId then
 		d.FarmWorld = 0
 	end
 	player:SetAttribute("FarmWorld", d.FarmWorld or 0)
@@ -436,7 +436,8 @@ startRun = function(player: Player)
 
 	-- Какой уровень едем: текущий или (фарм) последний уровень пройденного мира
 	local farmWorld = d.FarmWorld or 0
-	local farm = farmWorld > 0 and farmWorld < Config.worldOf(d.Level)
+	-- владелец игры может «фармить» и ещё не открытые миры — для проверки новых миров
+	local farm = farmWorld > 0 and (farmWorld < Config.worldOf(d.Level) or player.UserId == game.CreatorId)
 	local level = if farm then Config.farmLevel(farmWorld) else d.Level
 	local slot = takeSlot(player)
 	local track = Track.new(slot, level, if farm then 0 else d.LevelBest / 100 * Config.levelLength(d.Level))
@@ -821,7 +822,8 @@ WorldAction.OnServerInvoke = function(player, action, arg)
 	end
 	local current = Config.worldOf(d.Level)
 	if action == "farm" then
-		if typeof(arg) ~= "number" or arg % 1 ~= 0 or arg < 0 or arg >= current then
+		local owner = player.UserId == game.CreatorId
+		if typeof(arg) ~= "number" or arg % 1 ~= 0 or arg < 0 or (arg >= current and not owner) or arg > 99 then
 			return false, "Мир ещё не пройден"
 		end
 		d.FarmWorld = arg

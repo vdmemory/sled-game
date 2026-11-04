@@ -257,6 +257,13 @@ local function drawWorlds()
 			else
 				kind, text, action, arg = "yellow", "▶ ФАРМИТЬ", "farm", w
 			end
+		elseif player.UserId == game.CreatorId then
+			-- владелец игры: проверить любой мир без прохождения
+			if farm == w then
+				kind, text = "green", "✔ ТЕСТ ЗДЕСЬ"
+			else
+				kind, text, action, arg = "blue", "▶ ТЕСТ МИРА", "farm", w
+			end
 		elseif w == current + 1 then
 			kind, text, action = "purple", "ПРОПУСК R$" .. Config.PRODUCTS.SkipWorld.price, "skip"
 		else
