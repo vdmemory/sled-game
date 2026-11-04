@@ -137,7 +137,7 @@ local function buttonRow(buttons: { any })
 	rl.Padding = UDim.new(0, 8)
 	rl.Parent = row
 	for _, b in buttons do
-		local btn = UI.button(b[1], b[2], { Size = UDim2.fromOffset(math.max(110, #b[2] * 9), 40), Radius = 10, StrokeThickness = 2, ZIndex = 53, Parent = row })
+		local btn = UI.button(b[1], b[2], { Size = UDim2.fromOffset(math.max(100, (utf8.len(b[2]) or 8) * 13 + 24), 40), Radius = 10, StrokeThickness = 2, ZIndex = 53, Parent = row })
 		btn.Activated:Connect(b[3])
 	end
 	return row
@@ -265,8 +265,8 @@ tabs["Сани"] = function()
 			tabs.redraw()
 		end })
 	end
-	for i = 1, #rowModels, 5 do
-		buttonRow({ table.unpack(rowModels, i, math.min(i + 4, #rowModels)) })
+	for i = 1, #rowModels, 4 do
+		buttonRow({ table.unpack(rowModels, i, math.min(i + 3, #rowModels)) })
 	end
 	local rowR = {}
 	for r, rar in Config.RARITIES do
