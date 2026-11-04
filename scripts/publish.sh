@@ -13,6 +13,21 @@ ATTEMPTS="${ATTEMPTS:-6}"
 
 [ -f "$FILE" ] || { echo "Нет файла $FILE"; exit 1; }
 
+# Иконки интерфейса: новые PNG из assets/ui загружаются в Roblox (нужны права ключа на
+# Assets API). Если появились новые ID — пересобираем место, чтобы они попали в игру.
+# ID печатаются в лог деплоя; их сохраняют в репозиторий (assets/ui/decals.json).
+if [ -f scripts/upload_ui_assets.py ] && [ -z "${SKIP_UI_ASSETS:-}" ]; then
+  BEFORE=$(cat src/shared/UIDecals.luau 2>/dev/null || true)
+  python3 scripts/upload_ui_assets.py || echo "::warning::загрузка иконок не удалась"
+  if [ "$BEFORE" != "$(cat src/shared/UIDecals.luau 2>/dev/null || true)" ]; then
+    ROJO="$(find "${RUNNER_TEMP:-/tmp}" -type f -name rojo 2>/dev/null | head -n 1)"
+    if [ -n "$ROJO" ]; then
+      "$ROJO" build default.project.json -o "$FILE" && echo "Пересобрано с новыми иконками"
+    fi
+    echo "UI_DECALS_JSON_BEGIN"; cat assets/ui/decals.json; echo "UI_DECALS_JSON_END"
+  fi
+fi
+
 URL="https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=${VERSION_TYPE}"
 
 for attempt in $(seq 1 "$ATTEMPTS"); do
