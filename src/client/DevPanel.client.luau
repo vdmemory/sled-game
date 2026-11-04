@@ -166,7 +166,7 @@ local function preview(parent: Instance, build: (Model) -> ()): ViewportFrame
 	vcam.Parent = vp
 	vp.CurrentCamera = vcam
 	local cf, size = m:GetBoundingBox()
-	table.insert(spinning, { cam = vcam, center = cf.Position, dist = size.Magnitude * 0.95 + 1.5, vp = vp })
+	table.insert(spinning, { cam = vcam, center = cf.Position, dist = size.Magnitude * 0.72 + 1, vp = vp })
 	return vp
 end
 RunService.RenderStepped:Connect(function()
