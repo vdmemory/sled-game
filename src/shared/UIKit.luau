@@ -515,12 +515,9 @@ function UI.icon(name: string, props: { [string]: any }): Frame
 	local f = UI.new("Frame", props)
 	f.BackgroundTransparency = 1
 	local z = f.ZIndex
-	local fallback: GuiObject
-	if name == "coin" then
-		fallback = UI.coin(f, { Name = "Fallback", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.86, 0.86), ZIndex = z })
-	else
-		fallback = UI.new("TextLabel", { Name = "Fallback", Text = UI.EMOJI[name] or "", Size = UDim2.fromScale(1, 1), ZIndex = z, Parent = f })
-	end
+	-- заглушки: нарисованная монета для "coin", эмодзи для остального (иконку можно менять на лету)
+	local drawnCoin = UI.coin(f, { Name = "FallbackCoin", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.86, 0.86), ZIndex = z })
+	local emoji = UI.new("TextLabel", { Name = "Fallback", Text = "", Size = UDim2.fromScale(1, 1), ZIndex = z, Parent = f })
 	local img = UI.new("ImageLabel", { Name = "Image", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ScaleType = Enum.ScaleType.Fit, Visible = false, ZIndex = z, Parent = f })
 	f:SetAttribute("Icon", name)
 	local function apply()
@@ -536,10 +533,9 @@ function UI.icon(name: string, props: { [string]: any }): Frame
 		-- показываем картинку только когда она реально загрузилась
 		local ready = img.Image ~= "" and img.IsLoaded
 		img.Visible = ready
-		fallback.Visible = not ready
-		if fallback:IsA("TextLabel") then
-			fallback.Text = UI.EMOJI[n] or ""
-		end
+		drawnCoin.Visible = not ready and n == "coin"
+		emoji.Visible = not ready and n ~= "coin"
+		emoji.Text = UI.EMOJI[n] or ""
 	end
 	img:GetPropertyChangedSignal("IsLoaded"):Connect(apply)
 	f:GetAttributeChangedSignal("Icon"):Connect(apply)
