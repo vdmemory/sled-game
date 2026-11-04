@@ -437,7 +437,14 @@ tabs["Настройка"] = function()
 			tabs.redraw()
 		end },
 	})
-	note("Изменено параметров: " .. changed)
+	local counter = note("Изменено параметров: " .. changed)
+	local function recount()
+		local n = 0
+		for _ in p do
+			n += 1
+		end
+		counter.Text = "Изменено параметров: " .. n .. (if n > 0 then " — не забудь сохранить" else "")
+	end
 	local group = ""
 	for _, tn in Config.TUNABLES do
 		local path, label, grp, lo, hi, step = tn[1], tn[2], tn[3], tn[4], tn[5], tn[6]
@@ -462,6 +469,7 @@ tabs["Настройка"] = function()
 			end
 			box.Text = fmt(nv, step)
 			row.BackgroundColor3 = if p[path] then Color3.fromRGB(90, 80, 40) else Color3.fromRGB(42, 56, 90)
+			recount()
 		end
 		box.FocusLost:Connect(function()
 			local nv = tonumber((string.gsub(box.Text, ",", ".")))
