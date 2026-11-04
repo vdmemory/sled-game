@@ -13,7 +13,8 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 | Про что запрос | Агент | Его файлы |
 | --- | --- | --- |
 | Трассы, треки, участки, повороты, обрывы, дороги/трафик, миры как ландшафт, лобби как место; препятствия — виды, правила и логика размещения, плотность, сложность по уровням, расстановка бонусов | `track-architect` | `server/Track.luau`, `server/Props.luau`, `Config` (раздел ТРАССА, THEMES) |
-| Правила игры, прогрессия, экономика, цены, апгрейды и тиры, бонусы и их шансы, задания, подарки, сундуки, монетизация, баланс, «как должно работать» | `game-designer` | `Config.luau` (баланс), `server/Rewards.luau`, `server/DataService.luau`, `server/Main.server.luau` (правила), `docs/GAME_DESIGN.md` |
+| Деньги и направление: монетизация (что/почём/когда продавать), доход и прогноз, KPI (retention, сессия, конверсия, ARPDAU, Creator Rewards), приоритеты роадмапа по выручке, привлечение игроков (иконка, реклама, Discovery), риски платформы, «стоит ли» | `producer` | `docs/BUSINESS.md`, цифры Creator Hub Analytics (присылает владелец), `Config.PRODUCTS`/геймпассы через `game-designer` |
+| Правила игры, прогрессия, внутриигровая экономика (монеты/гемы), цены апгрейдов и тиры, бонусы и их шансы, задания, подарки, сундуки, баланс, «как должно работать»; вписывает в код Robux-товары по ТЗ продюсера | `game-designer` | `Config.luau` (баланс), `server/Rewards.luau`, `server/DataService.luau`, `server/Main.server.luau` (правила), `docs/GAME_DESIGN.md` |
 | Средства передвижения детально: геометрия, посадка, точки крепления, обвес по тирам, ракеты/моторы, рогатка/катапульта, новый транспорт | `vehicle-engineer` | `shared/SledModels.luau`, `Config.SLEDS/TIERS`, `Main.makeSled` |
 | Внешний вид: стиль и цвета моделей, пропсы, UI/UX (окна, HUD, кнопки, иконки), эффекты, свет, пейзаж, анимации, звук | `art-director` | `server/Props.luau` (вид), `shared/UIKit.luau`, `client/HUD`, `client/LobbyMenus`, `client/Effects`, `client/Reveal`, `client/Sounds`, `assets/ui` |
 | Идеи: «что дальше», «чего не хватает», «что у конкурентов», новые механики/миры/события, анализ игроков и отзывов, тренды Roblox | `idea-scout` | интернет, Creator Hub Analytics (цифры присылает владелец), `docs/IDEAS.md` |
@@ -32,6 +33,8 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 - «Добавь препятствия в каньон» → `track-architect` (карточка препятствия: роль, класс,
   читаемость, размещение, прогрессия) + `art-director` (вид) → `qa-tester` (плотность, попытки).
 - «Хочу такую же игру на воде» → `docs/PLAYBOOK.md`, затем агенты по разделам плейбука.
+- «Как заработать / что продавать / стоит ли делать X / что дальше по деньгам» → `producer`
+  (воронка, цифры, ставка) → `game-designer` (вписать) → `art-director` (окно предложения).
 
 Каждый агент заканчивает отчёт разделом «Идеи» (1–3 улучшения своей области с оценкой
 польза/цена/риск) и пишет их в `docs/IDEAS.md`; реализуются только после согласия владельца.
@@ -44,7 +47,8 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 - **Документация с каждым изменением:** `docs/CHANGELOG.md` всегда; `docs/GAME_DESIGN.md` при
   смене правил/механик; `docs/ARCHITECTURE.md` при смене устройства (модули, ремоуты, данные);
   `docs/PLAYBOOK.md` если меняется то, что нужно знать при создании похожей игры;
-  `docs/IDEAS.md` — статус идеи при принятии/реализации/отклонении.
+  `docs/IDEAS.md` — статус идеи при принятии/реализации/отклонении; `docs/BUSINESS.md` — при
+  изменении цен, товаров, предложений и при получении новых цифр.
 - **Все числа — в `src/shared/Config.luau`**, не в коде модулей. Новый параметр баланса сразу
   добавляется в `Config.TUNABLES` (панель владельца «Настройка»).
 - **Синтаксис перед пушем:** `luau-compile --null <файл>` (или `luau-analyze`) для каждого
@@ -69,6 +73,6 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 | `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика и ввод), `HUD`, `LobbyMenus`, `DevPanel` (владелец), `Effects`, `Sounds`, `Traffic`, `Reveal`, `ConfigSync` |
 | `assets/ui` | Decal-ы в Roblox | 50 иконок Fluent Emoji 3D (MIT), `decals.json` |
 | `scripts` | CI | `publish.sh` (сборка, загрузка иконок, публикация), `upload_ui_assets.py` |
-| `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `CHANGELOG` |
+| `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `BUSINESS` (монетизация, KPI, гипотезы), `CHANGELOG` |
 
 Подробности: `docs/ARCHITECTURE.md`. Как собрать такую же игру на воде или суше: `docs/PLAYBOOK.md`.
