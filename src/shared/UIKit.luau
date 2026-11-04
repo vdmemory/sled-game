@@ -498,10 +498,40 @@ UI.EMOJI = {
 }
 local imagesFolder: Folder? = nil
 local waiting: { () -> () } = {}
+-- Загрузку проверяем через ContentProvider (свойство IsLoaded у невидимых картинок не меняется)
+local loaded: { [string]: boolean } = {}
+local function preloadAll(f: Instance)
+	local ids = {}
+	for k, v in f:GetAttributes() do
+		if string.sub(k, 1, 1) ~= "_" and typeof(v) == "string" and loaded[v] == nil then
+			loaded[v] = false
+			table.insert(ids, v)
+		end
+	end
+	if #ids == 0 then
+		return
+	end
+	task.spawn(function()
+		pcall(function()
+			game:GetService("ContentProvider"):PreloadAsync(ids, function(id, status)
+				if status == Enum.AssetFetchStatus.Success then
+					loaded[id] = true
+				end
+			end)
+		end)
+		for _, fn in waiting do
+			fn()
+		end
+	end)
+end
 task.spawn(function()
 	local f = ReplicatedStorage:WaitForChild("UIImages", 60)
 	if f then
 		imagesFolder = f :: Folder
+		preloadAll(f)
+		f.AttributeChanged:Connect(function()
+			preloadAll(f)
+		end)
 		task.delay(20, function()
 			local n = 0
 			for k in f:GetAttributes() do
@@ -509,13 +539,13 @@ task.spawn(function()
 					n += 1
 				end
 			end
-			local id = f:GetAttribute("coin")
-			local probe = Instance.new("ImageLabel")
-			probe.Image = id or ""
-			local okLoad = pcall(function()
-				game:GetService("ContentProvider"):PreloadAsync({ probe })
-			end)
-			print("[UIImages] картинок:", n, "ошибка:", f:GetAttribute("_err"), "coin:", id, "preload:", okLoad, "loaded:", probe.IsLoaded)
+			local ok = 0
+			for _, v in loaded do
+				if v then
+					ok += 1
+				end
+			end
+			print("[UIImages] картинок:", n, "загружено:", ok, "ошибка:", f:GetAttribute("_err"))
 		end)
 		for _, fn in waiting do
 			fn()
@@ -549,19 +579,8 @@ function UI.icon(name: string, props: { [string]: any }): Frame
 			img.Image = ""
 		end
 		-- показываем картинку только когда она реально загрузилась
-		-- скрытая (Visible = false) картинка не грузится вовсе, поэтому прячем прозрачностью
-		local ready = img.Image ~= "" and img.IsLoaded
+		local ready = img.Image ~= "" and (loaded[img.Image] == true or img.IsLoaded)
 		img.ImageTransparency = if ready then 0 else 1
-		if img.Image ~= "" and not ready and not f:GetAttribute("Recheck") then
-			-- IsLoaded меняется без сигнала у некоторых клиентов — перепроверяем по таймеру
-			f:SetAttribute("Recheck", true)
-			task.delay(2, function()
-				f:SetAttribute("Recheck", nil)
-				if f.Parent then
-					apply()
-				end
-			end)
-		end
 		drawnCoin.Visible = not ready and n == "coin"
 		emoji.Visible = not ready and n ~= "coin"
 		emoji.Text = UI.EMOJI[n] or ""
