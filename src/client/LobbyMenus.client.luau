@@ -155,7 +155,7 @@ local chestPill = UI.new("TextButton", {
 	AutoButtonColor = false,
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 130),
-	Size = UDim2.fromOffset(200, 50),
+	Size = UDim2.fromOffset(230, 50),
 	BackgroundTransparency = 0,
 	Parent = lobby,
 })
@@ -163,10 +163,15 @@ UI.grad(chestPill, Color3.fromRGB(255, 225, 80), Color3.fromRGB(245, 175, 30))
 UI.corner(chestPill, 1000)
 UI.stroke(chestPill, 3)
 UI.bounce(chestPill)
-UI.text({ Text = "🧰", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 6, 0.5, -4), Size = UDim2.fromOffset(64, 64), Outline = 0, ZIndex = 3, Parent = chestPill })
-local chestInner = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(1, -60, 1, -14), BackgroundColor3 = C.navy, BackgroundTransparency = 0.1, ZIndex = 2, Parent = chestPill })
+-- нарисованный сундук вылезает за левый край плашки (как в оригинале)
+UI.chest(chestPill, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 14, 0.5, -6), Size = UDim2.fromOffset(78, 70), ZIndex = 4 })
+local chestShine = UI.new("Frame", { Position = UDim2.new(0, 40, 0, 4), Size = UDim2.new(1, -60, 0, 5), BackgroundColor3 = C.white, BackgroundTransparency = 0.5, ZIndex = 2, Parent = chestPill })
+UI.corner(chestShine, 1000)
+local chestInner = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(1, -66, 1, -14), BackgroundColor3 = C.navy, BackgroundTransparency = 0.05, ZIndex = 2, Parent = chestPill })
 UI.corner(chestInner, 1000)
-local chestText = UI.text({ Text = "", Position = UDim2.fromOffset(8, 3), Size = UDim2.new(1, -16, 1, -6), ZIndex = 3, Parent = chestInner })
+-- монетка слева в тёмной капсуле таймера
+UI.coin(chestInner, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(28, 28), ZIndex = 3 })
+local chestText = UI.text({ Text = "", Position = UDim2.fromOffset(34, 3), Size = UDim2.new(1, -40, 1, -6), ZIndex = 3, Parent = chestInner })
 
 ------------------------------------------------------------------ награды (состояние с сервера)
 local rewards: any = nil

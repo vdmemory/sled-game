@@ -289,38 +289,121 @@ function UI.progress(parent: Instance, props: { [string]: any }): (Frame, (numbe
 end
 
 -- Плашка валюты: тёмно-синяя, иконка-кружок вылезает слева
+-- Нарисованная монета: золотой круг с ободком, внутренним кольцом и звездой
+function UI.coin(parent: Instance, props: { [string]: any }): Frame
+	local c = UI.new("Frame", props)
+	c.BackgroundTransparency = 0
+	c.Parent = parent
+	UI.grad(c, Color3.fromRGB(255, 230, 90), Color3.fromRGB(240, 160, 20))
+	UI.corner(c, 1000)
+	UI.stroke(c, 2.5, Color3.fromRGB(150, 85, 10))
+	local inner = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.7, 0.7), BackgroundTransparency = 0, ZIndex = c.ZIndex + 1, Parent = c })
+	UI.grad(inner, Color3.fromRGB(250, 195, 40), Color3.fromRGB(255, 225, 95))
+	UI.corner(inner, 1000)
+	UI.stroke(inner, 1.5, Color3.fromRGB(205, 130, 20))
+	UI.new("TextLabel", { Text = "★", TextColor3 = Color3.fromRGB(255, 245, 190), Position = UDim2.fromScale(0.12, 0.08), Size = UDim2.fromScale(0.76, 0.8), ZIndex = c.ZIndex + 2, Parent = inner })
+	-- блик
+	local shine = UI.new("Frame", { Position = UDim2.fromScale(0.2, 0.12), Size = UDim2.fromScale(0.28, 0.16), Rotation = -30, BackgroundColor3 = UI.C.white, BackgroundTransparency = 0.35, ZIndex = c.ZIndex + 3, Parent = c })
+	UI.corner(shine, 1000)
+	return c
+end
+
+-- Нарисованный сундук: деревянный корпус и крышка, металлические полосы и замок
+function UI.chest(parent: Instance, props: { [string]: any }): Frame
+	local box = UI.new("Frame", props)
+	box.BackgroundTransparency = 1
+	box.Parent = parent
+	local z = box.ZIndex
+	local wood1, wood2 = Color3.fromRGB(205, 130, 60), Color3.fromRGB(150, 85, 35)
+	local metal1, metal2 = Color3.fromRGB(225, 230, 240), Color3.fromRGB(140, 150, 170)
+	local ink = Color3.fromRGB(60, 35, 20)
+	-- корпус
+	local body = UI.new("Frame", { Position = UDim2.fromScale(0.04, 0.42), Size = UDim2.fromScale(0.92, 0.54), BackgroundTransparency = 0, ZIndex = z + 1, Parent = box })
+	UI.grad(body, wood1, wood2)
+	UI.corner(body, 6)
+	UI.stroke(body, 2.5, ink)
+	-- крышка (скруглённая сверху)
+	local lid = UI.new("Frame", { Position = UDim2.fromScale(0.04, 0.06), Size = UDim2.fromScale(0.92, 0.42), BackgroundTransparency = 0, ZIndex = z + 2, Parent = box })
+	UI.grad(lid, Color3.fromRGB(225, 150, 75), wood1)
+	local lc = Instance.new("UICorner")
+	lc.CornerRadius = UDim.new(0.45, 0)
+	lc.Parent = lid
+	UI.stroke(lid, 2.5, ink)
+	-- доски крышки
+	local plank = UI.new("Frame", { Position = UDim2.fromScale(0.08, 0.45), Size = UDim2.fromScale(0.84, 0.06), BackgroundColor3 = wood2, BackgroundTransparency = 0.3, ZIndex = z + 3, Parent = lid })
+	local _ = plank
+	-- металлические полосы по краям и окантовка крышки
+	for _, x in { 0.1, 0.78 } do
+		for _, part in { { lid, 0 }, { body, 0 } } do
+			local band = UI.new("Frame", { Position = UDim2.fromScale(x, 0), Size = UDim2.new(0.12, 0, 1, 0), BackgroundTransparency = 0, ZIndex = z + 4, Parent = part[1] })
+			UI.grad(band, metal1, metal2)
+			UI.stroke(band, 1.5, ink)
+		end
+	end
+	local rim = UI.new("Frame", { Position = UDim2.fromScale(0.02, 0.4), Size = UDim2.fromScale(0.96, 0.1), BackgroundTransparency = 0, ZIndex = z + 5, Parent = box })
+	UI.grad(rim, metal1, metal2)
+	UI.corner(rim, 3)
+	UI.stroke(rim, 1.5, ink)
+	-- замок
+	local lock = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.36), Size = UDim2.fromScale(0.2, 0.3), BackgroundTransparency = 0, ZIndex = z + 6, Parent = box })
+	UI.grad(lock, metal1, metal2)
+	UI.corner(lock, 4)
+	UI.stroke(lock, 1.5, ink)
+	local hole = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Size = UDim2.fromScale(0.3, 0.3), BackgroundColor3 = ink, BackgroundTransparency = 0, ZIndex = z + 7, Parent = lock })
+	UI.corner(hole, 1000)
+	return box
+end
+
+-- Плашка валюты как в оригинале: тёмная капсула, крупная иконка вылезает слева,
+-- белое число с обводкой. icon = "coin" рисует монету, иначе — эмодзи.
 function UI.currency(parent: Instance, icon: string, props: { [string]: any }): TextLabel
 	local f = UI.new("Frame", props)
 	f.BackgroundColor3 = UI.C.navy
-	f.BackgroundTransparency = 0.25
+	f.BackgroundTransparency = 0.15
 	UI.corner(f, 1000)
+	UI.stroke(f, 2, Color3.fromRGB(10, 18, 40), 0.3)
 	f.Parent = parent
-	UI.text({ Text = icon, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 4, 0.5, 0), Size = UDim2.fromOffset(46, 46), ZIndex = f.ZIndex + 2, Parent = f })
-	return UI.text({ Text = "0", Position = UDim2.new(0, 30, 0, 6), Size = UDim2.new(1, -40, 1, -12), ZIndex = f.ZIndex + 1, Parent = f })
+	local h = if props.Size and props.Size.Y.Offset > 0 then props.Size.Y.Offset else 38
+	local d = math.floor(h * 1.25)
+	if icon == "coin" then
+		UI.coin(f, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(d, d), ZIndex = f.ZIndex + 2 })
+	else
+		UI.text({ Text = icon, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(d + 4, d + 4), Outline = 0, ZIndex = f.ZIndex + 2, Parent = f })
+	end
+	return UI.text({ Text = "0", Position = UDim2.new(0, d / 2 + 12, 0, 5), Size = UDim2.new(1, -(d / 2 + 22), 1, -10), Outline = 2.5, ZIndex = f.ZIndex + 1, Parent = f })
 end
 
--- Квадратная «ледяная» плитка-иконка (левая/правая колонка лобби)
+-- Плитка меню как в оригинале: голубой квадрат с градиентом, светлой рамкой и бликом
 function UI.tile(parent: Instance, icon: string, props: { [string]: any }): TextButton
 	local b = UI.new("TextButton", props)
 	b.Text = ""
 	b.AutoButtonColor = false
 	b.BackgroundTransparency = 0
-	UI.grad(b, UI.KIND.ice[1], UI.KIND.ice[2])
-	UI.corner(b, 16)
-	UI.stroke(b, 3, Color3.fromRGB(90, 150, 220))
+	UI.grad(b, Color3.fromRGB(205, 238, 255), Color3.fromRGB(140, 200, 245))
+	UI.corner(b, 18)
+	UI.stroke(b, 3.5, Color3.fromRGB(235, 248, 255))
 	b.Parent = parent
-	UI.text({ Name = "Icon", Text = icon, Position = UDim2.fromScale(0.12, 0.1), Size = UDim2.fromScale(0.76, 0.76), ZIndex = b.ZIndex + 1, Parent = b })
+	-- внешняя тёмная окантовка (вторая рамка чуть больше плитки)
+	local edge = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 7, 1, 7), BackgroundTransparency = 1, ZIndex = b.ZIndex, Parent = b })
+	UI.corner(edge, 21)
+	UI.stroke(edge, 2, Color3.fromRGB(70, 120, 185), 0.2)
+	-- блик в верхней половине
+	local shine = UI.new("Frame", { Position = UDim2.fromOffset(6, 5), Size = UDim2.new(1, -12, 0.42, 0), BackgroundColor3 = UI.C.white, BackgroundTransparency = 0.55, ZIndex = b.ZIndex + 1, Parent = b })
+	UI.corner(shine, 14)
+	local sg = Instance.new("UIGradient")
+	sg.Rotation = 90
+	sg.Transparency = NumberSequence.new(0.1, 1)
+	sg.Parent = shine
+	UI.text({ Name = "Icon", Text = icon, Position = UDim2.fromScale(0.1, 0.08), Size = UDim2.fromScale(0.8, 0.8), Outline = 0, ZIndex = b.ZIndex + 2, Parent = b })
 	UI.bounce(b)
 	return b
 end
-
--- Бейдж в углу (NEW, %, !, число)
 function UI.badge(parent: GuiObject, text: string, kind: string?): TextLabel
 	local f = UI.new("TextLabel", {
 		Text = text,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(1, -6, 0, 6),
-		Size = UDim2.fromOffset(if #text > 2 then 54 else 30, 28),
+		Size = UDim2.fromOffset(if #text > 2 then 66 else 32, 30),
 		BackgroundTransparency = 0,
 		ZIndex = parent.ZIndex + 5,
 		Parent = parent,
@@ -328,8 +411,15 @@ function UI.badge(parent: GuiObject, text: string, kind: string?): TextLabel
 	local k = UI.KIND[kind or "red"]
 	UI.grad(f, k[1], k[2])
 	UI.corner(f, 1000)
-	UI.stroke(f, 2, UI.C.white)
+	UI.stroke(f, 2.5, UI.C.white).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	UI.outline(f, 1.5)
+	-- текст с запасом внутри плашки: обводка букв не вылезает за край
+	local p = Instance.new("UIPadding")
+	p.PaddingLeft = UDim.new(0, 8)
+	p.PaddingRight = UDim.new(0, 8)
+	p.PaddingTop = UDim.new(0, 5)
+	p.PaddingBottom = UDim.new(0, 5)
+	p.Parent = f
 	return f
 end
 

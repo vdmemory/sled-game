@@ -57,7 +57,7 @@ local currencyRow = UI.new("Frame", {
 	Size = UDim2.fromOffset(330, 40),
 	Parent = root,
 })
-local coinsLabel = UI.currency(currencyRow, "💰", { Position = UDim2.fromOffset(20, 0), Size = UDim2.fromOffset(140, 40) })
+local coinsLabel = UI.currency(currencyRow, "coin", { Position = UDim2.fromOffset(20, 0), Size = UDim2.fromOffset(140, 40) })
 local gemsLabel = UI.currency(currencyRow, "💎", { Position = UDim2.fromOffset(190, 0), Size = UDim2.fromOffset(140, 40) })
 
 -- «УРОВЕНЬ N» + мир
@@ -147,15 +147,19 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	local pips = {}
 	if not compact then
 		for i = 1, Config.TIER_SIZE do
+			-- деление тира: скруглённый квадратик с тёмной окантовкой и бликом (как в оригинале)
 			local pip = UI.new("Frame", {
-				Position = UDim2.new((i - 1) / Config.TIER_SIZE, 10 - (i - 1) * 20 / Config.TIER_SIZE, 0, artTop + artH + 8),
-				Size = UDim2.new(1 / Config.TIER_SIZE, -4, 0, 14),
+				Position = UDim2.new((i - 1) / Config.TIER_SIZE, 9 - (i - 1) * 18 / Config.TIER_SIZE, 0, artTop + artH + 6),
+				Size = UDim2.new(1 / Config.TIER_SIZE, -5, 0, 20),
 				BackgroundColor3 = st.pip,
 				BackgroundTransparency = 0,
 				ZIndex = 2,
 				Parent = card,
 			})
-			UI.corner(pip, 3)
+			UI.corner(pip, 5)
+			UI.stroke(pip, 1.5, Color3.fromRGB(15, 22, 45), 0.2)
+			local hl = UI.new("Frame", { Position = UDim2.new(0, 3, 0, 2), Size = UDim2.new(1, -6, 0, 5), BackgroundColor3 = C.white, BackgroundTransparency = 0.6, ZIndex = 3, Parent = pip })
+			UI.corner(hl, 3)
 			pips[i] = pip
 		end
 	end
@@ -166,6 +170,8 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	g.Name = "Fill"
 	UI.corner(priceBtn, 10)
 	UI.stroke(priceBtn, 2)
+	local btnShine = UI.new("Frame", { Position = UDim2.new(0, 6, 0, 3), Size = UDim2.new(1, -12, 0, 4), BackgroundColor3 = C.white, BackgroundTransparency = 0.6, ZIndex = 3, Parent = priceBtn })
+	UI.corner(btnShine, 1000)
 	UI.text({ Text = "УЛУЧШИТЬ", Position = UDim2.new(0, 6, 0, 4), Size = UDim2.new(1, -12, 0.45, -2), ZIndex = 3, Parent = priceBtn })
 	local price = UI.text({ Text = "", Position = UDim2.new(0, 6, 0.48, 0), Size = UDim2.new(1, -12, 0.48, -4), ZIndex = 3, Parent = priceBtn })
 	local c = { root = card, badge = badge, pips = pips, price = price, priceBtn = priceBtn, effect = effect, style = st }
@@ -229,7 +235,7 @@ rocketCard.root.Position = UDim2.new(0.5, 3 * 156 / 2 + 14 + 18, 1, -14)
 local runUi = UI.new("Frame", { Name = "Run", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = root })
 
 -- Монеты и гемы за заезд — слева сверху (под кнопками Roblox)
-local runCoins = UI.currency(runUi, "💰", { Position = UDim2.fromOffset(34, 64), Size = UDim2.fromOffset(130, 38) })
+local runCoins = UI.currency(runUi, "coin", { Position = UDim2.fromOffset(34, 64), Size = UDim2.fromOffset(130, 38) })
 local gemPill = UI.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(34, 110), Size = UDim2.fromOffset(100, 34), Visible = false, Parent = runUi })
 local runGems = UI.currency(gemPill, "💎", { Size = UDim2.fromScale(1, 1) })
 
@@ -476,7 +482,7 @@ local function refresh()
 		c.badge.Text = tostring(lvl)
 		local inTier = if lvl > 0 and lvl % Config.TIER_SIZE == 0 then Config.TIER_SIZE else lvl % Config.TIER_SIZE
 		for i, pip in c.pips do
-			pip.BackgroundColor3 = if i <= inTier then c.style.pip else Color3.fromRGB(70, 85, 120)
+			pip.BackgroundColor3 = if i <= inTier then c.style.pip else c.style.pip:Lerp(Color3.fromRGB(30, 40, 70), 0.72)
 		end
 		local fill = c.priceBtn:FindFirstChild("Fill") :: UIGradient
 		if lvl >= u.MaxLevel then
