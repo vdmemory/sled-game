@@ -13,6 +13,8 @@ local Track = require(script.Parent.Track)
 local Data = require(script.Parent.DataService)
 local Rewards = require(script.Parent.Rewards)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
+local Tuning = require(script.Parent.Tuning)
+Tuning.init() -- настройки из панели разработчика (DataStore) — до постройки лобби и трасс
 
 ------------------------------------------------------------------ Remotes
 local remotes = Instance.new("Folder")
@@ -899,6 +901,8 @@ DevAction.OnServerInvoke = function(player, action, a, b)
 			d.OwnedSleds[model.id .. ":" .. k] = true
 		end
 		d.Sled, d.SledRarity = model.id, r
+	elseif action == "tune" and typeof(a) == "table" then
+		return Tuning.save(a)
 	elseif action == "resetDaily" then
 		d.Daily = nil
 		d.ChestAt = 0

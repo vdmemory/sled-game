@@ -228,7 +228,7 @@ end
 
 tabs["Рогатка"] = function()
 	heading("Рогатка — " .. tierCount("Launch") .. " тиров, новый вид каждые " .. Config.TIER_SIZE .. " уровней")
-	note("Сила выстрела = 48 + 6 × уровень. Цена уровня: 25 × 1,18^уровень монет; переход на новый тир — гемы. На каждом тире свои столбы и резинка (Shared/SledModels.slingshot, ROPE_COLORS).")
+	note("Сила выстрела = " .. Config.F.launchBase .. " + " .. Config.F.launchStep .. " × уровень. Цена уровня: " .. Config.UPGRADES.Launch.BaseCost .. " × " .. Config.UPGRADES.Launch.Growth .. "^уровень монет; переход на новый тир — гемы. На каждом тире свои столбы и резинка (Shared/SledModels.slingshot, ROPE_COLORS).")
 	local g = cardGrid()
 	local cur = Config.tierOf(player:GetAttribute("LaunchLevel") or 0)
 	for t = 0, tierCount("Launch") - 1 do
@@ -256,7 +256,7 @@ end
 
 tabs["Сани"] = function()
 	heading("Сани — модели, редкости и " .. tierCount("Sled") .. " тиров обвеса")
-	note("Скорость: потолок = (100 + 5 × уровень) × (1 + бонус модели + бонус редкости), трение = 9,5 × 0,965^уровень. Обвес по тиру — Shared/SledModels.extras; у каждой модели свои точки крепления (MOUNTS, SPOILER, SHIELD, BUMPER).")
+	note("Скорость: потолок = (" .. Config.F.speedBase .. " + " .. Config.F.speedStep .. " × уровень) × (1 + бонус модели + бонус редкости), трение = " .. Config.F.frictionBase .. " × " .. Config.F.frictionDecay .. "^уровень. Обвес по тиру — Shared/SledModels.extras; у каждой модели свои точки крепления (MOUNTS, SPOILER, SHIELD, BUMPER).")
 	-- выбор модели
 	local rowModels = {}
 	for _, mdl in Config.SLEDS do
@@ -304,7 +304,7 @@ end
 
 tabs["Ракета"] = function()
 	heading("Ракета — " .. tierCount("Rocket") .. " видов, прокачка за гемы")
-	note("Топливо = 0,6 + 0,3 × уровень секунд. Цена уровня: 1 + уровень/3 гемов. Вид: корпус, нос, пояски, стабилизаторы, сопло (Shared/SledModels.ROCKETS); пламя у тиров 5+ голубое (Effects).")
+	note("Топливо = " .. Config.F.fuelBase .. " + " .. Config.F.fuelStep .. " × уровень секунд. Цена уровня: 1 + уровень/3 гемов. Вид: корпус, нос, пояски, стабилизаторы, сопло (Shared/SledModels.ROCKETS); пламя у тиров 5+ голубое (Effects).")
 	local g = cardGrid()
 	local cur = Config.tierOf(player:GetAttribute("RocketLevel") or 0)
 	for t = 0, tierCount("Rocket") - 1 do
@@ -323,7 +323,7 @@ end
 
 tabs["Доход"] = function()
 	heading("Доход — множитель монет за заезд")
-	note("Множитель = 1 + 0,15 × уровень. Цена уровня: 60 × 1,2^уровень монет; переход на новый тир — гемы.")
+	note("Множитель = 1 + " .. Config.F.incomeStep .. " × уровень. Цена уровня: " .. Config.UPGRADES.Income.BaseCost .. " × " .. Config.UPGRADES.Income.Growth .. "^уровень монет; переход на новый тир — гемы.")
 	local g = cardGrid()
 	local cur = Config.tierOf(player:GetAttribute("IncomeLevel") or 0)
 	for t = 0, tierCount("Income") - 1 do
@@ -397,7 +397,87 @@ tabs["Инструменты"] = function()
 	note("Все действия меняют только твой профиль. Сервер проверяет, что ты — владелец игры; другим игрокам панель не видна и не работает.")
 end
 
-local TAB_ORDER = { "Рогатка", "Сани", "Ракета", "Доход", "Миры", "Бонусы", "Инструменты" }
+-- Настройка параметров игры: правка → «Сохранить для всех» (DataStore, все сервера)
+local HttpService = game:GetService("HttpService")
+local pending: { [string]: number }? = nil
+local function savedOverrides(): { [string]: number }
+	local raw = ReplicatedStorage:GetAttribute("ConfigOverrides")
+	local ok, data = pcall(HttpService.JSONDecode, HttpService, if typeof(raw) == "string" then raw else "{}")
+	return if ok and type(data) == "table" then data else {}
+end
+local function fmt(v: number, step: number): string
+	local dec = if step >= 1 then 0 elseif step >= 0.1 then 1 elseif step >= 0.01 then 2 else 3
+	return string.format("%." .. dec .. "f", v)
+end
+tabs["Настройка"] = function()
+	if not pending then
+		pending = table.clone(savedOverrides())
+	end
+	local p = pending :: { [string]: number }
+	heading("Настройка игры — меняется у всех игроков без перевыпуска")
+	note("Измени значения (− / + или введи число), затем «Сохранить для всех»: настройки запишутся в DataStore и применятся на всех серверах за несколько секунд. Жёлтым — отличается от значения в коде.")
+	local changed = 0
+	for path, v in p do
+		if v ~= Config.TUNABLE_DEFAULTS[path] then
+			changed += 1
+		end
+	end
+	buttonRow({
+		{ "green", "СОХРАНИТЬ ДЛЯ ВСЕХ", function()
+			dev("tune", p)
+			pending = nil
+			task.delay(0.3, tabs.redraw)
+		end },
+		{ "grey", "ОТМЕНИТЬ ПРАВКИ", function()
+			pending = nil
+			tabs.redraw()
+		end },
+		{ "red", "ВСЁ ПО УМОЛЧАНИЮ", function()
+			pending = {}
+			tabs.redraw()
+		end },
+	})
+	note("Изменено параметров: " .. changed)
+	local group = ""
+	for _, tn in Config.TUNABLES do
+		local path, label, grp, lo, hi, step = tn[1], tn[2], tn[3], tn[4], tn[5], tn[6]
+		if grp ~= group then
+			group = grp
+			heading(grp)
+		end
+		local def = Config.TUNABLE_DEFAULTS[path]
+		local val = p[path] or def
+		local row = UI.new("Frame", { LayoutOrder = nextOrder(), Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = if val ~= def then Color3.fromRGB(90, 80, 40) else Color3.fromRGB(42, 56, 90), BackgroundTransparency = 0, ZIndex = 52, Parent = content })
+		UI.corner(row, 8)
+		UI.new("TextLabel", { Text = label, Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -330, 1, 0), TextScaled = false, TextSize = 16, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(225, 235, 250), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 53, Parent = row })
+		UI.new("TextLabel", { Text = "по умолч. " .. fmt(def, step), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -230, 0.5, 0), Size = UDim2.fromOffset(100, 20), TextScaled = false, TextSize = 13, Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(150, 165, 195), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 53, Parent = row })
+		local box = UI.new("TextBox", { Text = fmt(val, step), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -52, 0.5, 0), Size = UDim2.fromOffset(110, 30), BackgroundColor3 = Color3.fromRGB(20, 28, 48), BackgroundTransparency = 0, TextScaled = false, TextSize = 17, Font = Enum.Font.GothamBold, TextColor3 = Color3.new(1, 1, 1), ClearTextOnFocus = false, ZIndex = 53, Parent = row })
+		UI.corner(box, 6)
+		local function setV(nv: number)
+			nv = math.clamp(math.floor(nv / step + 0.5) * step, lo, hi)
+			if math.abs(nv - def) < step / 2 then
+				p[path] = nil
+			else
+				p[path] = nv
+			end
+			box.Text = fmt(nv, step)
+			row.BackgroundColor3 = if p[path] then Color3.fromRGB(90, 80, 40) else Color3.fromRGB(42, 56, 90)
+		end
+		box.FocusLost:Connect(function()
+			local nv = tonumber((string.gsub(box.Text, ",", ".")))
+			setV(nv or (p[path] or def))
+		end)
+		for i, d in { -1, 1 } do
+			local b = UI.button(if d < 0 then "dark" else "blue", if d < 0 then "−" else "+", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, if d < 0 then -168 else -8, 0.5, 0), Size = UDim2.fromOffset(38, 30), Radius = 6, StrokeThickness = 1.5, ZIndex = 53, Parent = row })
+			local _ = i
+			b.Activated:Connect(function()
+				setV((p[path] or def) + d * step)
+			end)
+		end
+	end
+end
+
+local TAB_ORDER = { "Рогатка", "Сани", "Ракета", "Доход", "Миры", "Бонусы", "Настройка", "Инструменты" }
 function tabs.redraw()
 	clear()
 	order = 0

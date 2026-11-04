@@ -165,7 +165,7 @@ end
 ------------------------------------------------------------------ НАГРАДЫ (удержание)
 -- Монетные награды растут с уровнем, чтобы оставаться полезными
 function Config.rewardCoins(base: number, level: number): number
-	return math.floor(base * (1 + (level - 1) * 0.25))
+	return math.floor(base * (1 + (level - 1) * (if Config.F then Config.F.rewardGrowth else 0.25)))
 end
 -- Ежедневные задания: 3 в день из пула (выбор детерминирован по номеру дня)
 -- Задания дня. max = true — считается лучший результат одного заезда, а не сумма.
@@ -301,20 +301,30 @@ function Config.tierName(name: string, level: number): string
 	return list[math.min(Config.tierOf(level) + 1, #list)]
 end
 
+-- Коэффициенты формул прокачки (настраиваются в панели разработчика)
+Config.F = {
+	launchBase = 48, launchStep = 6, -- сила рогатки = база + шаг × уровень
+	fuelBase = 0.6, fuelStep = 0.3, -- топливо ракеты, сек
+	frictionBase = 9.5, frictionDecay = 0.965, -- трение = база × спад^уровень
+	speedBase = 100, speedStep = 5, -- потолок скорости
+	incomeStep = 0.15, -- множитель монет = 1 + шаг × уровень
+	finishPerLevel = 100, -- бонус за финиш = это × уровень
+	rewardGrowth = 0.25, -- рост монетных наград с уровнем
+}
 function Config.launchSpeed(level: number): number
-	return 48 + 6 * level
+	return Config.F.launchBase + Config.F.launchStep * level
 end
 function Config.rocketFuel(level: number): number
-	return 0.6 + 0.3 * level -- секунд
+	return Config.F.fuelBase + Config.F.fuelStep * level -- секунд
 end
 function Config.friction(level: number): number
-	return 9.5 * 0.965 ^ level
+	return Config.F.frictionBase * Config.F.frictionDecay ^ level
 end
 function Config.maxSpeed(level: number): number
-	return 100 + 5 * level
+	return Config.F.speedBase + Config.F.speedStep * level
 end
 function Config.incomeMult(level: number): number
-	return 1 + 0.15 * level
+	return 1 + Config.F.incomeStep * level
 end
 
 -- Цена следующего уровня: (сколько, валюта "Coins" | "Gems")
@@ -414,8 +424,109 @@ Config.STUDS_PER_COIN = 4
 Config.COIN_PICKUP_VALUE = 3
 Config.COINS_PER_FLIP = 15
 function Config.finishBonus(level: number): number
-	return 100 * level
+	return Config.F.finishPerLevel * level
 end
 Config.GAMEPASS_X2_COINS = 0 -- ID геймпасса «x2 монеты» (0 = выкл)
+
+------------------------------------------------------------------ НАСТРОЙКА В ИГРЕ
+-- Параметры, которые владелец меняет в панели разработчика (вкладка «Настройка»).
+-- Изменения хранятся в DataStore и применяются на всех серверах без перевыпуска игры.
+-- { путь в Config, подпись, группа, мин, макс, шаг }
+Config.TUNABLES = {
+	{ "F.launchBase", "Рогатка: сила на 0 ур.", "Прокачка", 10, 200, 1 },
+	{ "F.launchStep", "Рогатка: + силы за уровень", "Прокачка", 1, 20, 0.5 },
+	{ "UPGRADES.Launch.BaseCost", "Рогатка: цена 1-го ур.", "Прокачка", 5, 1000, 5 },
+	{ "UPGRADES.Launch.Growth", "Рогатка: рост цены ×", "Прокачка", 1.01, 1.5, 0.01 },
+	{ "F.speedBase", "Сани: потолок скорости на 0 ур.", "Прокачка", 50, 300, 5 },
+	{ "F.speedStep", "Сани: + потолка за уровень", "Прокачка", 0, 20, 0.5 },
+	{ "F.frictionBase", "Сани: трение на 0 ур.", "Прокачка", 1, 30, 0.5 },
+	{ "F.frictionDecay", "Сани: спад трения за ур.", "Прокачка", 0.8, 1, 0.005 },
+	{ "UPGRADES.Sled.BaseCost", "Сани: цена 1-го ур.", "Прокачка", 5, 1000, 5 },
+	{ "UPGRADES.Sled.Growth", "Сани: рост цены ×", "Прокачка", 1.01, 1.5, 0.01 },
+	{ "F.incomeStep", "Доход: + множителя за ур.", "Прокачка", 0.01, 1, 0.01 },
+	{ "UPGRADES.Income.BaseCost", "Доход: цена 1-го ур.", "Прокачка", 5, 2000, 5 },
+	{ "UPGRADES.Income.Growth", "Доход: рост цены ×", "Прокачка", 1.01, 1.5, 0.01 },
+	{ "F.fuelBase", "Ракета: топливо на 0 ур., с", "Прокачка", 0.1, 5, 0.1 },
+	{ "F.fuelStep", "Ракета: + топлива за ур., с", "Прокачка", 0.05, 2, 0.05 },
+	{ "ROCKET_THRUST", "Ракета: тяга", "Прокачка", 5, 150, 1 },
+
+	{ "STUDS_PER_COIN", "Studs за 1 монету дистанции", "Экономика", 1, 20, 1 },
+	{ "COIN_PICKUP_VALUE", "Монета на трассе = N", "Экономика", 1, 50, 1 },
+	{ "F.finishPerLevel", "Финиш: монет × уровень", "Экономика", 0, 1000, 10 },
+	{ "F.rewardGrowth", "Рост наград с уровнем", "Экономика", 0, 2, 0.05 },
+	{ "GEMS_FINISH", "Гемов за финиш", "Экономика", 0, 50, 1 },
+	{ "GEMS_NEW_BEST", "Гемов за рекорд", "Экономика", 0, 20, 1 },
+	{ "GEMS_FARM_FINISH", "Гемов за финиш (фарм)", "Экономика", 0, 20, 1 },
+	{ "CRYSTAL_COINS", "Кристалл: монет", "Экономика", 0, 500, 5 },
+	{ "SMASH_COINS", "Разбил препятствие: монет", "Экономика", 0, 100, 1 },
+	{ "COINS_PER_FLIP", "Сальто: монет", "Экономика", 0, 200, 1 },
+	{ "AIR_COINS_PER_SEC", "Полёт: монет в секунду", "Экономика", 0, 100, 1 },
+
+	{ "MAGNET_CHANCE", "Магнит: шанс на кусок", "Бонусы", 0, 1, 0.01 },
+	{ "MAGNET_TIME", "Магнит: длительность, с", "Бонусы", 1, 30, 1 },
+	{ "MAGNET_RADIUS", "Магнит: радиус", "Бонусы", 5, 100, 1 },
+	{ "BOOST_CHANCE", "Ускоритель: шанс в ряду", "Бонусы", 0, 1, 0.01 },
+	{ "BOOST_ADD", "Ускоритель: + скорости", "Бонусы", 0, 80, 1 },
+	{ "POWERUPS.shield.chance", "Щит: шанс", "Бонусы", 0, 1, 0.01 },
+	{ "POWERUPS.x2.chance", "x2 монеты: шанс", "Бонусы", 0, 1, 0.01 },
+	{ "POWERUPS.x2.time", "x2 монеты: длительность, с", "Бонусы", 1, 60, 1 },
+	{ "POWERUPS.fuel.chance", "Канистра: шанс", "Бонусы", 0, 1, 0.01 },
+	{ "POWERUPS.rings.chance", "Кольца: шанс", "Бонусы", 0, 1, 0.01 },
+	{ "POWERUPS.rings.coins", "Кольца: монет за кольцо", "Бонусы", 0, 200, 1 },
+
+	{ "TASKS_PER_DAY", "Заданий в день", "Награды", 1, 12, 1 },
+	{ "TASK_CHEST_COINS", "Сундук заданий: монет", "Награды", 0, 10000, 50 },
+	{ "TASK_CHEST_GEMS", "Сундук заданий: гемов", "Награды", 0, 200, 1 },
+	{ "CHEST_COINS", "Сундук в лобби: монет", "Награды", 0, 10000, 25 },
+	{ "CHEST_GEMS", "Сундук в лобби: гемов", "Награды", 0, 100, 1 },
+
+	{ "OBSTACLE_ROWS", "Рядов препятствий на кусок", "Трасса", 0, 6, 1 },
+	{ "SAFE_START", "Без препятствий первые, studs", "Трасса", 0, 1000, 10 },
+	{ "COIN_LINE_CHANCE", "Шанс линии монет", "Трасса", 0, 1, 0.05 },
+	{ "CURVE_CHANCE", "Шанс поворота", "Трасса", 0, 1, 0.05 },
+	{ "KICKER_CHANCE", "Шанс обрыва с трамплином", "Трасса", 0, 1, 0.01 },
+	{ "GRAVITY_ALONG", "Гравитация вдоль склона", "Трасса", 10, 200, 1 },
+	{ "STEER_SPEED", "Руль: боковая скорость", "Трасса", 10, 120, 1 },
+	{ "OBSTACLE_SLOWDOWN", "Удар: скорость ×", "Трасса", 0, 1, 0.05 },
+}
+Config.TUNABLE_DEFAULTS = {} :: { [string]: number }
+
+-- Значение по пути "A.B.C"
+function Config.getPath(path: string): any
+	local t: any = Config
+	for part in string.gmatch(path, "[^%.]+") do
+		if type(t) ~= "table" then
+			return nil
+		end
+		t = t[part]
+	end
+	return t
+end
+function Config.setPath(path: string, value: any)
+	local parts = string.split(path, ".")
+	local t: any = Config
+	for i = 1, #parts - 1 do
+		t = t[parts[i]]
+		if type(t) ~= "table" then
+			return
+		end
+	end
+	t[parts[#parts]] = value
+end
+for _, tn in Config.TUNABLES do
+	Config.TUNABLE_DEFAULTS[tn[1]] = Config.getPath(tn[1])
+end
+-- Применить словарь изменений { путь = число } (неизвестные пути и нечисла пропускаются)
+function Config.applyOverrides(overrides: { [string]: any })
+	for _, tn in Config.TUNABLES do
+		local path = tn[1]
+		local v = overrides[path]
+		if typeof(v) == "number" then
+			Config.setPath(path, math.clamp(v, tn[4], tn[5]))
+		else
+			Config.setPath(path, Config.TUNABLE_DEFAULTS[path])
+		end
+	end
+end
 
 return Config
