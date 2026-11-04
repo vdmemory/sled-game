@@ -134,7 +134,7 @@ local function addSnowTrail(sled: Instance)
 				bm.Width1 = 0.05
 				bm.FaceCamera = true
 				bm.Segments = 12
-				bm.LightEmission = 1
+				bm.LightEmission = 0.7
 				bm.LightInfluence = 0
 				bm.Color = colors
 				bm.Transparency = transp
@@ -143,7 +143,7 @@ local function addSnowTrail(sled: Instance)
 				return bm
 			end
 			-- оболочка факела: от жёлто-белого у сопла к оранжевому и красному на конце
-			beam("RocketPlume", tail, d * 0.9, ColorSequence.new({
+			beam("RocketPlume", tail, d * 0.7, ColorSequence.new({
 				ColorSequenceKeypoint.new(0, hot),
 				ColorSequenceKeypoint.new(0.25, mid),
 				ColorSequenceKeypoint.new(1, outer),
@@ -153,7 +153,7 @@ local function addSnowTrail(sled: Instance)
 				NumberSequenceKeypoint.new(1, 1),
 			})).Name = "RocketPlume" .. side
 			-- ослепительное короткое ядро
-			beam("RocketCore", coreTail, d * 0.5, ColorSequence.new(Color3.new(1, 1, 1), hot), NumberSequence.new({
+			beam("RocketCore", coreTail, d * 0.35, ColorSequence.new(Color3.new(1, 1, 1), hot), NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 0),
 				NumberSequenceKeypoint.new(1, 1),
 			})).Name = "RocketCore" .. side
@@ -169,9 +169,9 @@ local function addSnowTrail(sled: Instance)
 			-- языки пламени вокруг факела
 			local fire = emitter("RocketFire", "rbxasset://textures/particles/fire_main.dds")
 			fire.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, hot), ColorSequenceKeypoint.new(0.3, mid), ColorSequenceKeypoint.new(1, outer) })
-			fire.LightEmission = 1
-			fire.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, d * 0.9), NumberSequenceKeypoint.new(0.5, d * 1.4), NumberSequenceKeypoint.new(1, 0.1) })
-			fire.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+			fire.LightEmission = 0.6
+			fire.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, d * 0.6), NumberSequenceKeypoint.new(0.5, d * 0.9), NumberSequenceKeypoint.new(1, 0.1) })
+			fire.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
 			fire.Lifetime = NumberRange.new(0.12, 0.22)
 			fire.Speed = NumberRange.new(28, 40)
 			fire.SpreadAngle = Vector2.new(6, 6)
@@ -199,8 +199,8 @@ local function addSnowTrail(sled: Instance)
 			local light = Instance.new("PointLight")
 			light.Name = "RocketLight"
 			light.Color = mid
-			light.Range = 16
-			light.Brightness = 3
+			light.Range = 7
+			light.Brightness = 0.8
 			light.Enabled = false
 			light.Parent = nozzle
 		end
@@ -347,12 +347,12 @@ RunService.RenderStepped:Connect(function(dt)
 				if child.Name == "RocketNozzle" then
 					local fire = child:FindFirstChild("RocketFire") :: ParticleEmitter?
 					if fire then
-						fire.Rate = if on then 160 else 0
+						fire.Rate = if on then 90 else 0
 						(child:FindFirstChild("RocketSparks") :: ParticleEmitter).Rate = if on then 60 else 0
 						(child:FindFirstChild("RocketSmoke") :: ParticleEmitter).Rate = if on then 45 else 0
 						local light = child:FindFirstChild("RocketLight") :: PointLight
 						light.Enabled = on
-						light.Brightness = 2.5 + math.random() * 1.5
+						light.Brightness = 0.6 + math.random() * 0.5 -- без пересвета снега
 					end
 				elseif child:IsA("Beam") and string.sub(child.Name, 1, 6) == "Rocket" then
 					child.Enabled = on
