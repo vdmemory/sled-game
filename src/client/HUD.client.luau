@@ -453,10 +453,17 @@ local function refresh()
 	runUi.Visible = inRun
 	currencyRow.Visible = not inRun
 
-	levelTitle.Text = "УРОВЕНЬ " .. level
-	local best = player:GetAttribute("LevelBest") or 0
-	worldLine.Text = (player:GetAttribute("ThemeName") or "") .. " · " .. ((level - 1) % Config.LEVELS_PER_WORLD + 1) .. "/" .. Config.LEVELS_PER_WORLD
-		.. (if best > 0 then "  ·  рекорд " .. best .. "%" else "")
+	local farm = player:GetAttribute("FarmWorld") or 0
+	local best = if farm > 0 then 0 else player:GetAttribute("LevelBest") or 0
+	if farm > 0 then
+		-- фарм пройденного мира: уровень не растёт, вернуться — в окне «Миры»
+		levelTitle.Text = "ФАРМ · МИР " .. farm
+		worldLine.Text = Config.worldName(farm) .. " · только монеты · вернуться: 🌍 Миры"
+	else
+		levelTitle.Text = "УРОВЕНЬ " .. level
+		worldLine.Text = (player:GetAttribute("ThemeName") or "") .. " · " .. ((level - 1) % Config.LEVELS_PER_WORLD + 1) .. "/" .. Config.LEVELS_PER_WORLD
+			.. (if best > 0 then "  ·  рекорд " .. best .. "%" else "")
+	end
 
 	for name, c in cards do
 		local u = Config.UPGRADES[name]
@@ -491,7 +498,7 @@ local function refresh()
 	bestMark.Visible = best > 0
 	bestMark.Position = UDim2.fromScale(0.5, 1 - best / 100)
 end
-for _, attr in { "Coins", "Gems", "Level", "LevelBest", "InRun", "Loaded", "ThemeName", "LaunchLevel", "RocketLevel", "SledLevel", "IncomeLevel" } do
+for _, attr in { "Coins", "Gems", "Level", "LevelBest", "InRun", "Loaded", "ThemeName", "FarmWorld", "LaunchLevel", "RocketLevel", "SledLevel", "IncomeLevel" } do
 	player:GetAttributeChangedSignal(attr):Connect(refresh)
 end
 refresh()
@@ -518,7 +525,7 @@ local function updateRun()
 	local mult = Config.comboMult(combo)
 	comboLabel.Text = if combo >= 3 then "КОМБО x" .. combo .. (if mult > 1 then "  · монеты x" .. mult else "") else ""
 	distLabel.Text = dist .. " м"
-	local best = math.floor((player:GetAttribute("LevelBest") or 0) / 100 * L)
+	local best = if (player:GetAttribute("FarmWorld") or 0) > 0 then 0 else math.floor((player:GetAttribute("LevelBest") or 0) / 100 * L)
 	bestLabel.Text = if best > 0 then "★ " .. best .. " м" else ""
 	if not player:GetAttribute("InRun") then
 		recordShown = false
@@ -658,8 +665,9 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 	resultToken += 1
 	local my = resultToken
 	local finished = r.reason == "finish"
-	resultTitle.Text = if finished
-		then "УРОВЕНЬ " .. r.level .. " ПРОЙДЕН!"
+	resultTitle.Text = if finished and r.farm
+		then "ТРАССА ПРОЙДЕНА!"
+		elseif finished then "УРОВЕНЬ " .. r.level .. " ПРОЙДЕН!"
 		elseif r.reason == "crash" then "ВРЕЗАЛСЯ!"
 		elseif r.reason == "fell" then "УЛЕТЕЛ С ТРАССЫ!"
 		elseif r.reason == "stopped" then "ОСТАНОВИЛСЯ"

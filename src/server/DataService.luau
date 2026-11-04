@@ -16,6 +16,8 @@ local DEFAULT = {
 	Gems = 0,
 	Skin = "classic", -- надетый скин
 	OwnedSkins = { classic = true },
+	FarmWorld = 0, -- 0 = текущий мир; N = фарм пройденного мира N
+	Receipts = {}, -- ID обработанных покупок Robux (защита от повторной выдачи)
 	Settings = { Sfx = true, Music = true, Snow = true, Shadows = true },
 	Sled = "tube", -- модель саней
 	SledRarity = 1,

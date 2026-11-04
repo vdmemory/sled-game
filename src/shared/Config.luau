@@ -243,6 +243,18 @@ end
 ------------------------------------------------------------------ ГЕМЫ
 Config.GEMS_FINISH = 3 -- за пройденный уровень
 Config.GEMS_NEW_BEST = 1 -- за новый рекорд на уровне
+Config.GEMS_FARM_FINISH = 1 -- финиш в уже пройденном мире (фарм): уровень не растёт
+
+-- Robux-товары (Developer Products). Владелец создаёт их в Creator Dashboard
+-- (Monetization → Developer Products) и вписывает сюда ID; при id = 0 кнопка покажет «скоро».
+Config.PRODUCTS = {
+	SkipWorld = { id = 0, price = 49 }, -- пропуск текущего мира: сразу на 1-й уровень следующего
+}
+
+-- Уровень, на котором едем при фарме мира (последний, самый длинный уровень мира)
+function Config.farmLevel(world: number): number
+	return world * Config.LEVELS_PER_WORLD
+end
 
 ------------------------------------------------------------------ СКИНЫ ВАТРУШЕК (за монеты)
 -- tube — основной цвет, rim — бортик, neon — светится

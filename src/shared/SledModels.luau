@@ -37,7 +37,7 @@ function Builder:part(shape: Enum.PartType, size: Vector3, cf: CFrame, color: Co
 	p.CanCollide = false
 	p.CanQuery = false
 	p.CanTouch = false
-	p.CastShadow = true
+	p.CastShadow = size.Magnitude > 1.5 -- мелкие детали без теней: заметно дешевле на телефонах
 	p.Massless = true
 	p.CollisionGroup = "Riders"
 	if self.main and color == self.main then

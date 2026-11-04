@@ -37,6 +37,9 @@ local ONE_SHOTS = {
 	record = { "electronicpingshort.wav", 0.6, 1 },
 	gem = { "electronicpingshort.wav", 0.5, 1.5 },
 	reward = { "electronicpingshort.wav", 0.5, 1.2 },
+	magnet = { "electronicpingshort.wav", 0.55, 0.7 },
+	crystal = { "impact_explosion_03.mp3", 0.2, 2.4 },
+	horn = { "electronicpingshort.wav", 0.6, 0.32 },
 }
 local cache: { [string]: Sound } = {}
 local function play(name: string)
@@ -59,7 +62,47 @@ local function play(name: string)
 	SoundService:PlayLocalSound(s)
 end
 
-controller:WaitForChild("Sfx").Event:Connect(play)
+controller:WaitForChild("Sfx").Event:Connect(function(name: string)
+	play(name)
+	if name == "magnet" then -- «вжух» вверх: второй, более высокий тон
+		task.delay(0.08, function()
+			local s = sound("electronicpingshort.wav", 0.45, 1.4)
+			if player:GetAttribute("SetSfx") ~= false then
+				SoundService:PlayLocalSound(s)
+			end
+			task.delay(1, function()
+				s:Destroy()
+			end)
+		end)
+	elseif name == "crystal" then -- звон льда поверх хлопка
+		play("gem")
+	end
+end)
+
+-- Гудок машины: когда в заезде проносишься рядом с машиной (раз в несколько секунд)
+local CollectionService = game:GetService("CollectionService")
+local lastHorn = 0
+task.spawn(function()
+	while true do
+		task.wait(0.25)
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root and player:GetAttribute("Launched") == true and os.clock() - lastHorn > 4 then
+			for _, m in CollectionService:GetTagged("Mover") do
+				local pv = if m:IsA("Model") then m:GetPivot().Position elseif m:IsA("BasePart") then m.Position else nil
+				if pv and (pv - root.Position).Magnitude < 28 then
+					lastHorn = os.clock()
+					-- «би-бип»: два коротких низких сигнала
+					play("horn")
+					task.delay(0.18, function()
+						play("horn")
+					end)
+					break
+				end
+			end
+		end
+	end
+end)
 Remotes.RunEnded.OnClientEvent:Connect(function(r)
 	if r.reason == "finish" then
 		play("finish")

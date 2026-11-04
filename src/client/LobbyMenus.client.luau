@@ -219,18 +219,51 @@ local function drawWorlds()
 		local frac = if w == current then (done + best / 100) / per elseif w < current then 1 else 0
 		local _, set = UI.progress(card, { Position = UDim2.fromOffset(14, 180), Size = UDim2.new(1, -28, 0, 24), ZIndex = 34 })
 		set(frac, math.floor(frac * 100) .. "%")
-		local kind, text
+		-- Кнопка: фармить пройденный мир / вернуться в текущий / пропустить следующий за Robux
+		local farm = player:GetAttribute("FarmWorld") or 0
+		local kind, text, action, arg
 		if w == current then
-			kind, text = "green", "✔ ВЫ ЗДЕСЬ"
+			if farm == 0 then
+				kind, text = "green", "✔ ВЫ ЗДЕСЬ"
+			else
+				kind, text, action, arg = "blue", "▶ ВЕРНУТЬСЯ", "farm", 0
+			end
 		elseif w < current then
-			kind, text = "yellow", "🏆 ПРОЙДЕН"
+			if farm == w then
+				kind, text = "green", "✔ ФАРМИШЬ ЗДЕСЬ"
+			else
+				kind, text, action, arg = "yellow", "▶ ФАРМИТЬ", "farm", w
+			end
+		elseif w == current + 1 then
+			kind, text, action = "purple", "⏩ ПРОПУСТИТЬ  R$" .. Config.PRODUCTS.SkipWorld.price, "skip"
 		else
 			kind, text = "grey", "🔒 Пройди мир " .. (w - 1)
 		end
+		if w < current and farm ~= w then
+			-- подсказка: в пройденном мире уровень не растёт, только монеты
+			UI.ink({ Text = "монеты без прогресса", Position = UDim2.new(0, 8, 1, -82), Size = UDim2.new(1, -16, 0, 20), TextTransparency = 0.3, ZIndex = 34, Parent = card })
+		end
 		local st = UI.button(kind, text, { Position = UDim2.new(0, 10, 1, -58), Size = UDim2.new(1, -20, 0, 48), ZIndex = 34, Parent = card })
-		st.Active = false
+		if action then
+			st.Activated:Connect(function()
+				local ok, msg = Remotes.WorldAction:InvokeServer(action, arg)
+				if typeof(msg) == "string" then
+					say(ok, msg)
+				end
+				if ok and action == "farm" then
+					worldsWin.Visible = false
+				end
+			end)
+		else
+			st.Active = false
+		end
 	end
 end
+player:GetAttributeChangedSignal("FarmWorld"):Connect(function()
+	if worldsWin.Visible then
+		drawWorlds()
+	end
+end)
 worldsBtn.Activated:Connect(function()
 	drawWorlds()
 	open(worldsWin)

@@ -250,7 +250,7 @@ RunService.RenderStepped:Connect(function(dt)
 		if pe and s:IsA("BasePart") then
 			local v = s.AssemblyLinearVelocity.Magnitude
 			local grounded = workspace:Raycast(s.Position, -s.CFrame.UpVector * 3) ~= nil
-			pe.Rate = if grounded then math.clamp(v * 0.8, 0, 90) else 0
+			pe.Rate = if grounded then math.clamp(v * 0.8, 0, 90) * (if player:GetAttribute("LowQuality") then 0.3 else 1) else 0
 			local trail = s:FindFirstChild("IceTrail")
 			if trail then
 				trail.Enabled = grounded and v > 5 and not s.Anchored
@@ -288,5 +288,69 @@ RunService.RenderStepped:Connect(function(dt)
 				end
 			end
 		end
+	end
+end)
+
+------------------------------------------------------------------ Освещение и дымка под мир
+-- В заезде небо, дымка и цвет кадра подстраиваются под тему уровня (RunTheme с сервера),
+-- в лобби — базовый снежный вид. Меняется только у этого игрока.
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+
+local LOOKS = {
+	-- 1 Снежный лес: ясный голубой день
+	{ clock = 14.5, atmo = { Color = Color3.fromRGB(190, 220, 255), Decay = Color3.fromRGB(110, 160, 230), Density = 0.25, Haze = 0.5 }, cc = { TintColor = Color3.fromRGB(240, 248, 255), Saturation = 0.25 } },
+	-- 2 Ледяной город: холодный вечерний свет и городская дымка
+	{ clock = 16.2, atmo = { Color = Color3.fromRGB(205, 215, 240), Decay = Color3.fromRGB(120, 130, 185), Density = 0.32, Haze = 1.3 }, cc = { TintColor = Color3.fromRGB(232, 238, 255), Saturation = 0.15 } },
+	-- 3 Каньон: тёплый закатный свет и пыльная оранжевая дымка
+	{ clock = 16.9, atmo = { Color = Color3.fromRGB(255, 222, 185), Decay = Color3.fromRGB(215, 140, 90), Density = 0.3, Haze = 1.1 }, cc = { TintColor = Color3.fromRGB(255, 240, 222), Saturation = 0.32 } },
+}
+
+local function applyWorldLook()
+	local theme = if player:GetAttribute("InRun") then player:GetAttribute("RunTheme") or 1 else 1
+	local look = LOOKS[((theme - 1) % #LOOKS) + 1]
+	local info = TweenInfo.new(1.5, Enum.EasingStyle.Sine)
+	TweenService:Create(Lighting, info, { ClockTime = look.clock }):Play()
+	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmo then
+		TweenService:Create(atmo, info, look.atmo):Play()
+	end
+	local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+	if cc then
+		TweenService:Create(cc, info, look.cc):Play()
+	end
+end
+player:GetAttributeChangedSignal("InRun"):Connect(applyWorldLook)
+player:GetAttributeChangedSignal("RunTheme"):Connect(applyWorldLook)
+task.delay(2, applyWorldLook)
+
+------------------------------------------------------------------ Авто-качество (FPS на телефонах)
+-- Если кадров стабильно меньше ~40, облегчаем картинку: меньше снега и пыли, без bloom,
+-- без мелких теней. Вернуть нельзя автоматически — чтобы не «мигало» качество.
+local lowQuality = false
+local frames, elapsed, slowWindows = 0, 0, 0
+local fpsConn
+fpsConn = RunService.RenderStepped:Connect(function(dt)
+	frames += 1
+	elapsed += dt
+	if elapsed < 3 then
+		return
+	end
+	local fps = frames / elapsed
+	frames, elapsed = 0, 0
+	slowWindows = if fps < 40 then slowWindows + 1 else 0
+	if slowWindows >= 2 and not lowQuality then
+		lowQuality = true
+		player:SetAttribute("LowQuality", true)
+		snow.Rate = 40
+		local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
+		if bloom then
+			bloom.Enabled = false
+		end
+		local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
+		if clouds then
+			clouds.Enabled = false
+		end
+		fpsConn:Disconnect()
 	end
 end)

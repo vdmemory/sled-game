@@ -41,6 +41,7 @@ local SledAction: RemoteFunction = remote("RemoteFunction", "SledAction") -- к�
 local TrailAction: RemoteFunction = remote("RemoteFunction", "TrailAction") -- купить/надеть след
 local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 local SkinAction: RemoteFunction = remote("RemoteFunction", "SkinAction")
+local WorldAction: RemoteFunction = remote("RemoteFunction", "WorldAction") -- фарм пройденного мира / пропуск мира за Robux
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ Мир
@@ -106,7 +107,9 @@ local function syncPlayer(player: Player)
 	for _, key in { "Coins", "Gems", "Level", "LevelBest", "LaunchLevel", "RocketLevel", "SledLevel", "IncomeLevel" } do
 		player:SetAttribute(key, d[key])
 	end
-	player:SetAttribute("LevelLength", Config.levelLength(d.Level))
+	if not player:GetAttribute("InRun") then -- в заезде длину задаёт трасса (фарм — другой уровень)
+		player:SetAttribute("LevelLength", Config.levelLength(d.Level))
+	end
 	player:SetAttribute("Skin", d.Skin)
 	local owned = {}
 	for id in d.OwnedSkins do
@@ -114,6 +117,11 @@ local function syncPlayer(player: Player)
 	end
 	player:SetAttribute("OwnedSkins", table.concat(owned, ","))
 	player:SetAttribute("ThemeName", Config.worldName(Config.worldOf(d.Level)))
+	-- фарм: пройденный мир, в котором сейчас катаемся (0 — текущий)
+	if (d.FarmWorld or 0) >= Config.worldOf(d.Level) then
+		d.FarmWorld = 0
+	end
+	player:SetAttribute("FarmWorld", d.FarmWorld or 0)
 	player:SetAttribute("Sled", d.Sled)
 	player:SetAttribute("SledRarity", d.SledRarity)
 	local ownedSleds = {}
@@ -232,6 +240,8 @@ type Run = {
 	startTime: number,
 	launchTime: number?,
 	crashed: boolean?,
+	level: number,
+	farm: boolean,
 	finishedAt: number?,
 	smashes: number?,
 	airTotal: number?,
@@ -256,7 +266,7 @@ local function endRun(player: Player, reason: string)
 	runs[player] = nil
 
 	local d = Data.get(player)
-	local level = d and d.Level or 1
+	local level = run.level
 	local L = run.track.length
 	local finished = reason == "finish"
 	local dist = math.min(run.distance, L)
@@ -270,7 +280,12 @@ local function endRun(player: Player, reason: string)
 
 	if d then
 		d.Coins += earned
-		if finished then
+		if run.farm then
+			-- фарм пройденного мира: только монеты и немного гемов, прогресс не двигается
+			if finished then
+				gems += Config.GEMS_FARM_FINISH
+			end
+		elseif finished then
 			d.Level += 1
 			d.LevelBest = 0
 			gems += Config.GEMS_FINISH
@@ -424,8 +439,14 @@ startRun = function(player: Player)
 		return
 	end
 
+	-- Какой уровень едем: текущий или (фарм) последний уровень пройденного мира
+	local farmWorld = d.FarmWorld or 0
+	local farm = farmWorld > 0 and farmWorld < Config.worldOf(d.Level)
+	local level = if farm then Config.farmLevel(farmWorld) else d.Level
 	local slot = takeSlot(player)
-	local track = Track.new(slot, d.Level, d.LevelBest / 100 * Config.levelLength(d.Level))
+	local track = Track.new(slot, level, if farm then 0 else d.LevelBest / 100 * Config.levelLength(d.Level))
+	player:SetAttribute("RunTheme", Config.themeOf(level))
+	player:SetAttribute("LevelLength", track.length)
 	local startCF = track:startCFrame()
 	local sled = makeSled(player, startCF)
 
@@ -474,6 +495,8 @@ startRun = function(player: Player)
 		slot = slot,
 		sled = sled,
 		ropes = ropes,
+		level = level,
+		farm = farm,
 		launched = false,
 		distance = 0,
 		bonusCoins = 0,
@@ -782,6 +805,66 @@ BuyUpgrade.OnServerInvoke = function(player, name)
 		return true, Config.tierName(name, level + 1)
 	end
 	return true
+end
+
+-- Миры: «farm» — кататься в пройденном мире (0 = вернуться в текущий),
+-- «skip» — пропустить текущий мир за Robux (Developer Product, выдаёт ProcessReceipt ниже)
+WorldAction.OnServerInvoke = function(player, action, arg)
+	local d = Data.get(player)
+	if not d or runs[player] then
+		return false, "Недоступно"
+	end
+	local current = Config.worldOf(d.Level)
+	if action == "farm" then
+		if typeof(arg) ~= "number" or arg % 1 ~= 0 or arg < 0 or arg >= current then
+			return false, "Мир ещё не пройден"
+		end
+		d.FarmWorld = arg
+		syncPlayer(player)
+		return true, if arg == 0 then "Вернулся в мир " .. current else "Фарм: " .. Config.worldName(arg)
+	elseif action == "skip" then
+		local product = Config.PRODUCTS.SkipWorld
+		if product.id == 0 then
+			return false, "Пропуск мира появится скоро"
+		end
+		MarketplaceService:PromptProductPurchase(player, product.id)
+		return true
+	end
+	return false, "Недоступно"
+end
+
+-- Покупки за Robux. Каждая покупка выдаётся ровно один раз: ID чека запоминаем в профиле.
+local PRODUCT_HANDLERS: { [number]: (Player, any) -> () } = {}
+if Config.PRODUCTS.SkipWorld.id ~= 0 then
+	PRODUCT_HANDLERS[Config.PRODUCTS.SkipWorld.id] = function(player, d)
+		d.Level = Config.worldOf(d.Level) * Config.LEVELS_PER_WORLD + 1
+		d.LevelBest = 0
+		d.FarmWorld = 0
+		postLevel(player, d.Level)
+	end
+end
+MarketplaceService.ProcessReceipt = function(info)
+	local player = Players:GetPlayerByUserId(info.PlayerId)
+	local d = player and Data.get(player)
+	local handler = PRODUCT_HANDLERS[info.ProductId]
+	if not player or not d or not handler then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	d.Receipts = d.Receipts or {}
+	if table.find(d.Receipts, info.PurchaseId) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	if runs[player] then
+		endRun(player, "back")
+	end
+	handler(player, d)
+	table.insert(d.Receipts, info.PurchaseId)
+	while #d.Receipts > 50 do
+		table.remove(d.Receipts, 1)
+	end
+	syncPlayer(player)
+	Data.save(player)
+	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
 -- Скины: купить (если не куплен) или надеть

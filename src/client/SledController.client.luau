@@ -433,7 +433,7 @@ local function breakCrystal(hit: BasePart)
 		end
 	end
 	trickPopup:Fire("💎 Кристалл!  +" .. Config.CRYSTAL_COINS .. " 💰 +1 💎")
-	sfx:Fire("smash")
+	sfx:Fire("crystal")
 	Remotes.Crystal:FireServer(hit)
 end
 
@@ -461,7 +461,7 @@ local function onTouched(hit: BasePart)
 			end
 			magnetUntil = now + Config.MAGNET_TIME
 			trickPopup:Fire("🧲 Магнит!")
-			sfx:Fire("boost")
+			sfx:Fire("magnet")
 		end
 		return
 	end
