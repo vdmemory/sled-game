@@ -28,6 +28,14 @@ if [ -f scripts/upload_ui_assets.py ] && [ -z "${SKIP_UI_ASSETS:-}" ]; then
   fi
 fi
 
+# Метрики (Open Cloud Analytics Query API, бета): CSV печатается в лог между METRICS_CSV_BEGIN/END,
+# недельная задача (docs/WEEKLY.md) забирает его из лога и коммитит. Нужно право ключа
+# universe-analytics:read; без него — warning, деплой продолжается.
+if [ -f scripts/fetch_metrics.py ] && [ -z "${SKIP_METRICS:-}" ]; then
+  ROBLOX_ANALYTICS_KEY="${ROBLOX_ANALYTICS_KEY:-$ROBLOX_API_KEY}" DAYS="${METRICS_DAYS:-8}" \
+    python3 scripts/fetch_metrics.py --print || echo "::warning::метрики не собраны"
+fi
+
 URL="https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=${VERSION_TYPE}"
 
 for attempt in $(seq 1 "$ATTEMPTS"); do

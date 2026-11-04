@@ -6,11 +6,19 @@
 ## Расписание (время Киев)
 | Когда | Что | Кто |
 | --- | --- | --- |
-| Пн 07:17 | GitHub Actions `weekly-metrics`: `scripts/fetch_metrics.py` забирает метрики за 8 дней из Open Cloud Analytics Query API → `analytics/metrics.csv`; `scripts/metrics_report.py` → `analytics/REPORT.md`; коммит в `main` | бот |
+| Пн 09:00, шаг 0 | Задача делает пустой коммит `metrics: weekly refresh` в `main` → деплой-workflow → `publish.sh` → `scripts/fetch_metrics.py --print` печатает CSV за 8 дней из Open Cloud Analytics Query API в лог между `METRICS_CSV_BEGIN/END` → задача читает лог (`gh run view --log`), пишет `analytics/metrics.csv`, строит `REPORT.md`, коммитит | задача + CI |
 | Пн 09:00 | Запланированная задача Claude «Недельный обзор игры»: свежая сессия клонирует репозиторий, выполняет шаги ниже и делает «зелёные» авто-правки по уровню автономии | главный + агенты |
 | Пн, когда удобно | Владелец читает сводку, отвечает «делаем 1 и 3» | владелец |
 
 ## Шаги задачи «Недельный обзор»
+0. **Свежие метрики.** `git commit --allow-empty -m "metrics: weekly refresh" && git push` → дождаться
+   `completed success` последнего `gh run` (цикл ожидания — `docs/TESTING.md` §1) →
+   `gh run view <id> --log | sed -n '/METRICS_CSV_BEGIN/,/METRICS_CSV_END/p' | sed '1d;$d' | sed 's/^.*\t//'`
+   → если строк > 1, записать в `analytics/metrics.csv` (слить по дате с тем, что есть),
+   `python3 scripts/metrics_report.py`, закоммитить `analytics/` с сообщением «analytics: метрики
+   за неделю». Если в логе `::warning::метрики не собраны` или HTTP 403 — API недоступен, идти
+   дальше без свежих цифр и сказать об этом в сводке. (Альтернатива с отдельным workflow —
+   `scripts/weekly-metrics.yml.example`, если владелец захочет создать его сам.)
 1. `gh repo clone vdmemory/sled-game`, прочитать `CLAUDE.md`, `docs/WEEKLY.md`, `analytics/REPORT.md`,
    `analytics/events.csv`, `docs/BUSINESS.md` §6 (гипотезы), `docs/IDEAS.md`, последние записи
    `docs/CHANGELOG.md`.
@@ -59,21 +67,16 @@
 
 
 ## Что нужно один раз от владельца
-1. **Ключ API.** create.roblox.com → Dashboard → слева **Open Cloud → API Keys** → открыть
-   существующий ключ деплоя (или Create API Key) → **Access Permissions → Add API System →
-   «Analytics» (universe-analytics)** → Add Experience → выбрать production-опыт → операция
-   **Read** → Save. Если это новый ключ — скопировать его значение (показывается один раз).
-2. **Секрет в GitHub.** github.com/vdmemory/sled-game → Settings → Environments → **production**
-   → Environment secrets → Add secret: имя `ROBLOX_ANALYTICS_KEY`, значение — ключ из п. 1.
-   Ключ в чат не присылать; Claude его не видит и не должен видеть.
-3. **Workflow.** В репозитории: Add file → Create new file → имя
-   `.github/workflows/weekly-metrics.yml` → вставить содержимое `scripts/weekly-metrics.yml.example`
-   (без первых строк-комментариев можно) → Commit to main. Сессии Claude не могут создавать
-   workflows (нет scope `workflow` у прокси GitHub). Проверить: Actions → weekly-metrics → Run
-   workflow → через минуту в `analytics/metrics.csv` появятся строки (или warning в логе, если
-   API вернул 403 — бета).
-- Analytics Query API в бете: если вернёт 403, доступа у аккаунта пока нет — тогда владелец
-  раз в неделю присылает скриншоты Analytics, главный заносит их в CSV руками.
+1. **Право Analytics у ключа деплоя.** create.roblox.com → Dashboard → **Open Cloud → API Keys**
+   → открыть ключ, которым деплоит GitHub (`ROBLOX_API_KEY`) → Access Permissions → в списке
+   систем найти **Analytics / Universe Analytics** (внутреннее имя `universe-analytics`, операция
+   `universe.analytics:read`) → добавить production-опыт (и тестовый) → Read → Save. Нового
+   секрета в GitHub не нужно: `publish.sh` использует тот же ключ. Если такой системы в списке
+   нет — API-бета ещё не открыта для аккаунта (DevForum, июль 2026): прислать скриншот списка,
+   а до открытия — скриншоты Analytics раз в неделю, главный заносит в CSV руками.
+2. **ID production-опыта для метрик** (необязательно): GitHub → Settings → Environments →
+   staging → Environment variables → `ANALYTICS_UNIVERSE_ID` = Universe ID production-опыта.
+   Без него при деплое на staging собираются метрики тестового опыта.
 
 ## Источники
 - Open Cloud Analytics Query API: метрики и измерения —

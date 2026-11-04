@@ -4,7 +4,11 @@
 Нужно: ROBLOX_ANALYTICS_KEY (API-ключ с правом universe-analytics → universe.analytics:read на этот
 опыт) и UNIVERSE_ID. Берём последние DAYS дней (по умолчанию 8 — с запасом), по одной строке на
 день; уже существующие даты перезаписываем свежими значениями (ретеншн D7/D30 дозреет позже).
-Запуск: ROBLOX_ANALYTICS_KEY=... UNIVERSE_ID=... python3 scripts/fetch_metrics.py
+Запуск: ROBLOX_ANALYTICS_KEY=... UNIVERSE_ID=... python3 scripts/fetch_metrics.py [--print]
+--print — после обновления напечатать весь CSV между METRICS_CSV_BEGIN/END (так его читают из лога
+GitHub Actions: деплой-workflow вызывает скрипт из publish.sh, а недельная задача забирает CSV из лога
+и коммитит — у сессий Claude нет права менять workflows). ANALYTICS_UNIVERSE_ID, если задан,
+имеет приоритет над UNIVERSE_ID (метрики production при деплое на staging).
 Документация: create.roblox.com/docs/cloud/guides/analytics/metrics. Каждый сбой метрики —
 предупреждение, не падение: пустая ячейка лучше нуля.
 """
@@ -21,7 +25,7 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CSV = ROOT / "analytics" / "metrics.csv"
 KEY = os.environ.get("ROBLOX_ANALYTICS_KEY") or os.environ.get("ROBLOX_API_KEY", "")
-UNIVERSE = os.environ.get("UNIVERSE_ID", "")
+UNIVERSE = os.environ.get("ANALYTICS_UNIVERSE_ID") or os.environ.get("UNIVERSE_ID", "")
 DAYS = int(os.environ.get("DAYS", "8"))
 API = f"https://apis.roblox.com/analytics-query-api/v1/universes/{UNIVERSE}/metrics"
 DEVEX, FEE = 0.0038, 0.7
@@ -118,6 +122,10 @@ def main():
         for day in sorted(rows):
             w.writerow({c: rows[day].get(c, "") for c in COLUMNS})
     print(f"Обновлено дней: {len(fresh)} ({min(fresh)} … {max(fresh)}); всего строк: {len(rows)}")
+    if "--print" in sys.argv:
+        print("METRICS_CSV_BEGIN")
+        print(CSV.read_text(encoding="utf-8").rstrip("\n"))
+        print("METRICS_CSV_END")
     return 0
 
 
