@@ -44,6 +44,9 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 
 ## Обязательные правила
 
+- **Инженерный стандарт для всех агентов — `docs/ENGINEERING.md`**: Luau-идиомы, сервер-авторитет,
+  производительность, где смотреть документацию (create.roblox.com через Context7, а не по памяти).
+
 - **Документация с каждым изменением:** `docs/CHANGELOG.md` всегда; `docs/GAME_DESIGN.md` при
   смене правил/механик; `docs/ARCHITECTURE.md` при смене устройства (модули, ремоуты, данные);
   `docs/PLAYBOOK.md` если меняется то, что нужно знать при создании похожей игры;
@@ -73,6 +76,6 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 | `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика и ввод), `HUD`, `LobbyMenus`, `DevPanel` (владелец), `Effects`, `Sounds`, `Traffic`, `Reveal`, `ConfigSync` |
 | `assets/ui` | Decal-ы в Roblox | 50 иконок Fluent Emoji 3D (MIT), `decals.json` |
 | `scripts` | CI | `publish.sh` (сборка, загрузка иконок, публикация), `upload_ui_assets.py` |
-| `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `BUSINESS` (монетизация, KPI, гипотезы), `CHANGELOG` |
+| `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `BUSINESS` (монетизация, KPI, гипотезы), `ENGINEERING` (стандарт кода и доки), `CHANGELOG` |
 
 Подробности: `docs/ARCHITECTURE.md`. Как собрать такую же игру на воде или суше: `docs/PLAYBOOK.md`.
