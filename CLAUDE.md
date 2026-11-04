@@ -12,9 +12,10 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 
 | Про что запрос | Агент | Его файлы |
 | --- | --- | --- |
-| Трассы, треки, участки, повороты, обрывы, дороги/трафик, миры как ландшафт, препятствия, расстановка бонусов на трассе, лобби как место | `track-architect` | `server/Track.luau`, `server/Props.luau`, `Config` (раздел ТРАССА, THEMES) |
+| Трассы, треки, участки, повороты, обрывы, дороги/трафик, миры как ландшафт, лобби как место; препятствия — виды, правила и логика размещения, плотность, сложность по уровням, расстановка бонусов | `track-architect` | `server/Track.luau`, `server/Props.luau`, `Config` (раздел ТРАССА, THEMES) |
 | Правила игры, прогрессия, экономика, цены, апгрейды и тиры, бонусы и их шансы, задания, подарки, сундуки, монетизация, баланс, «как должно работать» | `game-designer` | `Config.luau` (баланс), `server/Rewards.luau`, `server/DataService.luau`, `server/Main.server.luau` (правила), `docs/GAME_DESIGN.md` |
-| Внешний вид: 3D-модели (сани, ракеты, рогатка, пропсы), UI/UX (окна, HUD, кнопки, иконки), эффекты, свет, пейзаж, анимации, звук | `art-director` | `shared/SledModels.luau`, `shared/UIKit.luau`, `client/HUD`, `client/LobbyMenus`, `client/Effects`, `client/Reveal`, `client/Sounds`, `assets/ui` |
+| Средства передвижения детально: геометрия, посадка, точки крепления, обвес по тирам, ракеты/моторы, рогатка/катапульта, новый транспорт | `vehicle-engineer` | `shared/SledModels.luau`, `Config.SLEDS/TIERS`, `Main.makeSled` |
+| Внешний вид: стиль и цвета моделей, пропсы, UI/UX (окна, HUD, кнопки, иконки), эффекты, свет, пейзаж, анимации, звук | `art-director` | `server/Props.luau` (вид), `shared/UIKit.luau`, `client/HUD`, `client/LobbyMenus`, `client/Effects`, `client/Reveal`, `client/Sounds`, `assets/ui` |
 | Проверить, протестировать, пройти трассу, найти баги, оценить сложность/скорость/плотность препятствий, «почему не работает», FPS на телефоне | `qa-tester` | играет на staging через компьютер владельца; `docs/TESTING.md` |
 | Код-ревью, архитектура, структура модулей, деплой, CI, DataStore/ремоуты/безопасность, производительность, «сделай правильно» | `code-reviewer` | всё `src/`, `scripts/`, `default.project.json`, `docs/ARCHITECTURE.md` |
 
@@ -24,8 +25,11 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 - «Слишком сложно на 8 уровне» → `qa-tester` (замерить) → `game-designer` (решение) →
   `track-architect` (правка генерации).
 - «Кнопка вылезает за рамки» → `art-director`.
-- «Сделай новое средство передвижения» → `game-designer` (место в экономике) + `art-director`
-  (модель, обвес по тирам) → `qa-tester`.
+- «Сделай новое средство передвижения» → `vehicle-engineer` (чертёж, модель, крепления, обвес по
+  тирам) + `game-designer` (место в экономике, цена, бонус) + `art-director` (цвета, иконка) →
+  `qa-tester`.
+- «Добавь препятствия в каньон» → `track-architect` (карточка препятствия: роль, класс,
+  читаемость, размещение, прогрессия) + `art-director` (вид) → `qa-tester` (плотность, попытки).
 - «Хочу такую же игру на воде» → `docs/PLAYBOOK.md`, затем агенты по разделам плейбука.
 
 Агенты не спорят с решениями владельца из `docs/GAME_DESIGN.md` → «Решения владельца»; если
