@@ -1,0 +1,4 @@
+{
+  "_comment": "Universe ID опыта, чьи метрики собираем (Universe ID публичный, не секрет). 0 = брать UNIVERSE_ID окружения деплоя (staging).",
+  "analytics_universe_id": 0
+}

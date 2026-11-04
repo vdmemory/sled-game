@@ -74,9 +74,10 @@
    секрета в GitHub не нужно: `publish.sh` использует тот же ключ. Если такой системы в списке
    нет — API-бета ещё не открыта для аккаунта (DevForum, июль 2026): прислать скриншот списка,
    а до открытия — скриншоты Analytics раз в неделю, главный заносит в CSV руками.
-2. **ID production-опыта для метрик** (необязательно): GitHub → Settings → Environments →
-   staging → Environment variables → `ANALYTICS_UNIVERSE_ID` = Universe ID production-опыта.
-   Без него при деплое на staging собираются метрики тестового опыта.
+2. **ID production-опыта для метрик**: Universe ID боевого опыта (Creator Hub → опыт → «⋯» →
+   Copy Universe ID; он публичный) → в `analytics/config.json` поле `analytics_universe_id`
+   (или переменная окружения `ANALYTICS_UNIVERSE_ID` в GitHub). Пока 0 — собираются метрики
+   тестового опыта. Ключу деплоя нужно право Analytics и на боевой опыт.
 
 ## Источники
 - Open Cloud Analytics Query API: метрики и измерения —

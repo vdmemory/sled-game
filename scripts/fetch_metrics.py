@@ -25,7 +25,15 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CSV = ROOT / "analytics" / "metrics.csv"
 KEY = os.environ.get("ROBLOX_ANALYTICS_KEY") or os.environ.get("ROBLOX_API_KEY", "")
-UNIVERSE = os.environ.get("ANALYTICS_UNIVERSE_ID") or os.environ.get("UNIVERSE_ID", "")
+def _cfg_universe() -> str:
+    try:
+        v = json.loads((ROOT / "analytics" / "config.json").read_text()).get("analytics_universe_id") or 0
+        return str(v) if int(v) > 0 else ""
+    except (OSError, ValueError):
+        return ""
+
+
+UNIVERSE = os.environ.get("ANALYTICS_UNIVERSE_ID") or _cfg_universe() or os.environ.get("UNIVERSE_ID", "")
 DAYS = int(os.environ.get("DAYS", "8"))
 API = f"https://apis.roblox.com/analytics-query-api/v1/universes/{UNIVERSE}/metrics"
 DEVEX, FEE = 0.0038, 0.7
