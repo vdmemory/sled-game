@@ -110,6 +110,15 @@ def main():
         DB.write_text(json.dumps(ids, indent=1, sort_keys=True) + "\n")
     write_luau(ids)
     print(f"Иконок с ID: {len(ids)}")
+    # статус модерации (новые картинки Roblox показывает только после одобрения)
+    if KEY and ids:
+        states = {}
+        for name, aid in sorted(ids.items()):
+            code, body = http("GET", f"https://apis.roblox.com/assets/v1/assets/{aid}?readMask=moderationResult", headers={"x-api-key": KEY})
+            st = json.loads(body).get("moderationResult", {}).get("moderationState", f"HTTP {code}") if code == 200 else f"HTTP {code}: {body[:120]}"
+            states.setdefault(st, []).append(name)
+        for st, names in states.items():
+            print(f"Модерация {st}: {len(names)} — {', '.join(names[:8])}")
 
 
 if __name__ == "__main__":
