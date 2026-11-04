@@ -13,7 +13,7 @@
 ## Шаги задачи «Недельный обзор»
 0. **Свежие метрики.** `git commit --allow-empty -m "metrics: weekly refresh" && git push` → дождаться
    `completed success` последнего `gh run` (цикл ожидания — `docs/TESTING.md` §1) →
-   `gh run view <id> --log | sed -n '/METRICS_CSV_BEGIN/,/METRICS_CSV_END/p' | sed '1d;$d' | sed 's/^.*\t//'`
+   `gh run view <id> --log | sed -n '/METRICS_CSV_BEGIN/,/METRICS_CSV_END/p' | sed '1d;$d' | sed -E 's/^.*[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z //'`
    → если строк > 1, записать в `analytics/metrics.csv` (слить по дате с тем, что есть),
    `python3 scripts/metrics_report.py`, закоммитить `analytics/` с сообщением «analytics: метрики
    за неделю». Если в логе `::warning::метрики не собраны` или HTTP 403 — API недоступен, идти
