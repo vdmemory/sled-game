@@ -7,17 +7,21 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local UI = require(ReplicatedStorage.Shared:WaitForChild("UIKit"))
+local UIFx = require(ReplicatedStorage.Shared:WaitForChild("UIFx"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local player = Players.LocalPlayer
 local hud = player:WaitForChild("PlayerGui"):WaitForChild("HUD")
 local root = hud:WaitForChild("Root")
 local lobby = root:WaitForChild("Lobby")
+-- событие HUD: полёт монет/гемов к верхним счётчикам (см. HUD.client, CurrencyGain)
+local currencyGain = script.Parent:WaitForChild("HUD"):WaitForChild("CurrencyGain") :: BindableEvent
 local C = UI.C
 
 ------------------------------------------------------------------ окна
@@ -201,8 +205,55 @@ local function act(action: string, arg: any?): (boolean, any)
 	end
 	return ok, res
 end
+-- Сумма награды: из ответа сервера («+500 💰  +15 💎»), иначе — по дельте атрибутов
+local function gainAmounts(res: any, before: { [string]: number }): (number, number)
+	local coins, gems
+	if typeof(res) == "string" then
+		coins = tonumber(string.match(res, "%+(%d+)%s*💰"))
+		gems = tonumber(string.match(res, "%+(%d+)%s*💎"))
+	end
+	coins = coins or math.max(0, (player:GetAttribute("Coins") or 0) - before.Coins)
+	gems = gems or math.max(0, (player:GetAttribute("Gems") or 0) - before.Gems)
+	return coins, gems
+end
+local function gainFire(coins: number, gems: number, from: Vector2)
+	currencyGain:Fire("coin", coins, from)
+	currencyGain:Fire("gem", gems, from)
+end
+-- Награда с анимацией: держим счётчики, спрашиваем сервер, при успехе монеты летят к HUD.
+-- onSuccess(fire) — если задан, сам решает, когда запустить полёт (сундук: после открытия).
+local function rewardAct(action: string, arg: any?, from: GuiObject, onSuccess: ((() -> ()) -> ())?): boolean
+	local fromPos = from.AbsolutePosition + from.AbsoluteSize / 2 -- кнопку могут перерисовать
+	local before = { Coins = player:GetAttribute("Coins") or 0, Gems = player:GetAttribute("Gems") or 0 }
+	currencyGain:Fire("coin", -1, fromPos) -- «держать» счётчики до ответа сервера
+	currencyGain:Fire("gem", -1, fromPos)
+	local ok, res = act(action, arg)
+	if not ok then
+		gainFire(0, 0, fromPos)
+		return false
+	end
+	local coins, gems = gainAmounts(res, before)
+	local function fire()
+		gainFire(coins, gems, fromPos)
+	end
+	if onSuccess then
+		onSuccess(fire)
+	else
+		fire()
+	end
+	return true
+end
 chestPill.Activated:Connect(function()
-	act("chest")
+	if rewards and rewards.chestAt - serverNow() > 0 then
+		UIFx.shakeNo(chestPill) -- ещё закрыт
+		return
+	end
+	local ok = rewardAct("chest", nil, chestPill, function(fire)
+		UIFx.openChest(chestPill, fire)
+	end)
+	if not ok then
+		UIFx.shakeNo(chestPill)
+	end
 end)
 
 ------------------------------------------------------------------ Миры
@@ -310,8 +361,18 @@ local chestClaim = UI.new("TextButton", { Text = "", AnchorPoint = Vector2.new(1
 local chestIcon = UI.chest(chestClaim, { Position = UDim2.fromOffset(2, 6), Size = UDim2.fromOffset(68, 60), ZIndex = 35 })
 local chestDone = UI.icon("check", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(32, 32), Visible = false, ZIndex = 45, Parent = chestClaim })
 UI.bounce(chestClaim)
+local taskChestReady = false
 chestClaim.Activated:Connect(function()
-	act("taskChest")
+	if not taskChestReady then
+		UIFx.shakeNo(chestIcon) -- ещё не все задания / уже открыт
+		return
+	end
+	local ok = rewardAct("taskChest", nil, chestClaim, function(fire)
+		UIFx.openChest(chestIcon, fire)
+	end)
+	if not ok then
+		UIFx.shakeNo(chestIcon)
+	end
 end)
 -- список заданий прокручивается (их 6 в день)
 local taskRows = scroller(tasksBody, false, 108)
@@ -347,7 +408,7 @@ local function drawTasks()
 			UI.grad(row, UI.KIND.yellow[1], UI.KIND.yellow[2])
 			UI.bounce(row)
 			row.Activated:Connect(function()
-				act("task", i)
+				rewardAct("task", i, row)
 			end)
 		else
 			row.BackgroundColor3 = C.row
@@ -376,8 +437,8 @@ local function drawTasks()
 	local total = #rewards.tasks
 	setTasksBar(claimed / total, claimed .. "/" .. total)
 	chestDone.Visible = rewards.chestClaimed == true
-	local _ = chestIcon
-	chestClaim.Active = claimed == total and not rewards.chestClaimed
+	-- кнопка остаётся активной: если сундук не готов — покачивание «нет» вместо открытия
+	taskChestReady = claimed == total and not rewards.chestClaimed
 	tasksBadge.Text = tostring(ready)
 	tasksBadge.Visible = ready > 0
 	if claimed == total and not rewards.chestClaimed then
@@ -406,7 +467,9 @@ for i, g in Config.PLAYTIME_GIFTS do
 	local rowGems, setGems = UI.iconText({ Position = UDim2.fromOffset(6, if both then 32 else 12), Size = UDim2.new(1, -12, 0, if both then 24 else 40), Color = C.ink, ZIndex = 34, Parent = cell })
 	local st = UI.button("blue", "", { Position = UDim2.new(0, 8, 1, -46), Size = UDim2.new(1, -16, 0, 38), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = cell })
 	st.Activated:Connect(function()
-		act("gift", i)
+		if not rewardAct("gift", i, st) then
+			UIFx.shakeNo(st)
+		end
 	end)
 	giftCells[i] = { status = st, setCoins = setCoins, setGems = setGems, rows = { rowCoins, rowGems } }
 end
@@ -420,8 +483,25 @@ local sledList = scroller(sledBody, false, 6)
 local sl = Instance.new("UIListLayout")
 sl.Padding = UDim.new(0, 12)
 sl.Parent = sledList
-type Cell = { status: TextButton, model: any, rarity: number }
+type Cell = { status: TextButton, model: any, rarity: number, frame: Frame }
 local sledCells: { Cell } = {}
+-- Выбор саней: вспышка на выбранной карточке, остальные на 0.3 с приглушаются
+local function selectSled(chosen: Frame, purchased: boolean, status: TextButton)
+	UIFx.pulseSelect(chosen, if purchased then "КУПЛЕНО" else "ВЫБРАНО")
+	if purchased then
+		UI.pop(status) -- цена «подпрыгивает»
+	end
+	local dim = Color3.fromRGB(205, 212, 225)
+	for _, c in sledCells do
+		if c.frame ~= chosen then
+			local f = c.frame
+			TweenService:Create(f, TweenInfo.new(0.12), { BackgroundColor3 = dim }):Play()
+			task.delay(0.3, function()
+				TweenService:Create(f, TweenInfo.new(0.25), { BackgroundColor3 = C.white }):Play()
+			end)
+		end
+	end
+end
 for mi, model in Config.SLEDS do
 	local row = UI.new("Frame", { LayoutOrder = mi, Size = UDim2.new(1, -8, 0, 156), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = sledList })
 	UI.corner(row, 16)
@@ -451,9 +531,17 @@ for mi, model in Config.SLEDS do
 		UI.ink({ Text = if total > 0 then "+" .. total .. "%" else "базовые", Position = UDim2.fromOffset(6, 82), Size = UDim2.new(1, -12, 0, 18), TextColor3 = Color3.fromRGB(60, 150, 70), ZIndex = 35, Parent = cell })
 		local status = UI.button("blue", "", { Position = UDim2.new(0, 6, 1, -40), Size = UDim2.new(1, -12, 0, 34), Radius = 10, StrokeThickness = 2, ZIndex = 35, Parent = cell })
 		status.Activated:Connect(function()
-			say(Remotes.SledAction:InvokeServer(model.id, r))
+			local key = model.id .. ":" .. r
+			local hadIt = csvSet("OwnedSleds")[key] == true
+			local ok, res = Remotes.SledAction:InvokeServer(model.id, r)
+			say(ok, res)
+			if ok then
+				selectSled(cell, not hadIt, status)
+			else
+				UIFx.shakeNo(status)
+			end
 		end)
-		table.insert(sledCells, { status = status, model = model, rarity = r })
+		table.insert(sledCells, { status = status, model = model, rarity = r, frame = cell })
 	end
 end
 local function drawSleds()

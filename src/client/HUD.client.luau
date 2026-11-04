@@ -10,6 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local UI = require(ReplicatedStorage.Shared:WaitForChild("UIKit"))
+local UIFx = require(ReplicatedStorage.Shared:WaitForChild("UIFx"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local player = Players.LocalPlayer
@@ -22,6 +23,12 @@ local C = UI.C
 local upgradeReveal = Instance.new("BindableEvent")
 upgradeReveal.Name = "UpgradeReveal"
 upgradeReveal.Parent = script
+-- Награда валютой: (kind "coin"|"gem", amount, fromGuiOrPos). amount < 0 (или nil) — «держать»
+-- счётчик на старом значении (перед запросом к серверу), 0 — отпустить, > 0 — монеты летят к
+-- пилюле, счётчик тикает до нового значения. Без события валюта обновляется мгновенно.
+local currencyGain = Instance.new("BindableEvent")
+currencyGain.Name = "CurrencyGain"
+currencyGain.Parent = script
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "HUD"
@@ -57,8 +64,15 @@ local currencyRow = UI.new("Frame", {
 	Size = UDim2.fromOffset(330, 40),
 	Parent = root,
 })
-local coinsLabel = UI.currency(currencyRow, "coin", { Position = UDim2.fromOffset(20, 0), Size = UDim2.fromOffset(140, 40) })
-local gemsLabel = UI.currency(currencyRow, "gem", { Position = UDim2.fromOffset(190, 0), Size = UDim2.fromOffset(140, 40) })
+-- якорь по центру: бамп при прилёте монет растёт из середины пилюли
+local coinsLabel = UI.currency(currencyRow, "coin", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(90, 20), Size = UDim2.fromOffset(140, 40) })
+local gemsLabel = UI.currency(currencyRow, "gem", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(260, 20), Size = UDim2.fromOffset(140, 40) })
+local pills = { Coins = coinsLabel.Parent :: GuiObject, Gems = gemsLabel.Parent :: GuiObject }
+local currencyLabels = { Coins = coinsLabel, Gems = gemsLabel }
+-- «Замороженное» значение счётчика на время полёта монет (nil — показываем атрибут как есть)
+local frozen: { [string]: number? } = {}
+local shown: { [string]: number } = { Coins = 0, Gems = 0 }
+local gainToken: { [string]: number } = { Coins = 0, Gems = 0 }
 
 -- «УРОВЕНЬ N» + мир
 local levelTitle = UI.text({
@@ -85,7 +99,7 @@ local tapText = UI.new("TextButton", {
 	Size = UDim2.fromOffset(520, 44),
 	Parent = lobby,
 })
-local tapLabel = UI.text({ Text = "НАЖМИ, ЧТОБЫ ИГРАТЬ  ▶", Size = UDim2.fromScale(1, 1), Outline = 3, Parent = tapText })
+UI.text({ Text = "НАЖМИ, ЧТОБЫ ИГРАТЬ  ▶", Size = UDim2.fromScale(1, 1), Outline = 3, Parent = tapText })
 local tapScale = Instance.new("UIScale")
 tapScale.Parent = tapText
 TweenService:Create(tapScale, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.08 }):Play()
@@ -100,6 +114,29 @@ local CARD_STYLE = {
 local notice: (string, number?) -> ()
 type Card = { root: TextButton, badge: TextLabel, pips: { Frame }, setPrice: (string, string?) -> (), priceBtn: Frame, effect: TextLabel, style: any }
 local cards: { [string]: Card } = {}
+-- Число эффекта апгрейда и его формат — чтобы цифра могла «тикать» при покупке
+local function effectValue(name: string, lvl: number): number
+	if name == "Launch" then
+		return Config.launchSpeed(lvl)
+	elseif name == "Rocket" then
+		return Config.rocketFuel(lvl)
+	elseif name == "Income" then
+		return Config.incomeMult(lvl)
+	end
+	return (1 - Config.friction(lvl) / Config.friction(0)) * 100
+end
+local function effectText(name: string, v: number): string
+	if name == "Launch" then
+		return "сила " .. math.floor(v + 0.5)
+	elseif name == "Rocket" then
+		return string.format("%.1fс", v)
+	elseif name == "Income" then
+		return (string.format("x%.2f", v):gsub("%.?0+$", ""))
+	end
+	return "+" .. math.floor(v + 0.5) .. "%"
+end
+-- Пока идёт короткая анимация покупки, refresh не перезаписывает цифру эффекта
+local effectHold: { [string]: boolean } = {}
 
 local cardsRow = UI.new("Frame", {
 	Name = "Upgrades",
@@ -116,7 +153,6 @@ cl.SortOrder = Enum.SortOrder.LayoutOrder
 cl.Parent = cardsRow
 
 local function makeCard(name: string, parent: Instance, size: UDim2, order: number, compact: boolean): Card
-	local u = Config.UPGRADES[name]
 	local st = CARD_STYLE[name]
 	local card = UI.new("TextButton", { Text = "", AutoButtonColor = false, LayoutOrder = order, Size = size, BackgroundTransparency = 0, Parent = parent })
 	if compact then
@@ -176,16 +212,43 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	local _, setPrice = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.5, -1), Size = UDim2.new(1, -12, 0, math.floor(btnH * 0.42)), ZIndex = 3, Parent = priceBtn })
 	local c = { root = card, badge = badge, pips = pips, setPrice = setPrice, priceBtn = priceBtn, effect = effect, style = st }
 	cards[name] = c
+	local buying = false
 	card.Activated:Connect(function()
+		if buying then
+			return
+		end
+		buying = true
+		local oldLvl = player:GetAttribute(name .. "Level") or 0
+		effectHold[name] = true
 		local ok, msg = Remotes.BuyUpgrade:InvokeServer(name)
+		buying = false
 		if not ok then
+			effectHold[name] = nil
 			notice(msg or "Ошибка")
-		elseif msg then
+			UIFx.shakeNo(priceBtn)
+			return
+		end
+		-- короткая анимация любого апгрейда (~0.8 с): карточка подпрыгивает, цифра тикает,
+		-- новое деление тира загорается
+		local newLvl = math.max(player:GetAttribute(name .. "Level") or 0, oldLvl + 1)
+		UIFx.bump(card, 1.1)
+		UIFx.bump(priceBtn, 1.12)
+		controller.Sfx:Fire("coin")
+		UIFx.tickNumber(effect, effectValue(name, oldLvl), effectValue(name, newLvl), 0.5, function(v)
+			return effectText(name, v)
+		end)
+		local inTier = if newLvl % Config.TIER_SIZE == 0 then Config.TIER_SIZE else newLvl % Config.TIER_SIZE
+		local pip = pips[inTier]
+		if pip then
+			UIFx.lightUp(pip, st.pip)
+		end
+		task.delay(0.8, function()
+			effectHold[name] = nil
+			effect.Text = effectText(name, effectValue(name, player:GetAttribute(name .. "Level") or 0))
+		end)
+		if msg then
 			-- новый тир → большая анимация (Reveal.client)
 			upgradeReveal:Fire(name, msg)
-		else
-			UI.pop(card)
-			controller.Sfx:Fire("coin")
 		end
 	end)
 	return c
@@ -461,8 +524,11 @@ local function refresh()
 	local level = player:GetAttribute("Level") or 1
 	local inRun = player:GetAttribute("InRun") == true
 
-	coinsLabel.Text = UI.money(coins)
-	gemsLabel.Text = UI.money(gems)
+	-- во время полёта монет счётчик держим на старом значении (см. CurrencyGain)
+	shown.Coins = frozen.Coins or coins
+	shown.Gems = frozen.Gems or gems
+	coinsLabel.Text = UI.money(shown.Coins)
+	gemsLabel.Text = UI.money(shown.Gems)
 	runUi.Visible = inRun
 	currencyRow.Visible = not inRun
 
@@ -481,11 +547,9 @@ local function refresh()
 	for name, c in cards do
 		local u = Config.UPGRADES[name]
 		local lvl = player:GetAttribute(name .. "Level") or 0
-		c.effect.Text = if name == "Launch"
-			then "сила " .. Config.launchSpeed(lvl)
-			elseif name == "Rocket" then string.format("%.1fс", Config.rocketFuel(lvl))
-			elseif name == "Income" then string.format("x%.2f", Config.incomeMult(lvl)):gsub("%.?0+$", "")
-			else "+" .. math.floor((1 - Config.friction(lvl) / Config.friction(0)) * 100 + 0.5) .. "%"
+		if not effectHold[name] then
+			c.effect.Text = effectText(name, effectValue(name, lvl))
+		end
 		c.badge.Text = tostring(lvl)
 		local inTier = if lvl > 0 and lvl % Config.TIER_SIZE == 0 then Config.TIER_SIZE else lvl % Config.TIER_SIZE
 		for i, pip in c.pips do
@@ -515,6 +579,62 @@ for _, attr in { "Coins", "Gems", "Level", "LevelBest", "InRun", "Loaded", "Them
 	player:GetAttributeChangedSignal(attr):Connect(refresh)
 end
 refresh()
+
+------------------------------------------------------------------ награда валютой: полёт → тик → бамп
+local function releaseCurrency(attr: string)
+	gainToken[attr] += 1
+	frozen[attr] = nil
+	refresh()
+end
+currencyGain.Event:Connect(function(kind: string, amount: number?, from: any)
+	local attr = if kind == "gem" then "Gems" else "Coins"
+	local label = currencyLabels[attr]
+	local pill = pills[attr]
+	if amount == nil or amount < 0 then
+		-- «держать»: запоминаем, что показано сейчас, и не даём атрибуту обновить счётчик
+		if frozen[attr] == nil then
+			frozen[attr] = shown[attr]
+			gainToken[attr] += 1
+			local my = gainToken[attr]
+			-- страховка: если отпустить забыли — через 3 с отпускаем сами
+			task.delay(3, function()
+				if gainToken[attr] == my then
+					releaseCurrency(attr)
+				end
+			end)
+		end
+		return
+	end
+	if amount == 0 then
+		releaseCurrency(attr)
+		return
+	end
+	local startVal = frozen[attr] or shown[attr]
+	frozen[attr] = startVal
+	gainToken[attr] += 1
+	local my = gainToken[attr]
+	local fromPos = if typeof(from) == "Vector2" then from elseif typeof(from) == "Instance" and from:IsA("GuiObject") then from else pill
+	UIFx.flyCurrency(kind, fromPos, pill, UIFx.countFor(kind, amount), function(last)
+		if gainToken[attr] ~= my then
+			return
+		end
+		controller.Sfx:Fire(if kind == "gem" then "gem" else "coin")
+		if not last then
+			return
+		end
+		local target = player:GetAttribute(attr) or 0
+		UIFx.tickNumber(label, frozen[attr] or startVal, target, UIFx.T.tick, function(v)
+			local n = math.floor(v + 0.5)
+			frozen[attr] = n
+			return UI.money(n)
+		end)
+		task.delay(UIFx.T.tick + 0.05, function()
+			if gainToken[attr] == my then
+				releaseCurrency(attr)
+			end
+		end)
+	end)
+end)
 
 ------------------------------------------------------------------ обновление заезда
 local recordShown = false
