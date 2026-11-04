@@ -178,11 +178,12 @@ local function makeFuel(at: CFrame, parent: Instance)
 end
 -- Золотое кольцо поперёк полосы: проезжаешь сквозь — монеты
 local function makeRing(at: CFrame, parent: Instance)
-	powerHit("ring", at * CFrame.new(0, 0.5, 0), Vector3.new(5, 6, 1.5), parent)
-	local r, n = 4, 16
+	-- целое кольцо над снегом (низ почти касается трассы), датчик — в проёме
+	local r, n, cy = 3.6, 18, 3.9
+	powerHit("ring", at * CFrame.new(0, cy - 0.5, 0), Vector3.new(5, 6.5, 1.5), parent)
 	for k = 0, n - 1 do
 		local a = k / n * math.pi * 2
-		deco({ Size = Vector3.new(0.7, 1.75, 0.7), CFrame = at * CFrame.new(math.cos(a) * r, math.sin(a) * r + 1.5, 0) * CFrame.Angles(0, 0, a), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 205, 60) }, parent)
+		deco({ Size = Vector3.new(0.6, 1.4, 0.6), CFrame = at * CFrame.new(math.cos(a) * r, math.sin(a) * r + cy, 0) * CFrame.Angles(0, 0, a), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 205, 60) }, parent)
 	end
 end
 
