@@ -431,13 +431,14 @@ local ROCKETS = {
 	[2] = { name = "Турбо-ракета", body = Color3.fromRGB(205, 210, 220), bodyMat = Enum.Material.Metal, nose = Color3.fromRGB(225, 45, 45), fin = Color3.fromRGB(225, 45, 45), band = Color3.fromRGB(225, 45, 45), nozzle = STEEL, d = 1.05, len = 3.2, fins = 4, intake = true },
 	[3] = { name = "Мега-двигатель", body = Color3.fromRGB(45, 95, 215), nose = WHITE, fin = Color3.fromRGB(255, 200, 40), band = WHITE, nozzle = STEEL, d = 1.15, len = 3.5, fins = 4, intake = true, glow = Color3.fromRGB(90, 220, 255), canards = true },
 	[4] = { name = "Бласт-двигатель", body = Color3.fromRGB(240, 190, 55), bodyMat = Enum.Material.SmoothPlastic, shine = 0.25, nose = BLACK, fin = BLACK, band = BLACK, nozzle = Color3.fromRGB(60, 60, 70), d = 1.2, len = 3.7, fins = 4, intake = true, glow = Color3.fromRGB(255, 150, 40), canards = true },
+	[6] = { name = "Плазменный двигатель", body = WHITE, nose = Color3.fromRGB(120, 230, 255), fin = Color3.fromRGB(90, 230, 255), finMat = Enum.Material.Neon, band = Color3.fromRGB(90, 230, 255), bandMat = Enum.Material.Neon, nozzle = STEEL, d = 1.3, len = 4.2, fins = 3, intake = true, glow = Color3.fromRGB(120, 240, 255), canards = true },
 	[5] = { name = "Гиперджет", body = Color3.fromRGB(40, 32, 70), nose = Color3.fromRGB(170, 90, 255), fin = Color3.fromRGB(90, 230, 255), finMat = Enum.Material.Neon, band = Color3.fromRGB(90, 230, 255), bandMat = Enum.Material.Neon, nozzle = BLACK, d = 1.25, len = 3.9, fins = 4, intake = true, glow = Color3.fromRGB(190, 110, 255), canards = true },
 }
 SledModels.ROCKETS = ROCKETS
 
 -- Одна ракета: центр at, нос смотрит по −Z. Возвращает позицию среза сопла (для огня).
 local function buildRocket(b, at: Vector3, tier: number): Vector3
-	local r = ROCKETS[math.clamp(tier, 0, 5)]
+	local r = ROCKETS[math.clamp(tier, 0, 6)]
 	local d, len = r.d, r.len
 	local front, back = at.Z - len / 2, at.Z + len / 2
 	local metal = Enum.Material.Metal
@@ -553,7 +554,7 @@ end
 function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier: number, rocketTier: number, accent: Color3, weldTo: BasePart?): Vector3
 	local b = newBuilder(parent, base, weldTo)
 	local m = MOUNTS[id] or MOUNTS.tube
-	local r = ROCKETS[math.clamp(rocketTier, 0, 5)]
+	local r = ROCKETS[math.clamp(rocketTier, 0, 6)]
 	local x = if m.onWing then m.x else m.x + r.d / 2 + 0.12
 	local y = if m.onWing then m.y + r.d / 2 else m.y
 	local nozzle = Vector3.zero
@@ -606,6 +607,45 @@ function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier:
 			b:block(Vector3.new(0.12, 0.12, 4.5), CFrame.new(sx * (if id == "tube" then 3.0 else 1.6), -0.55, 0.2), accent, Enum.Material.Neon)
 		end
 	end
+	local back = (SPOILER[id] or { 3.0, 0.3 })
+	local side = x - r.d / 2 - 0.1 -- борт (там, где кронштейн ракеты)
+	if sledTier >= 6 then -- флажок на шесте сзади слева
+		local px, pz = -math.min(side, 1.4), back[1] - 0.4
+		b:rod({ Vector3.new(px, back[2] - 0.2, pz), Vector3.new(px, back[2] + 3.2, pz) }, 0.12, STEEL, Enum.Material.Metal)
+		b:wedge(Vector3.new(0.06, 0.9, 1.3), CFrame.new(px, back[2] + 2.7, pz + 0.65) * CFrame.Angles(0, 0, 0), accent)
+		b:ball(0.25, CFrame.new(px, back[2] + 3.3, pz), Color3.fromRGB(255, 215, 70), Enum.Material.Neon)
+	end
+	if sledTier >= 7 then -- боковые крылья-плавники
+		for _, sx in { -1, 1 } do
+			b:wedge(Vector3.new(0.12, 0.9, 1.8), CFrame.new(sx * (side + 0.05), y + 0.55, m.z + 0.9) * CFrame.Angles(0, 0, sx * math.rad(-35)), accent)
+		end
+	end
+	if sledTier >= 8 then -- хромированные выхлопные трубы сзади
+		for _, sx in { -1, 1 } do
+			local p0 = Vector3.new(sx * 0.6, back[2] - 0.3, back[1] - 0.6)
+			local pipe = b:cyl(0.32, 1.4, p0 + Vector3.new(0, 0.35, 0.55), Vector3.new(0, 0.5, 1), Color3.fromRGB(215, 220, 230), Enum.Material.Metal)
+			pipe.Reflectance = 0.4
+			b:cyl(0.24, 0.06, p0 + Vector3.new(0, 0.7, 1.25), Vector3.new(0, 0.5, 1), BLACK)
+		end
+	end
+	if sledTier >= 9 then -- сияние: искры и тёплый свет
+		local core = b:ball(0.2, CFrame.new(0, 0.2, 0), WHITE, nil, nil)
+		core.Transparency = 1
+		local sp = Instance.new("Sparkles")
+		sp.SparkleColor = Color3.fromRGB(255, 225, 120)
+		sp.Parent = core
+	end
+	if sledTier >= 10 then -- корона чемпиона спереди
+		local lp = m.lights
+		local c = CFrame.new(0, lp.Y + 0.55, lp.Z + 0.1)
+		local gold = Color3.fromRGB(255, 205, 60)
+		b:cyl(0.9, 0.3, c.Position, Vector3.yAxis, gold, Enum.Material.SmoothPlastic).Reflectance = 0.3
+		for k = 0, 4 do
+			local a = k / 5 * math.pi * 2
+			b:wedge(Vector3.new(0.12, 0.45, 0.3), c * CFrame.Angles(0, a, 0) * CFrame.new(0, 0.35, -0.4), gold)
+		end
+		b:ball(0.25, c * CFrame.new(0, 0.3, -0.45), Color3.fromRGB(255, 60, 90), Enum.Material.Neon)
+	end
 	return nozzle
 end
 
@@ -614,17 +654,24 @@ end
 -- золотая колонна с камнем → неоновый обелиск. Вокруг верха намотана резинка.
 -- base — центр столба (высота 9, низ на −4.5); резинка крепится на высоте +3.5.
 SledModels.ROPE_COLORS = {
-	Color3.fromRGB(205, 170, 120),
-	Color3.fromRGB(205, 55, 50),
-	Color3.fromRGB(215, 185, 140),
-	Color3.fromRGB(45, 45, 55),
-	Color3.fromRGB(255, 210, 80),
-	Color3.fromRGB(90, 230, 255),
+	Color3.fromRGB(205, 170, 120), -- 0 верёвка
+	Color3.fromRGB(205, 55, 50), -- 1 красный канат
+	Color3.fromRGB(215, 185, 140), -- 2 витой бежевый
+	Color3.fromRGB(45, 45, 55), -- 3 стальной трос
+	Color3.fromRGB(255, 210, 80), -- 4 золотой
+	Color3.fromRGB(90, 230, 255), -- 5 неон
+	Color3.fromRGB(200, 240, 255), -- 6 ледяной
+	Color3.fromRGB(255, 120, 30), -- 7 огненный
+	Color3.fromRGB(120, 140, 255), -- 8 электрический
+	Color3.fromRGB(255, 255, 255), -- 9 радужный (цвета задаются отдельно)
+	Color3.fromRGB(180, 110, 255), -- 10 галактический
 }
+-- Какие резинки светятся
+SledModels.ROPE_GLOW = { [5] = true, [6] = true, [7] = true, [8] = true, [9] = true, [10] = true }
 
 function SledModels.slingshot(parent: Instance, base: CFrame, tier: number)
 	local b = newBuilder(parent, base, nil)
-	tier = math.clamp(tier, 0, 5)
+	tier = math.clamp(tier, 0, 10)
 	local Y = Vector3.yAxis
 	local function v(y: number): Vector3
 		return Vector3.new(0, y, 0)
@@ -714,6 +761,75 @@ function SledModels.slingshot(parent: Instance, base: CFrame, tier: number)
 		local gem = b:block(Vector3.new(0.9, 0.9, 0.9), CFrame.new(0, 5.1, 0) * CFrame.Angles(math.rad(45), 0, math.rad(35)), Color3.fromRGB(80, 200, 255), Enum.Material.Glass)
 		gem.Transparency = 0.2
 		b:ball(0.45, CFrame.new(0, 5.1, 0), Color3.fromRGB(150, 230, 255), Enum.Material.Neon)
+	elseif tier == 6 then
+		-- ледяная: прозрачная шестигранная колонна со светящейся сердцевиной и короной сосулек
+		local ice = Color3.fromRGB(180, 230, 255)
+		b:block(Vector3.new(2.8, 0.7, 2.8), CFrame.new(0, -4.15, 0), Color3.fromRGB(235, 245, 255), Enum.Material.Snow)
+		b:cyl(1.8, 8.2, v(-0.1), Y, ice, Enum.Material.Glass).Transparency = 0.25
+		b:cyl(0.6, 7.6, v(-0.1), Y, Color3.fromRGB(120, 220, 255), Enum.Material.Neon)
+		for i = 0, 5 do
+			local a = i / 6 * math.pi * 2
+			b:wedge(Vector3.new(0.5, 1.8, 0.7), CFrame.new(math.cos(a) * 0.75, 4.6, math.sin(a) * 0.75) * CFrame.Angles(0, -a, 0), ice, Enum.Material.Ice)
+		end
+		postR = 0.9
+	elseif tier == 7 then
+		-- огненная: обсидиан с лавовыми трещинами и чаша с настоящим огнём
+		local obs = Color3.fromRGB(35, 28, 30)
+		b:block(Vector3.new(2.7, 0.7, 2.7), CFrame.new(0, -4.15, 0), obs, Enum.Material.Basalt)
+		b:cyl(1.7, 7.4, v(-0.3), Y, obs, Enum.Material.Basalt)
+		for k = 0, 4 do
+			b:block(Vector3.new(1.74, 0.16, 0.5), CFrame.new(0, -3 + k * 1.5, 0) * CFrame.Angles(0, k * 1.1, 0.25), Color3.fromRGB(255, 110, 30), Enum.Material.Neon)
+		end
+		b:cyl(2.6, 0.5, v(3.75), Y, Color3.fromRGB(60, 50, 50), Enum.Material.Metal)
+		local coals = b:cyl(2.2, 0.2, v(4.05), Y, Color3.fromRGB(255, 140, 40), Enum.Material.Neon)
+		local fire = Instance.new("Fire")
+		fire.Size = 6
+		fire.Heat = 12
+		fire.Parent = coals
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 140, 50)
+		light.Range = 14
+		light.Parent = coals
+		postR = 0.9
+	elseif tier == 8 then
+		-- техно-пилон: квадратная металлическая стойка, светящиеся линии и парящее кольцо
+		local metal = Color3.fromRGB(55, 60, 75)
+		b:block(Vector3.new(2.8, 0.6, 2.8), CFrame.new(0, -4.2, 0), metal, Enum.Material.DiamondPlate)
+		b:block(Vector3.new(1.6, 8.2, 1.6), CFrame.new(0, -0.1, 0), metal, Enum.Material.Metal)
+		for _, f in { Vector3.new(0.81, 0, 0), Vector3.new(-0.81, 0, 0), Vector3.new(0, 0, 0.81), Vector3.new(0, 0, -0.81) } do
+			b:block(Vector3.new(if f.X ~= 0 then 0.04 else 0.25, 7.4, if f.Z ~= 0 then 0.04 else 0.25), CFrame.new(f), Color3.fromRGB(90, 160, 255), Enum.Material.Neon)
+		end
+		b:torus(v(4.6), 1.3, 0.22, 16, Color3.fromRGB(120, 200, 255), Enum.Material.Neon)
+		b:block(Vector3.new(1.9, 0.4, 1.9), CFrame.new(0, 4.05, 0), Color3.fromRGB(30, 32, 40), Enum.Material.Metal)
+		postR = 1.05
+	elseif tier == 9 then
+		-- радужная: столбик из разноцветных колец и сияющая звезда
+		local rainbow = { Color3.fromRGB(240, 70, 70), Color3.fromRGB(255, 150, 50), Color3.fromRGB(255, 220, 60), Color3.fromRGB(90, 210, 90), Color3.fromRGB(70, 160, 255), Color3.fromRGB(120, 90, 230), Color3.fromRGB(200, 90, 220) }
+		b:block(Vector3.new(2.7, 0.6, 2.7), CFrame.new(0, -4.2, 0), WHITE, Enum.Material.SmoothPlastic)
+		for k, col in rainbow do
+			b:cyl(1.7, 1.12, v(-3.4 + (k - 1) * 1.12), Y, col).Reflectance = 0.15
+		end
+		local star = b:ball(1.3, CFrame.new(0, 4.9, 0), Color3.fromRGB(255, 230, 90), Enum.Material.Neon)
+		local sp = Instance.new("Sparkles")
+		sp.SparkleColor = Color3.fromRGB(255, 240, 150)
+		sp.Parent = star
+		postR = 0.88
+	elseif tier >= 10 then
+		-- галактическая: тёмно-фиолетовая колонна со звёздами и парящая планета с кольцом
+		local dark = Color3.fromRGB(40, 20, 70)
+		b:block(Vector3.new(2.7, 0.6, 2.7), CFrame.new(0, -4.2, 0), dark, Enum.Material.Slate)
+		local col = b:cyl(1.7, 8.0, v(-0.3), Y, dark, Enum.Material.Glass)
+		col.Transparency = 0.1
+		local sp = Instance.new("Sparkles")
+		sp.SparkleColor = Color3.fromRGB(200, 170, 255)
+		sp.Parent = col
+		local planet = b:ball(1.6, CFrame.new(0, 5.4, 0), Color3.fromRGB(170, 110, 255), Enum.Material.Neon)
+		b:torus(v(5.4), 1.3, 0.14, 18, Color3.fromRGB(255, 220, 120), Enum.Material.Neon)
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(180, 120, 255)
+		light.Range = 14
+		light.Parent = planet
+		postR = 0.88
 	else
 		-- неоновый обелиск: тёмный камень, светящиеся кольца, парящий кристалл
 		local dark, neon = Color3.fromRGB(32, 26, 55), Color3.fromRGB(90, 230, 255)
@@ -734,7 +850,7 @@ function SledModels.slingshot(parent: Instance, base: CFrame, tier: number)
 	end
 	-- намотка резинки: три витка у точки крепления
 	for i = 0, 2 do
-		b:torus(v(3.15 + i * 0.32), postR + 0.08, 0.3, 14, rope, if tier == 5 then Enum.Material.Neon else Enum.Material.Fabric)
+		b:torus(v(3.15 + i * 0.32), postR + 0.08, 0.3, 14, rope, if SledModels.ROPE_GLOW[tier] then Enum.Material.Neon else Enum.Material.Fabric)
 	end
 end
 

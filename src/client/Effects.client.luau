@@ -2,6 +2,7 @@
 -- Ничего не влияет на геймплей — только картинка.
 
 local Players = game:GetService("Players")
+local SledModels = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("SledModels"))
 local RunService = game:GetService("RunService")
 local CollectionService = game:GetService("CollectionService")
 
@@ -102,27 +103,106 @@ local function addSnowTrail(sled: Instance)
 		-- сопла боковых ракет: координаты отдаёт сервер (SledModels.extras)
 		local np = sled:GetAttribute("RocketNozzle")
 		local n = if typeof(np) == "Vector3" then np else Vector3.new(2.2, 0.6, 3.6)
+		-- Реалистичное пламя: светящийся конус-факел (два Beam: ядро и оболочка), искристое ядро,
+		-- языки огня, дым позади и мерцающий свет. Плазменные ракеты (тир 5+) горят голубым.
+		local tier = sled:GetAttribute("RocketTier") or 0
+		local plasma = tier >= 5
+		local d = (SledModels.ROCKETS[math.clamp(tier, 0, 6)] or SledModels.ROCKETS[1]).d
+		local hot = if plasma then Color3.fromRGB(220, 250, 255) else Color3.fromRGB(255, 250, 220)
+		local mid = if plasma then Color3.fromRGB(90, 200, 255) else Color3.fromRGB(255, 170, 40)
+		local outer = if plasma then Color3.fromRGB(140, 90, 255) else Color3.fromRGB(255, 70, 20)
 		for _, side in { -1, 1 } do
 			local nozzle = Instance.new("Attachment")
 			nozzle.Name = "RocketNozzle"
 			nozzle.Position = Vector3.new(side * math.abs(n.X), n.Y, n.Z)
 			nozzle.Parent = sled
-			local fire = Instance.new("ParticleEmitter")
-			fire.Name = "RocketFire"
-			fire.Texture = "rbxasset://textures/particles/fire_main.dds"
-			fire.Color = ColorSequence.new(Color3.fromRGB(255, 220, 120), Color3.fromRGB(255, 90, 30))
+			local tail = Instance.new("Attachment")
+			tail.Name = "RocketTail"
+			tail.Position = nozzle.Position + Vector3.new(0, 0, 5)
+			tail:SetAttribute("BaseZ", tail.Position.Z)
+			tail.Parent = sled
+			local coreTail = Instance.new("Attachment")
+			coreTail.Name = "RocketCoreTail"
+			coreTail.Position = nozzle.Position + Vector3.new(0, 0, 2.2)
+			coreTail.Parent = sled
+			local function beam(name: string, a1: Attachment, w0: number, colors: ColorSequence, transp: NumberSequence)
+				local bm = Instance.new("Beam")
+				bm.Name = name
+				bm.Attachment0 = nozzle
+				bm.Attachment1 = a1
+				bm.Width0 = w0
+				bm.Width1 = 0.05
+				bm.FaceCamera = true
+				bm.Segments = 12
+				bm.LightEmission = 1
+				bm.LightInfluence = 0
+				bm.Color = colors
+				bm.Transparency = transp
+				bm.Enabled = false
+				bm.Parent = sled
+				return bm
+			end
+			-- оболочка факела: от жёлто-белого у сопла к оранжевому и красному на конце
+			beam("RocketPlume", tail, d * 0.9, ColorSequence.new({
+				ColorSequenceKeypoint.new(0, hot),
+				ColorSequenceKeypoint.new(0.25, mid),
+				ColorSequenceKeypoint.new(1, outer),
+			}), NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.05),
+				NumberSequenceKeypoint.new(0.6, 0.45),
+				NumberSequenceKeypoint.new(1, 1),
+			})).Name = "RocketPlume" .. side
+			-- ослепительное короткое ядро
+			beam("RocketCore", coreTail, d * 0.5, ColorSequence.new(Color3.new(1, 1, 1), hot), NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(1, 1),
+			})).Name = "RocketCore" .. side
+			local function emitter(name: string, tex: string): ParticleEmitter
+				local pe = Instance.new("ParticleEmitter")
+				pe.Name = name
+				pe.Texture = tex
+				pe.EmissionDirection = Enum.NormalId.Back
+				pe.Rate = 0
+				pe.Parent = nozzle
+				return pe
+			end
+			-- языки пламени вокруг факела
+			local fire = emitter("RocketFire", "rbxasset://textures/particles/fire_main.dds")
+			fire.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, hot), ColorSequenceKeypoint.new(0.3, mid), ColorSequenceKeypoint.new(1, outer) })
 			fire.LightEmission = 1
-			fire.Size = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 1.6),
-				NumberSequenceKeypoint.new(1, 0.2),
-			})
-			fire.Transparency = NumberSequence.new(0.1, 1)
-			fire.Lifetime = NumberRange.new(0.15, 0.3)
-			fire.Speed = NumberRange.new(25, 35)
-			fire.EmissionDirection = Enum.NormalId.Back
-			fire.SpreadAngle = Vector2.new(8, 8)
-			fire.Rate = 0
-			fire.Parent = nozzle
+			fire.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, d * 0.9), NumberSequenceKeypoint.new(0.5, d * 1.4), NumberSequenceKeypoint.new(1, 0.1) })
+			fire.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+			fire.Lifetime = NumberRange.new(0.12, 0.22)
+			fire.Speed = NumberRange.new(28, 40)
+			fire.SpreadAngle = Vector2.new(6, 6)
+			fire.RotSpeed = NumberRange.new(-180, 180)
+			fire.Rotation = NumberRange.new(0, 360)
+			-- искры
+			local sparks = emitter("RocketSparks", "rbxasset://textures/particles/sparkles_main.dds")
+			sparks.Color = ColorSequence.new(hot, mid)
+			sparks.LightEmission = 1
+			sparks.Size = NumberSequence.new(0.25, 0)
+			sparks.Lifetime = NumberRange.new(0.2, 0.4)
+			sparks.Speed = NumberRange.new(30, 50)
+			sparks.SpreadAngle = Vector2.new(14, 14)
+			-- дымный след (живёт дольше, расширяется, сносится назад)
+			local smoke = emitter("RocketSmoke", "rbxasset://textures/particles/smoke_main.dds")
+			smoke.Color = ColorSequence.new(Color3.fromRGB(150, 150, 155), Color3.fromRGB(210, 210, 215))
+			smoke.LightEmission = 0
+			smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, d), NumberSequenceKeypoint.new(1, d * 4.5) })
+			smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+			smoke.Lifetime = NumberRange.new(0.7, 1.2)
+			smoke.Speed = NumberRange.new(10, 16)
+			smoke.Drag = 2
+			smoke.SpreadAngle = Vector2.new(10, 10)
+			-- свет от пламени
+			local light = Instance.new("PointLight")
+			light.Name = "RocketLight"
+			light.Color = mid
+			light.Range = 16
+			light.Brightness = 3
+			light.Enabled = false
+			light.Parent = nozzle
 		end
 	end
 end
@@ -261,10 +341,24 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 		end
 		if s:GetAttribute("Owner") == player.UserId then
-			for _, nozzle in s:GetChildren() do
-				local fire = nozzle.Name == "RocketNozzle" and nozzle:FindFirstChild("RocketFire")
-				if fire then
-					fire.Rate = if rocketOn.Value then 120 else 0
+			local on = rocketOn.Value
+			local flick = 1 + math.noise(os.clock() * 18) * 0.35 -- мерцание длины факела
+			for _, child in s:GetChildren() do
+				if child.Name == "RocketNozzle" then
+					local fire = child:FindFirstChild("RocketFire") :: ParticleEmitter?
+					if fire then
+						fire.Rate = if on then 160 else 0
+						(child:FindFirstChild("RocketSparks") :: ParticleEmitter).Rate = if on then 60 else 0
+						(child:FindFirstChild("RocketSmoke") :: ParticleEmitter).Rate = if on then 45 else 0
+						local light = child:FindFirstChild("RocketLight") :: PointLight
+						light.Enabled = on
+						light.Brightness = 2.5 + math.random() * 1.5
+					end
+				elseif child:IsA("Beam") and string.sub(child.Name, 1, 6) == "Rocket" then
+					child.Enabled = on
+				elseif child.Name == "RocketTail" and child:IsA("Attachment") then
+					local p = child.Position
+					child.Position = Vector3.new(p.X, p.Y, (child:GetAttribute("BaseZ") :: number) + (flick - 1) * 3)
 				end
 			end
 		end

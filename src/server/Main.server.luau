@@ -413,6 +413,7 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	local rocketTier = Config.tierOf(d and d.RocketLevel or 0)
 	local nozzle = SledModels.extras(seat, seat.CFrame, model.id, tier, rocketTier, accent, seat)
 	seat:SetAttribute("RocketNozzle", nozzle)
+	seat:SetAttribute("RocketTier", math.min(rocketTier, 6))
 	if tier >= 5 then -- неон
 		local glow = Instance.new("PointLight")
 		glow.Color = accent
@@ -467,7 +468,7 @@ startRun = function(player: Player)
 	local sled = makeSled(player, startCF)
 
 	-- Тиры рогатки: свой детализированный столб на каждый тир (Shared/SledModels.slingshot)
-	local ltier = math.min(Config.tierOf(d.LaunchLevel), 5)
+	local ltier = math.min(Config.tierOf(d.LaunchLevel), 10)
 	for _, post in track.posts do
 		local old = post:FindFirstChild("Look")
 		if old then
@@ -481,9 +482,12 @@ startRun = function(player: Player)
 	local ropeColor = SledModels.ROPE_COLORS[ltier + 1]
 
 	-- Резинка рогатки: «витая» верёвка — чередующиеся светлые и тёмные полосы вдоль луча
+	local RAINBOW = { Color3.fromRGB(240, 70, 70), Color3.fromRGB(255, 160, 50), Color3.fromRGB(255, 225, 60), Color3.fromRGB(90, 210, 90), Color3.fromRGB(70, 160, 255), Color3.fromRGB(150, 90, 240) }
 	local keys = {}
 	for i = 0, 18 do
-		local c = if i % 2 == 0 then ropeColor else ropeColor:Lerp(Color3.new(0, 0, 0), 0.35)
+		local c = if ltier == 9 then RAINBOW[(i % #RAINBOW) + 1]
+			elseif i % 2 == 0 then ropeColor
+			else ropeColor:Lerp(Color3.new(0, 0, 0), if SledModels.ROPE_GLOW[ltier] then 0.15 else 0.35)
 		table.insert(keys, ColorSequenceKeypoint.new(i / 18, c))
 	end
 	local twisted = ColorSequence.new(keys)
@@ -492,11 +496,13 @@ startRun = function(player: Player)
 		local beam = Instance.new("Beam")
 		beam.Attachment0 = post.RopeAttachment
 		beam.Attachment1 = sled.RopeAttachment
-		beam.Width0 = 0.6
-		beam.Width1 = 0.6
+		-- резинка толще и ярче с каждым тиром
+		local w = 0.5 + ltier * 0.04
+		beam.Width0 = w
+		beam.Width1 = w
 		beam.Color = twisted
-		beam.LightInfluence = 1
-		beam.LightEmission = if ltier == 5 then 0.6 else 0
+		beam.LightInfluence = if SledModels.ROPE_GLOW[ltier] then 0.3 else 1
+		beam.LightEmission = if SledModels.ROPE_GLOW[ltier] then 0.6 else 0
 		beam.FaceCamera = true
 		beam.Segments = 1
 		beam.Parent = sled

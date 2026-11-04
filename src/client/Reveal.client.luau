@@ -44,7 +44,7 @@ local function buildModel(kind: string, level: number): Model
 		SledModels.rocket(m, CFrame.Angles(0, math.rad(90), 0), tier)
 	elseif kind == "Launch" then
 		-- рогатка: два столба нового тира с натянутой резинкой, санки между ними
-		local rope = SledModels.ROPE_COLORS[math.clamp(tier, 0, 5) + 1]
+		local rope = SledModels.ROPE_COLORS[math.clamp(tier, 0, 10) + 1]
 		for _, sx in { -1, 1 } do
 			SledModels.slingshot(m, CFrame.new(sx * 5, 0, 0) * CFrame.Angles(0, 0, sx * math.rad(-8)), tier)
 			local band = Instance.new("Part")
