@@ -201,6 +201,12 @@ Config.TASK_POOL = {
 	{ id = "upgrades", text = "Улучши что-нибудь %d раз", targets = { 2, 6 }, gems = 4, icon = "rocket" },
 	{ id = "gifts", text = "Забери %d %s за игру", forms = { "подарок", "подарка", "подарков" }, targets = { 2, 4 }, gems = 3, icon = "gift" },
 	{ id = "chest", text = "Открой сундук в лобби", targets = { 1, 1 }, gems = 3, icon = "gift" },
+	-- аккуратность и магазин
+	{ id = "cleanFinish", text = "Доедь до финиша без аварии %d %s", forms = { "раз", "раза", "раз" }, targets = { 1, 3 }, gems = 7, icon = "check" },
+	{ id = "cleanRun", text = "Проедь %d м за один заезд без аварии", targets = { 400, 1000 }, gems = 5, icon = "ringbuoy", max = true },
+	{ id = "magnetCoins", text = "Притяни магнитом %d %s", forms = { "монету", "монеты", "монет" }, targets = { 20, 60 }, gems = 4, icon = "magnet" },
+	{ id = "rareRuns", text = "Сделай %d %s на санях Gold или редче", forms = { "заезд", "заезда", "заездов" }, targets = { 3, 7 }, gems = 5, icon = "sparkles" },
+	{ id = "buySled", text = "Купи %d %s саней", forms = { "редкость", "редкости", "редкостей" }, targets = { 1, 3 }, gems = 5, icon = "saucer" },
 }
 Config.TASKS_PER_DAY = 6
 

@@ -1,5 +1,31 @@
 # Журнал изменений
 
+## Настройка: области действия
+- `server/Tuning`: два слоя переопределений Config — общий (`overrides`) и персональный
+  (`p_<UserId>`, атрибут игрока `ConfigOverrides`, поверх общего). `Tuning.save(scope, userId,
+  overrides)`, `loadPlayer` при входе (pcall, ретраи), `merged(player)`, `forPlayer(player, fn)` —
+  временная подмена Config для синхронных расчётов; MessagingService шлёт `{ scope, userId, job }`,
+  серверы перечитывают только нужный ключ.
+- `Main.server`: цены/награды/сила рогатки/монеты за события/генерация трассы считаются через
+  `Tuning.forPlayer`; `DevAction("tune", overrides, scope, target)` и `DevAction("tuneGet",
+  target)` (UserId или ник — `GetUserIdFromNameAsync` в pcall). Персональные настройки грузятся
+  при входе и чистятся при выходе.
+- `client/ConfigSync`: сливает `ReplicatedStorage.ConfigOverrides` и свой атрибут игрока.
+- Панель DEV → Настройка: выбор области «ДЛЯ ВСЕХ» / «ТОЛЬКО Я» / «ИГРОК» + поле UserId/ник;
+  для персональных областей показываются эффективные значения, меняется только персональный
+  слой («базово» — общее значение); кнопка сохранения подписана по области, «СБРОСИТЬ
+  ПЕРСОНАЛЬНЫЕ»; статус «Сохранено для игрока Nick (123): 2 изменения».
+- Документация: `ARCHITECTURE.md` «Настройка на лету».
+
+## Задания дня: +5
+- `Config.TASK_POOL` 25 → 30: «Доедь до финиша без аварии N раз» (cleanFinish), «Проедь N м за
+  один заезд без аварии» (cleanRun, лучший заезд), «Притяни магнитом N монет» (magnetCoins),
+  «Сделай N заездов на санях Gold или редче» (rareRuns), «Купи N редкостей саней» (buySled).
+- Источники событий: `run.crashedOnTrack` (авария до финишной арки) и `run.magnetCoins` в
+  `Main.server`, `Rewards.add(player, "buySled")` в `SledAction`. Таблица заданий —
+  `GAME_DESIGN.md` «Задания дня». Набор заданий текущего дня после деплоя перемешается
+  (выбор из пула по номеру дня), прогресс по id сохраняется.
+
 ## Еженедельный автоматический цикл
 - `scripts/fetch_metrics.py`: метрики (DAU, визиты, CCU, D1/D7/D30, сессия, выручка, платящие,
   конверсия) из Open Cloud Analytics Query API → `analytics/metrics.csv`; пример workflow

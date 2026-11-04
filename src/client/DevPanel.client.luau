@@ -18,7 +18,6 @@ local Config = require(Shared:WaitForChild("Config"))
 local UI = require(Shared:WaitForChild("UIKit"))
 local SledModels = require(Shared:WaitForChild("SledModels"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local C = UI.C
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "DevPanel"
@@ -63,8 +62,8 @@ UI.closeButton(win, function()
 	win.Visible = false
 end)
 
-local function dev(action: string, a: any?, b: any?)
-	local ok, msg = Remotes.DevAction:InvokeServer(action, a, b)
+local function dev(action: string, a: any?, b: any?, c: any?)
+	local ok, msg = Remotes.DevAction:InvokeServer(action, a, b, c)
 	status.TextColor3 = if ok then Color3.fromRGB(150, 230, 150) else Color3.fromRGB(255, 120, 120)
 	status.Text = tostring(msg)
 end
@@ -397,34 +396,122 @@ tabs["Инструменты"] = function()
 	note("Все действия меняют только твой профиль. Сервер проверяет, что ты — владелец игры; другим игрокам панель не видна и не работает.")
 end
 
--- Настройка параметров игры: правка → «Сохранить для всех» (DataStore, все сервера)
+-- Настройка параметров игры: правка → сохранить (DataStore, все сервера).
+-- Область: «для всех» (общий слой), «только я» / «игрок …» (персональный слой поверх общего).
 local HttpService = game:GetService("HttpService")
 local pending: { [string]: number }? = nil
-local function savedOverrides(): { [string]: number }
-	local raw = ReplicatedStorage:GetAttribute("ConfigOverrides")
+local scope: "all" | "me" | "player" = "all"
+local targetText = "" -- UserId или ник для области «игрок»
+local targetInfo: { userId: number, name: string }? = nil -- кого нашли по targetText
+local tuneGen = 0 -- отсекает устаревшие ответы сервера при перерисовке
+
+local function decodeOverrides(raw: any): { [string]: number }
 	local ok, data = pcall(HttpService.JSONDecode, HttpService, if typeof(raw) == "string" then raw else "{}")
 	return if ok and type(data) == "table" then data else {}
+end
+local function globalOverrides(): { [string]: number }
+	return decodeOverrides(ReplicatedStorage:GetAttribute("ConfigOverrides"))
 end
 local function fmt(v: number, step: number): string
 	local dec = if step >= 1 then 0 elseif step >= 0.1 then 1 elseif step >= 0.01 then 2 else 3
 	return string.format("%." .. dec .. "f", v)
 end
-tabs["Настройка"] = function()
-	if not pending then
-		pending = table.clone(savedOverrides())
+local SCOPE_SAVE = { all = "СОХРАНИТЬ ДЛЯ ВСЕХ", me = "СОХРАНИТЬ ДЛЯ МЕНЯ", player = "СОХРАНИТЬ ДЛЯ ИГРОКА" }
+
+-- Аргументы DevAction("tune"/"tuneGet") для текущей области
+local function scopeArgs(): (string, any)
+	if scope == "all" then
+		return "all", nil
+	elseif scope == "me" then
+		return "player", player.UserId
 	end
-	local p = pending :: { [string]: number }
-	heading("Настройка игры — меняется у всех игроков без перевыпуска")
-	note("Измени значения (− / + или введи число), затем «Сохранить для всех»: настройки запишутся в DataStore и применятся на всех серверах за несколько секунд. Жёлтым — отличается от значения в коде.")
-	local changed = 0
-	for path, v in p do
-		if v ~= Config.TUNABLE_DEFAULTS[path] then
-			changed += 1
+	return "player", targetText
+end
+
+-- Персональный слой для текущей области: «только я» — из своего атрибута, «игрок» — с сервера
+-- (ник резолвит сервер, игрок может быть офлайн). Возвращает (набор, ошибка?)
+local function loadPending(): ({ [string]: number }?, string?)
+	if scope == "all" then
+		return table.clone(globalOverrides()), nil
+	elseif scope == "me" then
+		targetInfo = { userId = player.UserId, name = player.Name }
+		return table.clone(decodeOverrides(player:GetAttribute("ConfigOverrides"))), nil
+	end
+	targetInfo = nil
+	if targetText == "" then
+		return nil, "Укажи UserId или ник игрока"
+	end
+	local ok, res = Remotes.DevAction:InvokeServer("tuneGet", targetText)
+	if not ok or type(res) ~= "table" then
+		return nil, tostring(res)
+	end
+	targetInfo = { userId = res.userId, name = res.name }
+	return table.clone(res.overrides or {}), nil
+end
+
+tabs["Настройка"] = function()
+	tuneGen += 1
+	local gen = tuneGen
+	heading("Настройка игры — меняется без перевыпуска")
+	note("Область: «для всех» — общие значения на всех серверах; «только я» / «игрок» — персональный слой поверх общих (для проверки баланса на одном игроке). Измени значения (− / + или введи число) и сохрани. Жёлтым — отличается от базового значения.")
+	-- выбор области
+	local scopeRow = buttonRow({
+		{ if scope == "all" then "green" else "dark", "ДЛЯ ВСЕХ", function()
+			scope, pending = "all", nil
+			tabs.redraw()
+		end },
+		{ if scope == "me" then "green" else "dark", "ТОЛЬКО Я", function()
+			scope, pending = "me", nil
+			tabs.redraw()
+		end },
+		{ if scope == "player" then "green" else "dark", "ИГРОК", function()
+			scope, pending = "player", nil
+			tabs.redraw()
+		end },
+	})
+	local targetBox = UI.new("TextBox", { Text = targetText, PlaceholderText = "UserId или ник", Size = UDim2.fromOffset(220, 40), BackgroundColor3 = Color3.fromRGB(20, 28, 48), BackgroundTransparency = 0, TextScaled = false, TextSize = 17, Font = Enum.Font.GothamBold, TextColor3 = Color3.new(1, 1, 1), PlaceholderColor3 = Color3.fromRGB(120, 135, 165), ClearTextOnFocus = false, ZIndex = 53, Parent = scopeRow })
+	UI.corner(targetBox, 10)
+	targetBox.FocusLost:Connect(function()
+		local text = string.gsub(targetBox.Text, "^%s+", "")
+		text = string.gsub(text, "%s+$", "")
+		if text ~= targetText then
+			targetText, pending = text, nil
+			if scope == "player" then
+				tabs.redraw()
+			end
+		end
+	end)
+
+	local loadErr: string? = nil
+	if not pending then
+		local loading = if scope == "player" and targetText ~= "" then note("Загружаю настройки игрока…") else nil
+		local loaded, err = loadPending()
+		if gen ~= tuneGen then
+			return -- пока ждали сервер, вкладку перерисовали (другая область/вкладка)
+		end
+		pending, loadErr = loaded, err
+		if loading then
+			loading:Destroy()
 		end
 	end
-	buttonRow({
-		{ "green", "СОХРАНИТЬ ДЛЯ ВСЕХ", function()
-			dev("tune", p)
+	local p = pending or {}
+	pending = p
+	local personal = scope ~= "all"
+	-- базовый слой: для персональных областей — общие значения, для «всех» — значения из кода
+	local base = if personal then globalOverrides() else {}
+	local function baseOf(path: string): number
+		return base[path] or Config.TUNABLE_DEFAULTS[path]
+	end
+	if loadErr then
+		note("⚠ " .. loadErr).TextColor3 = Color3.fromRGB(255, 150, 150)
+	elseif personal and targetInfo then
+		note(string.format("Персональные настройки: %s (%d). Показаны эффективные значения; меняется только персональный слой, «базово» — общее значение.", targetInfo.name, targetInfo.userId))
+	end
+
+	local buttons = {
+		{ "green", SCOPE_SAVE[scope], function()
+			local sc, target = scopeArgs()
+			dev("tune", p, sc, target)
 			pending = nil
 			task.delay(0.3, tabs.redraw)
 		end },
@@ -432,19 +519,30 @@ tabs["Настройка"] = function()
 			pending = nil
 			tabs.redraw()
 		end },
-		{ "red", "ВСЁ ПО УМОЛЧАНИЮ", function()
+	}
+	if personal then
+		table.insert(buttons, { "red", "СБРОСИТЬ ПЕРСОНАЛЬНЫЕ", function()
+			local sc, target = scopeArgs()
+			dev("tune", {}, sc, target)
+			pending = nil
+			task.delay(0.3, tabs.redraw)
+		end })
+	else
+		table.insert(buttons, { "red", "ВСЁ ПО УМОЛЧАНИЮ", function()
 			pending = {}
 			tabs.redraw()
-		end },
-	})
-	local counter = note("Изменено параметров: " .. changed)
+		end })
+	end
+	buttonRow(buttons)
+	local counter = note("")
 	local function recount()
 		local n = 0
 		for _ in p do
 			n += 1
 		end
-		counter.Text = "Изменено параметров: " .. n .. (if n > 0 then " — не забудь сохранить" else "")
+		counter.Text = (if personal then "Персональных параметров: " else "Изменено параметров: ") .. n .. (if n > 0 then " — не забудь сохранить" else "")
 	end
+	recount()
 	local group = ""
 	for _, tn in Config.TUNABLES do
 		local path, label, grp, lo, hi, step = tn[1], tn[2], tn[3], tn[4], tn[5], tn[6]
@@ -452,12 +550,12 @@ tabs["Настройка"] = function()
 			group = grp
 			heading(grp)
 		end
-		local def = Config.TUNABLE_DEFAULTS[path]
+		local def = baseOf(path)
 		local val = p[path] or def
-		local row = UI.new("Frame", { LayoutOrder = nextOrder(), Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = if val ~= def then Color3.fromRGB(90, 80, 40) else Color3.fromRGB(42, 56, 90), BackgroundTransparency = 0, ZIndex = 52, Parent = content })
+		local row = UI.new("Frame", { LayoutOrder = nextOrder(), Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = if p[path] then Color3.fromRGB(90, 80, 40) else Color3.fromRGB(42, 56, 90), BackgroundTransparency = 0, ZIndex = 52, Parent = content })
 		UI.corner(row, 8)
 		UI.new("TextLabel", { Text = label, Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -330, 1, 0), TextScaled = false, TextSize = 16, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(225, 235, 250), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 53, Parent = row })
-		UI.new("TextLabel", { Text = "по умолч. " .. fmt(def, step), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -230, 0.5, 0), Size = UDim2.fromOffset(100, 20), TextScaled = false, TextSize = 13, Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(150, 165, 195), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 53, Parent = row })
+		UI.new("TextLabel", { Text = (if personal then "базово " else "по умолч. ") .. fmt(def, step), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -230, 0.5, 0), Size = UDim2.fromOffset(100, 20), TextScaled = false, TextSize = 13, Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(150, 165, 195), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 53, Parent = row })
 		local box = UI.new("TextBox", { Text = fmt(val, step), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -52, 0.5, 0), Size = UDim2.fromOffset(110, 30), BackgroundColor3 = Color3.fromRGB(20, 28, 48), BackgroundTransparency = 0, TextScaled = false, TextSize = 17, Font = Enum.Font.GothamBold, TextColor3 = Color3.new(1, 1, 1), ClearTextOnFocus = false, ZIndex = 53, Parent = row })
 		UI.corner(box, 6)
 		local function setV(nv: number)
@@ -475,9 +573,8 @@ tabs["Настройка"] = function()
 			local nv = tonumber((string.gsub(box.Text, ",", ".")))
 			setV(nv or (p[path] or def))
 		end)
-		for i, d in { -1, 1 } do
+		for _, d in { -1, 1 } do
 			local b = UI.button(if d < 0 then "dark" else "blue", if d < 0 then "−" else "+", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, if d < 0 then -168 else -8, 0.5, 0), Size = UDim2.fromOffset(38, 30), Radius = 6, StrokeThickness = 1.5, ZIndex = 53, Parent = row })
-			local _ = i
 			b.Activated:Connect(function()
 				setV((p[path] or def) + d * step)
 			end)
