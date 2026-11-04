@@ -509,7 +509,13 @@ task.spawn(function()
 					n += 1
 				end
 			end
-			print("[UIImages] картинок:", n, "ошибка:", f:GetAttribute("_err"))
+			local id = f:GetAttribute("coin")
+			local probe = Instance.new("ImageLabel")
+			probe.Image = id or ""
+			local okLoad = pcall(function()
+				game:GetService("ContentProvider"):PreloadAsync({ probe })
+			end)
+			print("[UIImages] картинок:", n, "ошибка:", f:GetAttribute("_err"), "coin:", id, "preload:", okLoad, "loaded:", probe.IsLoaded)
 		end)
 		for _, fn in waiting do
 			fn()
@@ -531,7 +537,8 @@ function UI.icon(name: string, props: { [string]: any }): Frame
 	local emoji = UI.new("TextLabel", { Name = "Fallback", Text = "", Size = UDim2.fromScale(1, 1), ZIndex = z, Parent = f })
 	local img = UI.new("ImageLabel", { Name = "Image", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1, ZIndex = z, Parent = f })
 	f:SetAttribute("Icon", name)
-	local function apply()
+	local apply
+	function apply()
 		local n = f:GetAttribute("Icon")
 		local id = imagesFolder and n and imagesFolder:GetAttribute(n)
 		if typeof(id) == "string" then
@@ -545,6 +552,16 @@ function UI.icon(name: string, props: { [string]: any }): Frame
 		-- скрытая (Visible = false) картинка не грузится вовсе, поэтому прячем прозрачностью
 		local ready = img.Image ~= "" and img.IsLoaded
 		img.ImageTransparency = if ready then 0 else 1
+		if img.Image ~= "" and not ready and not f:GetAttribute("Recheck") then
+			-- IsLoaded меняется без сигнала у некоторых клиентов — перепроверяем по таймеру
+			f:SetAttribute("Recheck", true)
+			task.delay(2, function()
+				f:SetAttribute("Recheck", nil)
+				if f.Parent then
+					apply()
+				end
+			end)
+		end
 		drawnCoin.Visible = not ready and n == "coin"
 		emoji.Visible = not ready and n ~= "coin"
 		emoji.Text = UI.EMOJI[n] or ""
