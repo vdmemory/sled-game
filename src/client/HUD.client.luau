@@ -338,7 +338,7 @@ for _, f in Config.GEMS_ON_TRACK do
 end
 local bestMark = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = C.white, BackgroundTransparency = 0, Visible = false, ZIndex = 3, Parent = progress })
 UI.corner(bestMark, 1000)
-UI.text({ Text = "BEST", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, 4, 0.5, 0), Size = UDim2.fromOffset(40, 16), Parent = bestMark })
+UI.text({ Text = "BEST", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 0.5, 0), Size = UDim2.fromOffset(40, 16), Parent = bestMark }) -- слева от метки: справа край экрана
 local pctBubble = UI.text({ Text = "0%", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 1, 0), Size = UDim2.fromOffset(56, 24), TextXAlignment = Enum.TextXAlignment.Right, Parent = progress })
 
 -- Магнит и всплывающие «+N»
