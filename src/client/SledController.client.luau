@@ -396,6 +396,10 @@ end
 
 local magnetUntil = 0
 local x2Until = 0
+local coinScan = 10
+local nearCoins: { BasePart } = {}
+local lastPos: Vector3? = nil
+local COIN_PICK_R = 3.6 -- радиус подбора монеты (по горизонтали)
 local magnetScan = 0
 local function hideLocal(p: BasePart)
 	p.LocalTransparencyModifier = 1
@@ -467,6 +471,9 @@ local function onTouched(hit: BasePart)
 					end
 				end
 			end
+			if kind == "shield" or kind == "fuel" then
+				Remotes.PowerUp:FireServer(hit) -- для заданий дня
+			end
 			if kind == "shield" then
 				shieldOn.Value = true
 				trickPopup:Fire("🛡 Щит!")
@@ -497,6 +504,7 @@ local function onTouched(hit: BasePart)
 				end
 			end
 			magnetUntil = now + Config.MAGNET_TIME
+			Remotes.PowerUp:FireServer(hit) -- для заданий дня
 			trickPopup:Fire("🧲 Магнит!")
 			sfx:Fire("magnet")
 		end
@@ -541,6 +549,7 @@ local function onTouched(hit: BasePart)
 			return
 		end
 		lastBoost = now
+		Remotes.PowerUp:FireServer(hit) -- для заданий дня
 		speed += Config.BOOST_ADD
 		trickPopup:Fire("⚡ Ускорение!")
 		sfx:Fire("boost")
@@ -603,6 +612,8 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	magnetLeft.Value = 0
 	x2Until = 0
 	x2Left.Value = 0
+	lastPos = nil
+	coinScan = 10
 	shieldOn.Value = false
 	fuel = Config.rocketFuel(player:GetAttribute("RocketLevel") or 0)
 	fuelMaxValue.Value = fuel
@@ -737,6 +748,41 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 	rocketOn.Value = useRocket
 	fuelValue.Value = fuel
+
+	-- Подбор монет по расстоянию: Touched на скорости пропускает тонкие монеты, поэтому
+	-- проверяем весь отрезок пути санок за кадр (без «туннелирования»); засчитывает сервер
+	coinScan += dt
+	if coinScan > 0.4 then
+		coinScan = 0
+		table.clear(nearCoins)
+		for _, coin in CollectionService:GetTagged("Coin") do
+			if coin:IsA("BasePart") and coin.LocalTransparencyModifier < 1 and (coin.Position - s.Position).Magnitude < 160 then
+				table.insert(nearCoins, coin)
+			end
+		end
+	end
+	if not crashed then
+		local a, b = lastPos or s.Position, s.Position
+		local ab = b - a
+		local len2 = ab:Dot(ab)
+		for i = #nearCoins, 1, -1 do
+			local coin = nearCoins[i]
+			if coin.LocalTransparencyModifier >= 1 or coin:GetAttribute("Taken") then
+				table.remove(nearCoins, i)
+				continue
+			end
+			local p = coin.Position
+			local t = if len2 > 0 then math.clamp((p - a):Dot(ab) / len2, 0, 1) else 0
+			local d = p - (a + ab * t)
+			if Vector3.new(d.X, 0, d.Z).Magnitude < COIN_PICK_R and d.Y > -3 and d.Y < 7 then
+				hideLocal(coin)
+				Remotes.CoinGrab:FireServer(coin)
+				sfx:Fire("coin")
+				table.remove(nearCoins, i)
+			end
+		end
+	end
+	lastPos = s.Position
 
 	-- Магнит: притягиваем монеты рядом (анимация у себя, засчитывает сервер)
 	local mLeft = math.max(0, magnetUntil - os.clock())

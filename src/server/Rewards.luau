@@ -24,7 +24,7 @@ local function tasksFor(day: number)
 	for _ = 1, Config.TASKS_PER_DAY do
 		local t = table.remove(pool, rng:NextInteger(1, #pool))
 		local target = t.targets[1] + rng:NextInteger(0, 2) * math.floor((t.targets[2] - t.targets[1]) / 2)
-		table.insert(out, { id = t.id, text = string.format(t.text, target), target = target, gems = t.gems })
+		table.insert(out, { id = t.id, text = string.format(t.text, target), target = target, gems = t.gems, max = t.max, icon = t.icon })
 	end
 	return out
 end
@@ -96,13 +96,21 @@ function Rewards.onRun(player: Player, stats: { [string]: number }): { string }
 		local before = d.Daily.progress[t.id] or 0
 		local add = stats[t.id] or 0
 		if add > 0 then
-			d.Daily.progress[t.id] = before + add
-			if before < t.target and before + add >= t.target then
+			-- «за один заезд» — лучший результат, иначе — сумма
+			local after = if t.max then math.max(before, add) else before + add
+			d.Daily.progress[t.id] = after
+			if before < t.target and after >= t.target then
 				table.insert(done, t.text)
 			end
 		end
 	end
 	Rewards.sync(player)
+	return done
+end
+
+-- Событие вне заезда (апгрейд, подарок, сундук) — та же логика прогресса заданий
+function Rewards.add(player: Player, id: string, n: number?)
+	local done = Rewards.onRun(player, { [id] = n or 1 })
 	return done
 end
 
@@ -173,7 +181,7 @@ function Rewards.claimGift(player: Player, index: number): (boolean, any)
 	end
 	d.GiftsClaimed[tostring(index)] = true
 	grant(player, d, g.coins, g.gems)
-	Rewards.sync(player)
+	Rewards.add(player, "gifts")
 	local parts = {}
 	if g.coins then
 		table.insert(parts, "+" .. Config.rewardCoins(g.coins, d.Level) .. " 💰")
@@ -195,7 +203,7 @@ function Rewards.openChest(player: Player): (boolean, any)
 	end
 	d.ChestAt = os.time() + Config.CHEST_INTERVAL
 	grant(player, d, Config.CHEST_COINS, Config.CHEST_GEMS)
-	Rewards.sync(player)
+	Rewards.add(player, "chest")
 	return true, "+" .. Config.rewardCoins(Config.CHEST_COINS, d.Level) .. " 💰  +" .. Config.CHEST_GEMS .. " 💎"
 end
 

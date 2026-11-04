@@ -168,18 +168,43 @@ function Config.rewardCoins(base: number, level: number): number
 	return math.floor(base * (1 + (level - 1) * 0.25))
 end
 -- Ежедневные задания: 3 в день из пула (выбор детерминирован по номеру дня)
+-- Задания дня. max = true — считается лучший результат одного заезда, а не сумма.
+-- icon — имя 3D-иконки (UI.icon). Каждый день выбирается TASKS_PER_DAY разных заданий.
 Config.TASK_POOL = {
-	{ id = "runs", text = "Сделай %d заездов", targets = { 5, 8 }, gems = 3 },
-	{ id = "coins", text = "Собери %d монет", targets = { 300, 800 }, gems = 4 },
-	{ id = "distance", text = "Проедь %d м всего", targets = { 3000, 8000 }, gems = 4 },
-	{ id = "air", text = "Пробудь в воздухе %d с", targets = { 15, 40 }, gems = 5 },
-	{ id = "flips", text = "Сделай %d флипов", targets = { 3, 8 }, gems = 5 },
-	{ id = "smash", text = "Разбей %d препятствий", targets = { 5, 15 }, gems = 4 },
-	{ id = "best", text = "Побей свой рекорд %d раз", targets = { 1, 2 }, gems = 5 },
+	-- заезды и дистанция
+	{ id = "runs", text = "Сделай %d заездов", targets = { 5, 10 }, gems = 3, icon = "sled" },
+	{ id = "distance", text = "Проедь %d м всего", targets = { 3000, 9000 }, gems = 4, icon = "mountain" },
+	{ id = "distanceRun", text = "Проедь %d м за один заезд", targets = { 500, 1200 }, gems = 5, icon = "flag", max = true },
+	{ id = "finish", text = "Доедь до финиша %d раз", targets = { 1, 3 }, gems = 6, icon = "flag" },
+	{ id = "best", text = "Побей свой рекорд %d раз", targets = { 1, 2 }, gems = 5, icon = "trophy" },
+	{ id = "farm", text = "Сделай %d заездов в пройденном мире", targets = { 2, 4 }, gems = 4, icon = "tree" },
+	-- монеты и награды
+	{ id = "coins", text = "Собери %d монет", targets = { 300, 900 }, gems = 4, icon = "coin" },
+	{ id = "coinsRun", text = "Заработай %d монет за один заезд", targets = { 150, 400 }, gems = 5, icon = "moneybag", max = true },
+	{ id = "combo", text = "Собери комбо x%d", targets = { 8, 20 }, gems = 5, icon = "star", max = true },
+	{ id = "gems", text = "Подбери %d гемов на трассе", targets = { 3, 8 }, gems = 5, icon = "gem" },
+	{ id = "crystal", text = "Разбей %d ледяных кристаллов", targets = { 1, 3 }, gems = 5, icon = "ice" },
+	-- трюки и скорость
+	{ id = "air", text = "Пробудь в воздухе %d с", targets = { 15, 45 }, gems = 5, icon = "parachute" },
+	{ id = "airRun", text = "Пробудь в воздухе %d с за один заезд", targets = { 6, 15 }, gems = 5, icon = "parachute", max = true },
+	{ id = "flips", text = "Сделай %d сальто", targets = { 3, 10 }, gems = 5, icon = "flip" },
+	{ id = "speed", text = "Разгонись до %d км/ч", targets = { 120, 200 }, gems = 5, icon = "stopwatch", max = true },
+	{ id = "smash", text = "Разбей %d препятствий", targets = { 5, 15 }, gems = 4, icon = "smash" },
+	{ id = "boosts", text = "Проедь по %d ускорителям", targets = { 4, 12 }, gems = 4, icon = "bolt" },
+	-- бонусы на трассе
+	{ id = "magnet", text = "Подбери %d магнитов", targets = { 2, 5 }, gems = 4, icon = "magnet" },
+	{ id = "shield", text = "Подбери %d щитов", targets = { 1, 3 }, gems = 5, icon = "shield" },
+	{ id = "x2", text = "Подбери %d бонусов x2", targets = { 1, 3 }, gems = 5, icon = "coin" },
+	{ id = "fuel", text = "Подбери %d канистр", targets = { 1, 4 }, gems = 4, icon = "fuel" },
+	{ id = "rings", text = "Пролети через %d золотых колец", targets = { 3, 12 }, gems = 5, icon = "ring" },
+	-- лобби
+	{ id = "upgrades", text = "Улучши что-нибудь %d раз", targets = { 2, 6 }, gems = 4, icon = "rocket" },
+	{ id = "gifts", text = "Забери %d подарков за игру", targets = { 2, 4 }, gems = 3, icon = "gift" },
+	{ id = "chest", text = "Открой сундук в лобби", targets = { 1, 1 }, gems = 3, icon = "gift" },
 }
-Config.TASKS_PER_DAY = 3
-Config.TASK_CHEST_COINS = 300 -- сундук за все задания (× rewardCoins) + гемы
-Config.TASK_CHEST_GEMS = 8
+Config.TASKS_PER_DAY = 6
+Config.TASK_CHEST_COINS = 500 -- сундук за все задания (× rewardCoins) + гемы
+Config.TASK_CHEST_GEMS = 15
 -- Подарки за время в игре (минуты с захода), как сетка «Подарки» в референсе
 Config.PLAYTIME_GIFTS = {
 	{ min = 1, coins = 60 },

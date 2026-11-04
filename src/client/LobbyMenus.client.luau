@@ -303,7 +303,7 @@ worldsBtn.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Задания дня
-local tasksWin, tasksBody = panel("ЗАДАНИЯ ДНЯ", 540, 540)
+local tasksWin, tasksBody = panel("ЗАДАНИЯ ДНЯ", 580, 560)
 UI.text({ Text = "ВЫПОЛНИ ВСЕ ЗАДАНИЯ,\nЧТОБЫ ПОЛУЧИТЬ СУНДУК!", Position = UDim2.fromOffset(10, 22), Size = UDim2.new(1, -100, 0, 46), ZIndex = 33, Parent = tasksBody })
 local _, setTasksBar = UI.progress(tasksBody, { Position = UDim2.fromOffset(12, 74), Size = UDim2.new(1, -100, 0, 24), ZIndex = 33 })
 local chestClaim = UI.new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 34), Size = UDim2.fromOffset(72, 72), BackgroundTransparency = 1, ZIndex = 34, Parent = tasksBody })
@@ -313,7 +313,11 @@ UI.bounce(chestClaim)
 chestClaim.Activated:Connect(function()
 	act("taskChest")
 end)
-local taskRows = UI.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 116), Size = UDim2.new(1, 0, 1, -160), ZIndex = 32, Parent = tasksBody })
+-- список заданий прокручивается (их 6 в день)
+local taskRows = scroller(tasksBody, false, 108)
+taskRows.Size = UDim2.new(1, 0, 1, -146)
+local taskPad = taskRows:FindFirstChildOfClass("UIPadding") :: UIPadding
+taskPad.PaddingTop = UDim.new(0, 6)
 local tl = Instance.new("UIListLayout")
 tl.Padding = UDim.new(0, 10)
 tl.SortOrder = Enum.SortOrder.LayoutOrder
@@ -338,7 +342,7 @@ local function drawTasks()
 		elseif done then
 			ready += 1
 		end
-		local row = UI.new("TextButton", { Text = "", AutoButtonColor = false, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 92), BackgroundTransparency = 0, ZIndex = 33, Parent = taskRows })
+		local row = UI.new("TextButton", { Text = "", AutoButtonColor = false, LayoutOrder = if t.claimed then 100 + i elseif done then i - 100 else i, Size = UDim2.new(1, -6, 0, 92), BackgroundTransparency = 0, ZIndex = 33, Parent = taskRows })
 		if done and not t.claimed then
 			UI.grad(row, UI.KIND.yellow[1], UI.KIND.yellow[2])
 			UI.bounce(row)
@@ -353,7 +357,7 @@ local function drawTasks()
 		local iconBox = UI.new("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(76, 76), BackgroundColor3 = C.white, BackgroundTransparency = 0.2, ZIndex = 34, Parent = row })
 		UI.corner(iconBox, 12)
 		local id = t.id
-		UI.icon(if t.claimed or done then "check" else (TASK_ICONS[id or ""] or "tasks"), { Position = UDim2.fromScale(0.1, 0.1), Size = UDim2.fromScale(0.8, 0.8), ZIndex = 35, Parent = iconBox })
+		UI.icon(if t.claimed or done then "check" else (t.icon or TASK_ICONS[id or ""] or "tasks"), { Position = UDim2.fromScale(0.1, 0.1), Size = UDim2.fromScale(0.8, 0.8), ZIndex = 35, Parent = iconBox })
 		if done and not t.claimed then
 			UI.ink({ Text = t.text, Position = UDim2.fromOffset(96, 10), Size = UDim2.new(1, -200, 0, 28), ZIndex = 34, Parent = row })
 			UI.text({ Text = "ЗАБРАТЬ НАГРАДУ!", Position = UDim2.fromOffset(96, 44), Size = UDim2.new(1, -200, 0, 34), ZIndex = 34, Parent = row })

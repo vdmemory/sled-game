@@ -243,6 +243,11 @@ type Run = {
 	gems: number?,
 	combo: number?,
 	x2Until: number?,
+	maxCombo: number?,
+	maxSpeed: number?,
+	boosts: number?,
+	boostPads: { [Instance]: boolean }?,
+	picked: { [string]: number }?,
 	lastCoin: number?,
 	crystal: boolean?,
 	lastAir: number?,
@@ -299,7 +304,22 @@ local function endRun(player: Player, reason: string)
 			air = math.floor(run.airTotal or 0),
 			flips = run.flips or 0,
 			smash = run.smashes or 0,
-			best = if newBest or finished then 1 else 0,
+			best = if newBest or (finished and not run.farm) then 1 else 0,
+			finish = if finished then 1 else 0,
+			distanceRun = math.floor(dist),
+			coinsRun = earned,
+			combo = run.maxCombo or 0,
+			gems = run.gems or 0,
+			crystal = if run.crystal then 1 else 0,
+			airRun = math.floor(run.airTotal or 0),
+			speed = math.floor(run.maxSpeed or 0),
+			boosts = run.boosts or 0,
+			magnet = run.picked and run.picked.magnet or 0,
+			shield = run.picked and run.picked.shield or 0,
+			x2 = run.picked and run.picked.x2 or 0,
+			fuel = run.picked and run.picked.fuel or 0,
+			rings = run.picked and run.picked.ring or 0,
+			farm = if run.farm and reason ~= "back" and reason ~= "restart" then 1 else 0,
 		})
 		syncPlayer(player)
 		for _, text in done do
@@ -806,6 +826,9 @@ BuyUpgrade.OnServerInvoke = function(player, name)
 	d[currency] -= cost
 	d[field] = level + 1
 	syncPlayer(player)
+	for _, text in Rewards.add(player, "upgrades") do
+		TaskDone:FireClient(player, text)
+	end
 	-- новый тир → клиент покажет «ПОЛУЧЕНО: …»
 	if (level + 1) % Config.TIER_SIZE == 0 then
 		return true, Config.tierName(name, level + 1)
@@ -895,6 +918,7 @@ local function awardCoin(player: Player, run: Run)
 	run.bonusCoins += value
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + value)
 	player:SetAttribute("Combo", run.combo)
+	run.maxCombo = math.max(run.maxCombo or 0, run.combo or 0)
 end
 
 local function takeCoin(coin: BasePart)
@@ -930,14 +954,27 @@ PowerUp.OnServerEvent:Connect(function(player, part)
 	if not run or run.ended or typeof(part) ~= "Instance" or not part:IsA("BasePart") then
 		return
 	end
-	if not CollectionService:HasTag(part, "PowerUp") or part:GetAttribute("Taken") then
-		return
-	end
 	if (part.Position - run.sled.Position).Magnitude > 30 then
 		return
 	end
+	-- ускоритель: каждую полосу считаем один раз (для заданий)
+	if CollectionService:HasTag(part, "Boost") then
+		local pads = run.boostPads or {}
+		run.boostPads = pads
+		if not pads[part] then
+			pads[part] = true
+			run.boosts = (run.boosts or 0) + 1
+		end
+		return
+	end
+	local kind = if CollectionService:HasTag(part, "Magnet") then "magnet" else part:GetAttribute("Kind")
+	if not (CollectionService:HasTag(part, "PowerUp") or kind == "magnet") or part:GetAttribute("Taken") then
+		return
+	end
 	part:SetAttribute("Taken", true)
-	local kind = part:GetAttribute("Kind")
+	local picked = run.picked or {}
+	run.picked = picked
+	picked[kind] = (picked[kind] or 0) + 1
 	if kind == "x2" then
 		run.x2Until = os.clock() + Config.POWERUPS.x2.time
 	elseif kind == "ring" then
@@ -1043,6 +1080,7 @@ RunService.Heartbeat:Connect(function(dt)
 		player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
 
 		track:ensureAround(math.max(0, run.distance))
+		run.maxSpeed = math.max(run.maxSpeed or 0, sled.AssemblyLinearVelocity.Magnitude * 1.1) -- км/ч, как на спидометре
 
 		if not run.launched or run.crashed then
 			continue
