@@ -516,6 +516,16 @@ startRun = function(player: Player)
 	sled:GetPropertyChangedSignal("Occupant"):Connect(function()
 		-- при аварии персонаж вылетает из санок сам — это не «вышел»
 		if not sled.Occupant and not run.crashed then
+			-- в первые секунды у рогатки (ещё не запущен) персонаж мог соскочить случайно —
+			-- сажаем обратно, а не обрываем заезд с «0 м»
+			if not run.launched and os.clock() - run.startTime < 3 and humanoid.Parent and humanoid.Health > 0 then
+				task.defer(function()
+					if runs[player] == run and not sled.Occupant then
+						sled:Sit(humanoid)
+					end
+				end)
+				return
+			end
 			endRun(player, "left")
 		end
 	end)

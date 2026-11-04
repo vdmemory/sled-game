@@ -235,7 +235,7 @@ local function drawWorlds()
 				kind, text, action, arg = "yellow", "▶ ФАРМИТЬ", "farm", w
 			end
 		elseif w == current + 1 then
-			kind, text, action = "purple", "⏩ ПРОПУСТИТЬ  R$" .. Config.PRODUCTS.SkipWorld.price, "skip"
+			kind, text, action = "purple", "ПРОПУСК R$" .. Config.PRODUCTS.SkipWorld.price, "skip"
 		else
 			kind, text = "grey", "🔒 Пройди мир " .. (w - 1)
 		end
@@ -266,6 +266,9 @@ player:GetAttributeChangedSignal("FarmWorld"):Connect(function()
 end)
 worldsBtn.Activated:Connect(function()
 	drawWorlds()
+	-- прокрутка к текущему миру (карточка 200 + отступ 14)
+	local current = Config.worldOf(player:GetAttribute("Level") or 1)
+	worldsList.CanvasPosition = Vector2.new(math.max(0, (current - 2) * 214), 0)
 	open(worldsWin)
 end)
 
