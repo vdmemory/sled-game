@@ -11,12 +11,17 @@ Roblox-версия мобильной Sled Surfers: рогатка запуск
 
 | Система | Файл |
 |---|---|
-| Все настройки (уклон, скорость, цены, ID геймпасса) | `src/shared/Config.luau` |
-| Бесконечная трасса, препятствия, трамплины, лобби | `src/server/TrackGenerator.luau` |
+| Все настройки (физика, трасса, цены, бонусы, задания) + настройка на лету | `src/shared/Config.luau`, `src/server/Tuning.luau` |
+| Трасса по seed уровня, 7 миров, препятствия, дороги, лобби | `src/server/Track.luau`, `src/server/Props.luau` |
 | Сохранение прогресса (DataStore) | `src/server/DataService.luau` |
-| Заезды, монеты, апгрейды, антиспам, лидерборд | `src/server/Main.server.luau` |
-| Управление санками и флипы (ПК, геймпад, мобильные) | `src/client/SledController.client.luau` |
-| Интерфейс | `src/client/HUD.client.luau` |
+| Заезды, монеты, апгрейды, тиры, покупки, лидерборд | `src/server/Main.server.luau` |
+| Задания дня, подарки, сундуки | `src/server/Rewards.luau` |
+| Управление, физика, бонусы, флипы (ПК, геймпад, телефон) | `src/client/SledController.client.luau` |
+| 9 моделей саней, рогатка и ракеты по тирам | `src/shared/SledModels.luau` |
+| Интерфейс, окна, панель владельца | `src/client/HUD`, `LobbyMenus`, `DevPanel`, `src/shared/UIKit.luau` |
+
+Как сделать из этого похожую игру (на воде, на суше): [docs/PLAYBOOK.md](docs/PLAYBOOK.md).
+Кто за что отвечает (агенты): [CLAUDE.md](CLAUDE.md), [docs/TEAM.md](docs/TEAM.md).
 
 **Управление:** A/D или стрелки — руль, пробел в воздухе — флип (держать). На телефоне — стик и кнопка «Флип».
 
@@ -100,9 +105,8 @@ ROBLOX_API_KEY=... UNIVERSE_ID=... PLACE_ID=... ./scripts/publish.sh game.rbxl
 
 ## Если что-то не так
 
-- **Трамплин стоит стенкой к игроку** — в `TrackGenerator.luau` в `addRamp` убери `* CFrame.Angles(0, math.pi, 0)`.
-- **Слишком быстро/медленно** — `BASE_SPEED`, `ACCELERATION`, `SLOPE_DEG` в `Config.luau`.
-- **Слишком сложно в начале** — увеличь `SAFE_SEGMENTS`, уменьши число препятствий в `buildSegment`.
+- **Слишком быстро/медленно** — `GRAVITY_ALONG`, `F.frictionBase`, `F.speedBase` в `Config.luau` (или DEV → Настройка прямо в игре).
+- **Слишком сложно в начале** — увеличь `SAFE_START`, уменьши `OBSTACLE_ROWS` / `steepChance`.
 - **Выкидывает из санок** — проверь, что в Output нет ошибок от `SledController`.
 
 ---

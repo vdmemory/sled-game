@@ -21,9 +21,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 | Папка | Куда в игре | Что там |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс), `UIKit` (стиль интерфейса), `SledModels` (3D-модели саней, боковые ракеты по тирам, обвес `extras`) |
-| `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты), `Track` (генерация трассы и лобби), `Props` (low-poly модели), `DataService` (DataStore), `Rewards` (задания, подарки, сундук) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `Effects`, `Sounds` (эффекты + фоновая музыка), `Traffic` (движение машин), `Reveal` (анимация нового тира апгрейда) |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
+| `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `Track` (генерация трассы и лобби), `Props` (low-poly модели), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (свет миров, частицы, пламя ракеты), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира) |
 
 ## Как устроен заезд
 
@@ -56,25 +56,42 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `RunEnded` | Event | сервер → итог заезда |
 | `TaskDone` | Event | сервер → задание выполнено |
 | `SetSetting` | Event | клиент → настройка (Sfx/Snow/Shadows) |
-| `BuyUpgrade`, `SkinAction`, `SledAction`, `TrailAction` | Function | покупки/экипировка |
+| `PowerUp` | Event | клиент → подобрал бонус (x2, кольцо, магнит, щит, канистра, ускоритель) |
+| `BuyUpgrade`, `SledAction`, `TrailAction` | Function | покупки/экипировка |
 | `RewardAction` | Function | задания, сундук заданий, подарки, сундук лобби |
+| `WorldAction` | Function | фарм пройденного мира / возврат / пропуск мира за Robux (владелец — тест любого мира) |
+| `DevAction` | Function | только владелец (`UserId == CreatorId`): уровень, валюта, апгрейды, сани, сброс заданий, `tune` (сохранить переопределения Config для всех) |
 
 ## Атрибуты игрока (сервер → клиент)
 
-`Coins`, `Gems`, `Level`, `LevelBest`, `LevelLength`, `ThemeName`, `*Level` (апгрейды), `Skin`,
-`OwnedSkins`, `Sled`, `SledRarity`, `OwnedSleds`, `Trail`, `OwnedTrails`, `Set*` (настройки),
+`Coins`, `Gems`, `Level`, `LevelBest`, `LevelLength`, `ThemeName`, `*Level` (апгрейды), `Sled`, `SledRarity`, `OwnedSleds`, `Trail`, `OwnedTrails`, `Set*` (настройки),
 `Rewards` (JSON: задания, подарки, сундук), в заезде — `InRun`, `Launched`, `RunDistance`,
 `RunCoins`, `RunGems`, `Combo`, `Finished`.
 
 ## Теги CollectionService
 
-`Obstacle`, `Coin`, `Gem`, `Crystal`, `Magnet`, `Boost`, `Mover`. У лёгких препятствий —
-атрибут `Breakable`.
+`Obstacle`, `Coin`, `Gem`, `Crystal`, `Magnet`, `Boost`, `Mover`, бонусы `Shield`/`X2`/`Fuel`/`Ring`.
+У лёгких препятствий — атрибут `Breakable`.
+
+## Настройка на лету
+
+`Config.TUNABLES` — список `{ путь, подпись, группа, min, max, шаг }`. Сервер (`Tuning`) при старте
+читает DataStore `GameConfig_v1` → `Config.applyOverrides` → атрибут `ReplicatedStorage.ConfigOverrides`
+(JSON); клиент (`ConfigSync`) применяет его к своему `Config`. Сохранение из панели владельца
+(`DevAction("tune")`) пишет DataStore и шлёт `MessagingService` «SledConfigChanged» — остальные
+серверы перечитывают. Параметры, которых нет в переопределениях, равны значениям из кода.
+
+## Иконки интерфейса
+
+`assets/ui/*.png` (Fluent Emoji 3D, MIT) → `scripts/upload_ui_assets.py` в деплое загружает новые
+как Decal через Assets API → ID в `assets/ui/decals.json` и `src/shared/UIDecals.luau`
+(коммитятся из лога между `UI_DECALS_JSON_BEGIN/END`). В игре `UIImages.server` достаёт ID
+картинки из декали, клиент `UI.icon` показывает её после `PreloadAsync`, до того — эмодзи.
 
 ## Сохранение (DataStore `SledData_v1`, ключ `u_<UserId>`)
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LaunchLevel`, `SledLevel`, `IncomeLevel`, `RocketLevel`,
-`Skin`/`OwnedSkins`, `Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings`, `Daily`
-(задания дня), `ChestAt`. Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
+`Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings` (`Sfx`, `Snow`, `Shadows`,
+`Music`), `Daily` (задания дня), `ChestAt`, `FarmWorld`, `Receipts` (дедуп покупок). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
 Если загрузка не удалась, сохранение для игрока отключается (чтобы не затереть прогресс).
 Доска лидеров — `OrderedDataStore` `BestLevel_v1`.
