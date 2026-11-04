@@ -24,7 +24,7 @@ local function tasksFor(day: number)
 	for _ = 1, Config.TASKS_PER_DAY do
 		local t = table.remove(pool, rng:NextInteger(1, #pool))
 		local target = t.targets[1] + rng:NextInteger(0, 2) * math.floor((t.targets[2] - t.targets[1]) / 2)
-		table.insert(out, { id = t.id, text = string.format(t.text, target), target = target, gems = t.gems, max = t.max, icon = t.icon })
+		table.insert(out, { id = t.id, text = Config.taskText(t, target), target = target, gems = t.gems, max = t.max, icon = t.icon })
 	end
 	return out
 end
@@ -49,6 +49,7 @@ function Rewards.sync(player: Player)
 	for i, t in tasks do
 		table.insert(list, {
 			id = t.id,
+			icon = t.icon,
 			text = t.text,
 			target = t.target,
 			gems = t.gems,

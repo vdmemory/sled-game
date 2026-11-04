@@ -172,37 +172,54 @@ end
 -- icon — имя 3D-иконки (UI.icon). Каждый день выбирается TASKS_PER_DAY разных заданий.
 Config.TASK_POOL = {
 	-- заезды и дистанция
-	{ id = "runs", text = "Сделай %d заездов", targets = { 5, 10 }, gems = 3, icon = "sled" },
+	{ id = "runs", text = "Сделай %d %s", forms = { "заезд", "заезда", "заездов" }, targets = { 5, 10 }, gems = 3, icon = "sled" },
 	{ id = "distance", text = "Проедь %d м всего", targets = { 3000, 9000 }, gems = 4, icon = "mountain" },
 	{ id = "distanceRun", text = "Проедь %d м за один заезд", targets = { 500, 1200 }, gems = 5, icon = "flag", max = true },
 	{ id = "finish", text = "Доедь до финиша %d раз", targets = { 1, 3 }, gems = 6, icon = "flag" },
 	{ id = "best", text = "Побей свой рекорд %d раз", targets = { 1, 2 }, gems = 5, icon = "trophy" },
-	{ id = "farm", text = "Сделай %d заездов в пройденном мире", targets = { 2, 4 }, gems = 4, icon = "tree" },
+	{ id = "farm", text = "Сделай %d %s в пройденном мире", forms = { "заезд", "заезда", "заездов" }, targets = { 2, 4 }, gems = 4, icon = "tree" },
 	-- монеты и награды
-	{ id = "coins", text = "Собери %d монет", targets = { 300, 900 }, gems = 4, icon = "coin" },
-	{ id = "coinsRun", text = "Заработай %d монет за один заезд", targets = { 150, 400 }, gems = 5, icon = "moneybag", max = true },
+	{ id = "coins", text = "Собери %d %s", forms = { "монету", "монеты", "монет" }, targets = { 300, 900 }, gems = 4, icon = "coin" },
+	{ id = "coinsRun", text = "Заработай %d %s за один заезд", forms = { "монету", "монеты", "монет" }, targets = { 150, 400 }, gems = 5, icon = "moneybag", max = true },
 	{ id = "combo", text = "Собери комбо x%d", targets = { 8, 20 }, gems = 5, icon = "star", max = true },
-	{ id = "gems", text = "Подбери %d гемов на трассе", targets = { 3, 8 }, gems = 5, icon = "gem" },
-	{ id = "crystal", text = "Разбей %d ледяных кристаллов", targets = { 1, 3 }, gems = 5, icon = "ice" },
+	{ id = "gems", text = "Подбери %d %s на трассе", forms = { "гем", "гема", "гемов" }, targets = { 3, 8 }, gems = 5, icon = "gem" },
+	{ id = "crystal", text = "Разбей %d %s", forms = { "ледяной кристалл", "ледяных кристалла", "ледяных кристаллов" }, targets = { 1, 3 }, gems = 5, icon = "ice" },
 	-- трюки и скорость
 	{ id = "air", text = "Пробудь в воздухе %d с", targets = { 15, 45 }, gems = 5, icon = "parachute" },
 	{ id = "airRun", text = "Пробудь в воздухе %d с за один заезд", targets = { 6, 15 }, gems = 5, icon = "parachute", max = true },
 	{ id = "flips", text = "Сделай %d сальто", targets = { 3, 10 }, gems = 5, icon = "flip" },
 	{ id = "speed", text = "Разгонись до %d км/ч", targets = { 120, 200 }, gems = 5, icon = "stopwatch", max = true },
-	{ id = "smash", text = "Разбей %d препятствий", targets = { 5, 15 }, gems = 4, icon = "smash" },
-	{ id = "boosts", text = "Проедь по %d ускорителям", targets = { 4, 12 }, gems = 4, icon = "bolt" },
+	{ id = "smash", text = "Разбей %d %s", forms = { "препятствие", "препятствия", "препятствий" }, targets = { 5, 15 }, gems = 4, icon = "smash" },
+	{ id = "boosts", text = "Проедь по %d %s", forms = { "ускорителю", "ускорителям", "ускорителям" }, targets = { 4, 12 }, gems = 4, icon = "bolt" },
 	-- бонусы на трассе
-	{ id = "magnet", text = "Подбери %d магнитов", targets = { 2, 5 }, gems = 4, icon = "magnet" },
-	{ id = "shield", text = "Подбери %d щитов", targets = { 1, 3 }, gems = 5, icon = "shield" },
-	{ id = "x2", text = "Подбери %d бонусов x2", targets = { 1, 3 }, gems = 5, icon = "coin" },
-	{ id = "fuel", text = "Подбери %d канистр", targets = { 1, 4 }, gems = 4, icon = "fuel" },
-	{ id = "rings", text = "Пролети через %d золотых колец", targets = { 3, 12 }, gems = 5, icon = "ring" },
+	{ id = "magnet", text = "Подбери %d %s", forms = { "магнит", "магнита", "магнитов" }, targets = { 2, 5 }, gems = 4, icon = "magnet" },
+	{ id = "shield", text = "Подбери %d %s", forms = { "щит", "щита", "щитов" }, targets = { 1, 3 }, gems = 5, icon = "shield" },
+	{ id = "x2", text = "Подбери %d %s", forms = { "бонус x2", "бонуса x2", "бонусов x2" }, targets = { 1, 3 }, gems = 5, icon = "coin" },
+	{ id = "fuel", text = "Подбери %d %s", forms = { "канистру", "канистры", "канистр" }, targets = { 1, 4 }, gems = 4, icon = "fuel" },
+	{ id = "rings", text = "Пролети через %d %s", forms = { "золотое кольцо", "золотых кольца", "золотых колец" }, targets = { 3, 12 }, gems = 5, icon = "ring" },
 	-- лобби
 	{ id = "upgrades", text = "Улучши что-нибудь %d раз", targets = { 2, 6 }, gems = 4, icon = "rocket" },
-	{ id = "gifts", text = "Забери %d подарков за игру", targets = { 2, 4 }, gems = 3, icon = "gift" },
+	{ id = "gifts", text = "Забери %d %s за игру", forms = { "подарок", "подарка", "подарков" }, targets = { 2, 4 }, gems = 3, icon = "gift" },
 	{ id = "chest", text = "Открой сундук в лобби", targets = { 1, 1 }, gems = 3, icon = "gift" },
 }
 Config.TASKS_PER_DAY = 6
+
+-- Число + слово в нужной форме: 1 заезд, 3 заезда, 5 заездов
+function Config.plural(n: number, forms: { string }): string
+	local n10, n100 = n % 10, n % 100
+	if n10 == 1 and n100 ~= 11 then
+		return forms[1]
+	elseif n10 >= 2 and n10 <= 4 and (n100 < 12 or n100 > 14) then
+		return forms[2]
+	end
+	return forms[3]
+end
+function Config.taskText(t, target: number): string
+	if t.forms then
+		return string.format(t.text, target, Config.plural(target, t.forms))
+	end
+	return string.format(t.text, target)
+end
 Config.TASK_CHEST_COINS = 500 -- сундук за все задания (× rewardCoins) + гемы
 Config.TASK_CHEST_GEMS = 15
 -- Подарки за время в игре (минуты с захода), как сетка «Подарки» в референсе
