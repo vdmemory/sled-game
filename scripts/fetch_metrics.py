@@ -118,6 +118,13 @@ def main():
         for day, v in series.items():
             fresh.setdefault(day, {})[col] = norm(col, v)
         time.sleep(2.2)  # лимит 30 POST/мин
+    if not fresh and os.environ.get("UNIVERSE_ID") and os.environ["UNIVERSE_ID"] != UNIVERSE and not os.environ.get("_FALLBACK"):
+        # боевой опыт ещё пуст (не выпущен) — берём метрики опыта, куда деплоим (staging)
+        print(f"::warning::у опыта {UNIVERSE} нет данных — беру метрики опыта {os.environ['UNIVERSE_ID']}")
+        os.environ["ANALYTICS_UNIVERSE_ID"] = os.environ["UNIVERSE_ID"]
+        os.environ["_FALLBACK"] = "1"
+        import subprocess
+        return subprocess.call([sys.executable, __file__] + sys.argv[1:], env=os.environ)
     if not fresh:
         print("::warning::API не вернул ни одной метрики (нет данных или нет доступа к бете)")
         return 0
