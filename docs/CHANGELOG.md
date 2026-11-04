@@ -6,6 +6,9 @@
   `scripts/weekly-metrics.yml.example` (понедельник 07:17, владелец добавляет через веб).
 - Запланированная задача Claude «Недельный обзор игры» (пн 09:00): producer → idea-scout →
   qa-tester (статика) → code-reviewer → сводка владельцу; шаги — `docs/WEEKLY.md`.
+- Уровни автономии (`docs/WEEKLY.md`): уровень 1 включён — «зелёные» авто-правки (техдолг/доки,
+  баланс числами из TUNABLES ≤ 3 в неделю и ≤ ±25% при обоснованных метриках, мелкие баг-фиксы)
+  уходят в `main` → staging с префиксом `auto:`; production — только тегом владельца.
 
 ## Аналитика и история метрик
 - `server/Analytics.luau`: AnalyticsService — воронка онбординга (Joined → FirstRun → ThirdRun →
