@@ -194,6 +194,7 @@ local function onPlayerAdded(player: Player)
 	end
 
 	Data.load(player)
+	Tuning.loadPlayer(player) -- персональные настройки владельца для этого игрока (атрибут ConfigOverrides)
 	local d0 = Data.get(player)
 	if d0 then
 		Analytics.onboarding(player, d0, 1)
@@ -205,7 +206,6 @@ local function onPlayerAdded(player: Player)
 	end
 	syncPlayer(player)
 	player:SetAttribute("Loaded", true)
-	local d0 = Data.get(player)
 	if d0 then
 		postLevel(player, d0.Level)
 	end
@@ -261,6 +261,8 @@ type Run = {
 	crystal: boolean?,
 	lastAir: number?,
 	ended: boolean?,
+	crashedOnTrack: boolean?, -- авария до финишной арки (задания «без аварии»)
+	magnetCoins: number?, -- монет притянуто магнитом (задание magnetCoins)
 }
 local runs: { [Player]: Run } = {}
 
@@ -280,88 +282,101 @@ local function endRun(player: Player, reason: string)
 	local finished = reason == "finish"
 	local dist = math.min(run.distance, L)
 	local pct = math.floor(dist / L * 100)
-	local mult = (if player:GetAttribute("X2Coins") then 2 else 1)
-		* Config.incomeMult(d and d.IncomeLevel or 0)
-		* (1 + Config.trail(d and d.Trail).bonus / 100)
-	local earned = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + (if finished then Config.finishBonus(level) else 0)) * mult)
+	local quiet = reason == "back" or reason == "restart"
+	local clean = not run.crashedOnTrack and reason ~= "fell" -- заезд без аварии
+	local mult, earned = 1, 0
 	local newBest = false
 	local gems = 0
 
-	if d then
-		d.Coins += earned
-		if run.farm then
-			-- фарм пройденного мира: только монеты и немного гемов, прогресс не двигается
-			if finished then
-				gems += Config.GEMS_FARM_FINISH
+	-- Весь расчёт наград — синхронно (без yield) внутри Tuning.forPlayer: Config на это время
+	-- настроен под персональные переопределения игрока, затем возвращается общий. Первый yield
+	-- в endRun — task.delay ниже, уже после расчёта.
+	Tuning.forPlayer(player, function()
+		mult = (if player:GetAttribute("X2Coins") then 2 else 1)
+			* Config.incomeMult(d and d.IncomeLevel or 0)
+			* (1 + Config.trail(d and d.Trail).bonus / 100)
+		earned = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + (if finished then Config.finishBonus(level) else 0)) * mult)
+
+		if d then
+			d.Coins += earned
+			if run.farm then
+				-- фарм пройденного мира: только монеты и немного гемов, прогресс не двигается
+				if finished then
+					gems += Config.GEMS_FARM_FINISH
+				end
+			elseif finished then
+				d.Level += 1
+				d.LevelBest = 0
+				gems += Config.GEMS_FINISH
+				postLevel(player, d.Level)
+			elseif pct > d.LevelBest and reason ~= "restart" and reason ~= "back" then
+				d.LevelBest = pct
+				newBest = true
+				gems += Config.GEMS_NEW_BEST
 			end
-		elseif finished then
-			d.Level += 1
-			d.LevelBest = 0
-			gems += Config.GEMS_FINISH
-			postLevel(player, d.Level)
-		elseif pct > d.LevelBest and reason ~= "restart" and reason ~= "back" then
-			d.LevelBest = pct
-			newBest = true
-			gems += Config.GEMS_NEW_BEST
-		end
-		gems += run.gems or 0
-		d.Gems += gems
-		-- аналитика: экономика и воронка (docs/METRICS.md)
-		d.Stats = d.Stats or {}
-		if reason ~= "back" and reason ~= "restart" then
-			d.Stats.Runs = (d.Stats.Runs or 0) + 1
-			local w = Config.worldOf(level)
-			Analytics.economy(player, "Source", "Coins", earned, d.Coins, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
-			Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
-			Analytics.custom(player, "RunDistance", math.floor(dist))
-			Analytics.custom(player, "RunPercent", pct)
-			Analytics.custom(player, if finished then "RunFinished" elseif reason == "crash" then "RunCrashed" else "RunStopped")
-			if d.Stats.Runs == 1 then
-				Analytics.onboarding(player, d, 2)
-			elseif d.Stats.Runs == 3 then
-				Analytics.onboarding(player, d, 3)
-			end
-			if finished and not run.farm then
-				d.Stats.Finishes = (d.Stats.Finishes or 0) + 1
-				Analytics.onboarding(player, d, 5)
-				if Config.worldOf(d.Level) >= 2 then
-					Analytics.onboarding(player, d, 6)
+			gems += run.gems or 0
+			d.Gems += gems
+			-- аналитика: экономика и воронка (docs/METRICS.md)
+			d.Stats = d.Stats or {}
+			if reason ~= "back" and reason ~= "restart" then
+				d.Stats.Runs = (d.Stats.Runs or 0) + 1
+				local w = Config.worldOf(level)
+				Analytics.economy(player, "Source", "Coins", earned, d.Coins, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
+				Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
+				Analytics.custom(player, "RunDistance", math.floor(dist))
+				Analytics.custom(player, "RunPercent", pct)
+				Analytics.custom(player, if finished then "RunFinished" elseif reason == "crash" then "RunCrashed" else "RunStopped")
+				if d.Stats.Runs == 1 then
+					Analytics.onboarding(player, d, 2)
+				elseif d.Stats.Runs == 3 then
+					Analytics.onboarding(player, d, 3)
+				end
+				if finished and not run.farm then
+					d.Stats.Finishes = (d.Stats.Finishes or 0) + 1
+					Analytics.onboarding(player, d, 5)
+					if Config.worldOf(d.Level) >= 2 then
+						Analytics.onboarding(player, d, 6)
+					end
 				end
 			end
+			local done = Rewards.onRun(player, {
+				runs = if reason == "back" or reason == "restart" then 0 else 1,
+				coins = earned,
+				distance = math.floor(dist),
+				air = math.floor(run.airTotal or 0),
+				flips = run.flips or 0,
+				smash = run.smashes or 0,
+				best = if newBest or (finished and not run.farm) then 1 else 0,
+				finish = if finished then 1 else 0,
+				distanceRun = math.floor(dist),
+				coinsRun = earned,
+				combo = run.maxCombo or 0,
+				gems = run.gems or 0,
+				crystal = if run.crystal then 1 else 0,
+				airRun = math.floor(run.airTotal or 0),
+				speed = math.floor(run.maxSpeed or 0),
+				boosts = run.boosts or 0,
+				magnet = run.picked and run.picked.magnet or 0,
+				shield = run.picked and run.picked.shield or 0,
+				x2 = run.picked and run.picked.x2 or 0,
+				fuel = run.picked and run.picked.fuel or 0,
+				rings = run.picked and run.picked.ring or 0,
+				farm = if run.farm and not quiet then 1 else 0,
+				-- новые задания (docs/GAME_DESIGN.md → «Задания дня»)
+				cleanFinish = if finished and clean then 1 else 0,
+				cleanRun = if clean then math.floor(dist) else 0,
+				magnetCoins = run.magnetCoins or 0,
+				rareRuns = if not quiet and (d.SledRarity or 1) >= 2 then 1 else 0,
+			})
+			syncPlayer(player)
+			for _, text in done do
+				TaskDone:FireClient(player, text)
+			end
 		end
-		local done = Rewards.onRun(player, {
-			runs = if reason == "back" or reason == "restart" then 0 else 1,
-			coins = earned,
-			distance = math.floor(dist),
-			air = math.floor(run.airTotal or 0),
-			flips = run.flips or 0,
-			smash = run.smashes or 0,
-			best = if newBest or (finished and not run.farm) then 1 else 0,
-			finish = if finished then 1 else 0,
-			distanceRun = math.floor(dist),
-			coinsRun = earned,
-			combo = run.maxCombo or 0,
-			gems = run.gems or 0,
-			crystal = if run.crystal then 1 else 0,
-			airRun = math.floor(run.airTotal or 0),
-			speed = math.floor(run.maxSpeed or 0),
-			boosts = run.boosts or 0,
-			magnet = run.picked and run.picked.magnet or 0,
-			shield = run.picked and run.picked.shield or 0,
-			x2 = run.picked and run.picked.x2 or 0,
-			fuel = run.picked and run.picked.fuel or 0,
-			rings = run.picked and run.picked.ring or 0,
-			farm = if run.farm and reason ~= "back" and reason ~= "restart" then 1 else 0,
-		})
-		syncPlayer(player)
-		for _, text in done do
-			TaskDone:FireClient(player, text)
-		end
-	end
+	end)
 
 	player:SetAttribute("InRun", false)
 	player:SetAttribute("Launched", false)
-	local quiet = reason == "back" or reason == "restart"
 	if not quiet then
 		RunEnded:FireClient(player, {
 			reason = reason,
@@ -493,7 +508,11 @@ startRun = function(player: Player)
 	local farm = farmWorld > 0 and (farmWorld < Config.worldOf(d.Level) or player.UserId == game.CreatorId)
 	local level = if farm then Config.farmLevel(farmWorld) else d.Level
 	local slot = takeSlot(player)
-	local track = Track.new(slot, level, if farm then 0 else d.LevelBest / 100 * Config.levelLength(d.Level))
+	-- Генерация трассы читает Config (ряды препятствий, шансы, старт без препятствий) синхронно —
+	-- строим по персональным настройкам игрока (Tuning.forPlayer); достройка — в Heartbeat ниже
+	local track = Tuning.forPlayer(player, function()
+		return Track.new(slot, level, if farm then 0 else d.LevelBest / 100 * Config.levelLength(d.Level))
+	end)
 	player:SetAttribute("RunTheme", Config.themeOf(level))
 	player:SetAttribute("LevelLength", track.length)
 	local startCF = track:startCFrame()
@@ -635,8 +654,10 @@ SetSetting.OnServerEvent:Connect(function(player, key, value)
 	player:SetAttribute("Set" .. key, value)
 end)
 
+-- Покупки и цены считаем по Config, настроенному под игрока (Tuning.forPlayer): обработчики ниже
+-- синхронные (без yield), поэтому подмена Config не видна другим игрокам.
 -- Сани: модель открывается с миром, редкости покупаются по порядку; купленное — надеть
-SledAction.OnServerInvoke = function(player, id, rarity)
+local function sledAction(player: Player, id: any, rarity: any): (boolean, string?)
 	local d = Data.get(player)
 	if not d or runs[player] or typeof(id) ~= "string" or typeof(rarity) ~= "number" then
 		return false, "Недоступно"
@@ -660,14 +681,22 @@ SledAction.OnServerInvoke = function(player, id, rarity)
 		d.Coins -= price
 		d.OwnedSleds[key] = true
 		Analytics.economy(player, "Sink", "Coins", price, d.Coins, Enum.AnalyticsEconomyTransactionType.Shop.Name, "Sled:" .. key, Analytics.fields(Config.worldOf(d.Level), nil, "Sled"))
+		for _, text in Rewards.add(player, "buySled") do -- задание «Купи N редкостей саней»
+			TaskDone:FireClient(player, text)
+		end
 	end
 	d.Sled = id
 	d.SledRarity = rarity
 	syncPlayer(player)
 	return true, model.name .. " · " .. Config.RARITIES[rarity].name
 end
+SledAction.OnServerInvoke = function(player, id, rarity)
+	return Tuning.forPlayer(player, function()
+		return sledAction(player, id, rarity)
+	end)
+end
 
-TrailAction.OnServerInvoke = function(player, id)
+local function trailAction(player: Player, id: any): (boolean, string?)
 	local d = Data.get(player)
 	if not d or runs[player] or typeof(id) ~= "string" then
 		return false, "Недоступно"
@@ -687,6 +716,11 @@ TrailAction.OnServerInvoke = function(player, id)
 	d.Trail = id
 	syncPlayer(player)
 	return true, "След «" .. t.name .. "» надет"
+end
+TrailAction.OnServerInvoke = function(player, id)
+	return Tuning.forPlayer(player, function()
+		return trailAction(player, id)
+	end)
 end
 
 RewardAction.OnServerInvoke = function(player, action, arg)
@@ -762,7 +796,9 @@ Launch.OnServerEvent:Connect(function(player, power)
 		r:Destroy()
 	end
 	local sled = run.sled
-	sled:SetAttribute("LaunchSpeed", Config.launchSpeed(d.LaunchLevel) * power)
+	sled:SetAttribute("LaunchSpeed", Tuning.forPlayer(player, function()
+		return Config.launchSpeed(d.LaunchLevel) * power
+	end))
 	sled.Anchored = false
 	-- дальше физику считает клиент: мгновенный отклик
 	local ok, err = pcall(sled.SetNetworkOwner, sled, player)
@@ -778,13 +814,16 @@ Air.OnServerEvent:Connect(function(player, seconds)
 	if not run or not run.launched or run.crashed or typeof(seconds) ~= "number" then
 		return
 	end
+	local sec: number = seconds
 	local now = os.clock()
-	if now - (run.lastAir or 0) < 0.8 or seconds < Config.AIR_MIN_TIME then
+	if now - (run.lastAir or 0) < 0.8 or sec < Config.AIR_MIN_TIME then
 		return
 	end
 	run.lastAir = now
-	run.airTotal = (run.airTotal or 0) + math.min(seconds, 6)
-	local add = math.floor(math.min(seconds, 4) * Config.AIR_COINS_PER_SEC)
+	run.airTotal = (run.airTotal or 0) + math.min(sec, 6)
+	local add = Tuning.forPlayer(player, function()
+		return math.floor(math.min(sec, 4) * Config.AIR_COINS_PER_SEC)
+	end)
 	run.bonusCoins += add
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 end)
@@ -796,6 +835,7 @@ Crash.OnServerEvent:Connect(function(player)
 		return
 	end
 	run.crashed = true
+	run.crashedOnTrack = not run.finishedAt -- после арки авария не портит «заезд без аварии»
 	if run.finishedAt then
 		-- после финишной арки авария уже не страшна: уровень пройден
 		task.delay(1.2, function()
@@ -828,8 +868,11 @@ Smash.OnServerEvent:Connect(function(player)
 	if run.smashes > 40 then
 		return
 	end
-	run.bonusCoins += Config.SMASH_COINS
-	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.SMASH_COINS)
+	local add = Tuning.forPlayer(player, function()
+		return Config.SMASH_COINS
+	end)
+	run.bonusCoins += add
+	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 end)
 
 Trick.OnServerEvent:Connect(function(player, flips)
@@ -843,12 +886,14 @@ Trick.OnServerEvent:Connect(function(player, flips)
 	end
 	run.lastTrick = now
 	run.flips = (run.flips or 0) + math.clamp(math.floor(flips), 0, 3)
-	local add = math.clamp(math.floor(flips), 0, 3) * Config.COINS_PER_FLIP
+	local add = Tuning.forPlayer(player, function()
+		return math.clamp(math.floor(flips), 0, 3) * Config.COINS_PER_FLIP
+	end)
 	run.bonusCoins += add
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 end)
 
-BuyUpgrade.OnServerInvoke = function(player, name)
+local function buyUpgrade(player: Player, name: any): (boolean, string?)
 	local u = Config.UPGRADES[name]
 	local d = Data.get(player)
 	if not u or not d or runs[player] then
@@ -876,6 +921,11 @@ BuyUpgrade.OnServerInvoke = function(player, name)
 		return true, Config.tierName(name, level + 1)
 	end
 	return true
+end
+BuyUpgrade.OnServerInvoke = function(player, name)
+	return Tuning.forPlayer(player, function()
+		return buyUpgrade(player, name)
+	end)
 end
 
 -- Миры: «farm» — кататься в пройденном мире (0 = вернуться в текущий),
@@ -907,9 +957,38 @@ end
 
 -- Панель разработчика: только владелец игры (game.CreatorId). Меняет свой прогресс для проверки
 -- уровней прокачки, миров, саней и наград. Обычным игрокам сервер всегда отказывает.
-DevAction.OnServerInvoke = function(player, action, a, b)
+DevAction.OnServerInvoke = function(player, action, a, b, c)
 	if player.UserId ~= game.CreatorId then
 		return false, "Только для владельца"
+	end
+	-- Настройка на лету: не трогает заезд и профиль.
+	-- "tune": a — { путь = число }, b — область "all" | "player", c — UserId или ник (для "player").
+	-- "tuneGet": a — UserId или ник → { userId, name, overrides } (персональный слой игрока).
+	if action == "tune" then
+		if typeof(a) ~= "table" then
+			return false, "Нет данных"
+		end
+		local scope = if b == nil then "all" else b
+		if scope == "all" then
+			return Tuning.save("all", nil, a)
+		elseif scope == "player" then
+			local userId, nameOrErr = Tuning.resolveTarget(c)
+			if not userId then
+				return false, nameOrErr
+			end
+			return Tuning.save("player", userId, a)
+		end
+		return false, "Неизвестная область"
+	elseif action == "tuneGet" then
+		local userId, nameOrErr = Tuning.resolveTarget(a)
+		if not userId then
+			return false, nameOrErr
+		end
+		local ok, res = Tuning.fetchPlayer(userId)
+		if not ok then
+			return false, res
+		end
+		return true, { userId = userId, name = nameOrErr, overrides = res }
 	end
 	local d = Data.get(player)
 	if not d then
@@ -934,8 +1013,6 @@ DevAction.OnServerInvoke = function(player, action, a, b)
 			d.OwnedSleds[model.id .. ":" .. k] = true
 		end
 		d.Sled, d.SledRarity = model.id, r
-	elseif action == "tune" and typeof(a) == "table" then
-		return Tuning.save(a)
 	elseif action == "resetDaily" then
 		d.Daily = nil
 		d.ChestAt = 0
@@ -1002,8 +1079,9 @@ local function awardCoin(player: Player, run: Run)
 	local now = os.clock()
 	run.combo = if now - (run.lastCoin or 0) < Config.COMBO_WINDOW then (run.combo or 0) + 1 else 1
 	run.lastCoin = now
-	local value = Config.COIN_PICKUP_VALUE * Config.comboMult(run.combo or 1)
-		* (if (run.x2Until or 0) > now then 2 else 1)
+	local value = Tuning.forPlayer(player, function()
+		return Config.COIN_PICKUP_VALUE * Config.comboMult(run.combo or 1) * (if (run.x2Until or 0) > now then 2 else 1)
+	end)
 	run.bonusCoins += value
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + value)
 	player:SetAttribute("Combo", run.combo)
@@ -1030,11 +1108,15 @@ CoinGrab.OnServerEvent:Connect(function(player, coin)
 	if not CollectionService:HasTag(coin, "Coin") or coin:GetAttribute("Taken") then
 		return
 	end
-	if (coin.Position - run.sled.Position).Magnitude > Config.MAGNET_RADIUS + 25 then
+	local radius = Tuning.forPlayer(player, function()
+		return Config.MAGNET_RADIUS
+	end)
+	if (coin.Position - run.sled.Position).Magnitude > radius + 25 then
 		return
 	end
 	takeCoin(coin)
 	awardCoin(player, run)
+	run.magnetCoins = (run.magnetCoins or 0) + 1 -- задание «Притяни магнитом N монет»
 end)
 
 -- Бонусы на трассе: x2 монеты (на время) и кольца (+монеты). Щит и канистра — только у клиента.
@@ -1065,9 +1147,13 @@ PowerUp.OnServerEvent:Connect(function(player, part)
 	run.picked = picked
 	picked[kind] = (picked[kind] or 0) + 1
 	if kind == "x2" then
-		run.x2Until = os.clock() + Config.POWERUPS.x2.time
+		run.x2Until = os.clock() + Tuning.forPlayer(player, function()
+			return Config.POWERUPS.x2.time
+		end)
 	elseif kind == "ring" then
-		local c = Config.POWERUPS.rings.coins
+		local c = Tuning.forPlayer(player, function()
+			return Config.POWERUPS.rings.coins
+		end)
 		run.bonusCoins += c
 		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + c)
 	end
@@ -1105,9 +1191,12 @@ Crystal.OnServerEvent:Connect(function(player, part)
 		return
 	end
 	run.crystal = true
-	run.bonusCoins += Config.CRYSTAL_COINS
+	local add = Tuning.forPlayer(player, function()
+		return Config.CRYSTAL_COINS
+	end)
+	run.bonusCoins += add
 	run.gems = (run.gems or 0) + 1
-	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + Config.CRYSTAL_COINS)
+	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 	player:SetAttribute("RunGems", run.gems)
 end)
 
@@ -1168,7 +1257,9 @@ RunService.Heartbeat:Connect(function(dt)
 		run.distance = math.max(run.distance, h)
 		player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
 
-		track:ensureAround(math.max(0, run.distance))
+		Tuning.forPlayer(player, function()
+			track:ensureAround(math.max(0, run.distance)) -- синхронно; Config под игрока (см. startRun)
+		end)
 		run.maxSpeed = math.max(run.maxSpeed or 0, sled.AssemblyLinearVelocity.Magnitude * 1.1) -- км/ч, как на спидометре
 
 		if not run.launched or run.crashed then
@@ -1215,6 +1306,7 @@ Players.PlayerRemoving:Connect(function(player)
 		slots[run.slot] = nil
 	end
 	Rewards.onLeave(player)
+	Tuning.unloadPlayer(player)
 	local d = Data.get(player)
 	local joined = player:GetAttribute("JoinedAt")
 	if d and typeof(joined) == "number" then

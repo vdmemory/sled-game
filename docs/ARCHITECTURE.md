@@ -75,11 +75,35 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 ## Настройка на лету
 
-`Config.TUNABLES` — список `{ путь, подпись, группа, min, max, шаг }`. Сервер (`Tuning`) при старте
-читает DataStore `GameConfig_v1` → `Config.applyOverrides` → атрибут `ReplicatedStorage.ConfigOverrides`
-(JSON); клиент (`ConfigSync`) применяет его к своему `Config`. Сохранение из панели владельца
-(`DevAction("tune")`) пишет DataStore и шлёт `MessagingService` «SledConfigChanged» — остальные
-серверы перечитывают. Параметры, которых нет в переопределениях, равны значениям из кода.
+`Config.TUNABLES` — список `{ путь, подпись, группа, min, max, шаг }`. Переопределения `{ путь = число }`
+лежат в DataStore `GameConfig_v1` в двух слоях:
+
+| Слой | Ключ DataStore | Атрибут для клиента | Кому |
+| --- | --- | --- | --- |
+| общий (`scope = "all"`) | `overrides` | `ReplicatedStorage.ConfigOverrides` (JSON) | всем |
+| персональный (`scope = "player"`) | `p_<UserId>` | `Player.ConfigOverrides` (JSON) | одному игроку, поверх общего |
+
+Сервер (`Tuning`): `init()` читает общий ключ и применяет `Config.applyOverrides`; `loadPlayer(player)`
+при входе читает `p_<UserId>` (pcall, 3 ретрая) и ставит атрибут игроку; `unloadPlayer` при выходе.
+`merged(player)` = по умолчанию ← общие ← персональные. Клиент (`ConfigSync`) сливает оба атрибута
+сам и пересчитывает при изменении любого из них.
+
+Сервер хранит в `Config` общие значения. Расчёты, которые должны учитывать персональный слой,
+оборачиваются в `Tuning.forPlayer(player, fn)`: временно `applyOverrides(merged)`, вызов `fn`,
+восстановление общих (pcall + rethrow). Это безопасно только для синхронного `fn` — Luau не
+прерывает поток до первого yield, поэтому другие игроки подмены не видят; внутри `fn` нельзя
+`task.wait`/DataStore/`InvokeClient`. Повторный вход для того же игрока — просто вызов. Обёрнуто
+в `Main.server`: `BuyUpgrade`, `SledAction`, `TrailAction`, расчёт наград в `endRun` (до первого
+yield), `Launch` (сила рогатки), монеты за полёт/трюки/разбитые препятствия/кристалл/кольца/x2,
+`awardCoin`, радиус магнита, генерация трассы (`Track.new`, `ensureAround`).
+
+Сохранение из панели владельца — `DevAction("tune", overrides, scope, target)` (`target` — UserId
+или ник; ник резолвит `Players:GetUserIdFromNameAsync` в pcall) → `Tuning.save(scope, userId,
+overrides)` пишет нужный ключ (пустой персональный набор — `RemoveAsync`) и шлёт
+`MessagingService` «SledConfigChanged» с `{ scope, userId, job }` — остальные серверы перечитывают
+только этот ключ (персональный — если игрок у них онлайн). `DevAction("tuneGet", target)` отдаёт
+панели персональный слой игрока (онлайн — из памяти, офлайн — из DataStore). Параметры, которых
+нет в переопределениях, равны значениям из кода.
 
 ## Иконки интерфейса
 
