@@ -21,9 +21,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 | Папка | Куда в игре | Что там |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
 | `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `Track` (генерация трассы и лобби), `Props` (low-poly модели), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (свет миров, частицы, пламя ракеты), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (свет миров, частицы, пламя ракеты), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало») |
 
 ## Как устроен заезд
 
@@ -61,6 +61,17 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `RewardAction` | Function | задания, сундук заданий, подарки, сундук лобби |
 | `WorldAction` | Function | фарм пройденного мира / возврат / пропуск мира за Robux (владелец — тест любого мира) |
 | `DevAction` | Function | только владелец (`UserId == CreatorId`): уровень, валюта, апгрейды, сани, сброс заданий, `tune` (сохранить переопределения Config для всех) |
+
+## События между клиентскими скриптами (BindableEvent в `HUD`)
+
+| Имя | Кто слушает | Смысл |
+| --- | --- | --- |
+| `UpgradeReveal(kind, tierName)` | `Reveal` | HUD получил от `BuyUpgrade` имя нового тира → большая анимация «было → стало» |
+| `CurrencyGain(kind, amount, from)` | `HUD` | `kind` — `"coin"`/`"gem"`; `amount < 0` — держать счётчик на старом значении (перед запросом к серверу), `0` — отпустить, `> 0` — `UIFx.flyCurrency` из `from` (GuiObject или Vector2) к пилюле, затем `tickNumber` до текущего атрибута. Вызывает `LobbyMenus` после `RewardAction`; без события валюта обновляется мгновенно |
+
+Эффекты (`shared/UIFx`) рисуются в своём ScreenGui `UIFx` с `DisplayOrder` 100 — поверх HUD (0),
+DevPanel (30) и Reveal (40); каждый эффект держит не больше одного `RenderStepped`/`Heartbeat`
+и отключает его по завершении, созданные инстансы уничтожаются.
 
 ## Атрибуты игрока (сервер → клиент)
 

@@ -184,14 +184,26 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
-local function card(grid: Frame, idx: number, title: string, lines: { string }, current: boolean, build: ((Model) -> ())?, onApply: (() -> ())?)
+-- Плоская картинка вместо 3D-превью: цветная плашка мира + 3D-иконка (Config.WORLD_IMAGES)
+local function worldArt(parent: Instance, theme: number)
+	local col = Config.WORLD_COLORS[theme] or C.ribbon
+	local pic = UI.new("Frame", { Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 118), BackgroundTransparency = 0, ZIndex = 53, Parent = parent })
+	UI.grad(pic, col:Lerp(C.white, 0.35), col)
+	UI.corner(pic, 10)
+	UI.stroke(pic, 2, col:Lerp(C.ink, 0.4))
+	UI.icon(Config.WORLD_IMAGES[theme] or "tree", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(84, 84), ZIndex = 54, Parent = pic })
+end
+
+local function card(grid: Frame, idx: number, title: string, lines: { string }, current: boolean, build: ((Model) -> ())?, onApply: (() -> ())?, art: ((Frame) -> ())?)
 	local c = UI.new("Frame", { LayoutOrder = idx, BackgroundColor3 = if current then Color3.fromRGB(60, 110, 70) else Color3.fromRGB(46, 62, 98), BackgroundTransparency = 0, ZIndex = 52, Parent = grid })
 	UI.corner(c, 12)
 	UI.stroke(c, 2, if current then Color3.fromRGB(140, 230, 120) else Color3.fromRGB(90, 120, 175))
 	if build then
 		preview(c, build)
+	elseif art then
+		art(c)
 	end
-	local y = if build then 128 else 8
+	local y = if build or art then 128 else 8
 	UI.text({ Text = title, Position = UDim2.fromOffset(6, y), Size = UDim2.new(1, -12, 0, 24), ZIndex = 53, Parent = c })
 	for i, line in lines do
 		UI.new("TextLabel", { Text = line, Position = UDim2.fromOffset(8, y + 24 + (i - 1) * 18), Size = UDim2.new(1, -16, 0, 18), TextScaled = false, TextSize = 14, Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(200, 215, 240), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 53, Parent = c })
@@ -350,6 +362,8 @@ tabs["Миры"] = function()
 			"финиш: +" .. Config.finishBonus(first) .. " 💰",
 		}, w == curWorld, nil, function()
 			dev("setWorldLevel", first)
+		end, function(c)
+			worldArt(c, Config.themeOfWorld(w))
 		end)
 	end
 end

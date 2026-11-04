@@ -68,6 +68,64 @@ end
 
 local current: ScreenGui? = nil
 
+-- «Подпись» детали: форма, размер, положение относительно модели, цвет — у одинаковых деталей
+-- старого и нового тира подписи совпадают, у новых/перекрашенных — нет
+local function partKey(p: BasePart, origin: CFrame): string
+	local rel = origin:PointToObjectSpace(p.Position)
+	local function q(v: number): number
+		return math.floor(v * 20 + 0.5) / 20
+	end
+	local c = p.Color
+	return string.format("%s|%s|%s,%s,%s|%d,%d,%d", p.Shape.Name, tostring(p.Size), q(rel.X), q(rel.Y), q(rel.Z), math.floor(c.R * 255), math.floor(c.G * 255), math.floor(c.B * 255))
+end
+local function partKeys(m: Model): { [string]: number }
+	local keys = {}
+	local origin = m:GetBoundingBox()
+	for _, p in m:GetDescendants() do
+		if p:IsA("BasePart") then
+			local k = partKey(p, origin)
+			keys[k] = (keys[k] or 0) + 1
+		end
+	end
+	return keys
+end
+-- Подсветка новых деталей: Neon-вспышка к белому и плавный возврат цвета/материала (Highlight в
+-- ViewportFrame не рисуется). Если новых деталей не нашлось или их почти всё — подсвечиваем всю модель.
+local function flashNewParts(newModel: Model, oldKeys: { [string]: number })
+	local origin = newModel:GetBoundingBox()
+	local fresh: { BasePart } = {}
+	local all: { BasePart } = {}
+	for _, p in newModel:GetDescendants() do
+		if p:IsA("BasePart") then
+			table.insert(all, p)
+			local k = partKey(p, origin)
+			if (oldKeys[k] or 0) > 0 then
+				oldKeys[k] -= 1
+			else
+				table.insert(fresh, p)
+			end
+		end
+	end
+	if #fresh == 0 or #fresh > #all * 0.7 then
+		fresh = all
+	end
+	for _, p in fresh do
+		local color, material = p.Color, p.Material
+		p.Material = Enum.Material.Neon
+		p.Color = color:Lerp(Color3.new(1, 1, 1), 0.75)
+		task.delay(0.3, function()
+			if p.Parent then
+				tween(p, 0.35, { Color = color })
+				task.delay(0.35, function()
+					if p.Parent then
+						p.Material = material
+					end
+				end)
+			end
+		end)
+	end
+end
+
 local function reveal(kind: string, tierName: string)
 	if current then
 		current:Destroy()
@@ -120,8 +178,12 @@ local function reveal(kind: string, tierName: string)
 	local vpScale = Instance.new("UIScale")
 	vpScale.Scale = 0.2
 	vpScale.Parent = vp
+	-- «было → стало»: сначала крутится модель прошлого тира, затем вспышка и новая с пружинкой
+	local SWAP_AT = 0.6
+	local oldModel = buildModel(kind, math.max(level - Config.TIER_SIZE, 0))
+	local oldKeys = partKeys(oldModel) -- до уничтожения старой модели
 	local model = buildModel(kind, level)
-	model.Parent = vp
+	oldModel.Parent = vp
 	local vcam = Instance.new("Camera")
 	vcam.FieldOfView = 38
 	vcam.Parent = vp
@@ -131,6 +193,8 @@ local function reveal(kind: string, tierName: string)
 	local dist = bbSize.Magnitude * 0.95 + 1.5
 
 	-- тексты
+	local wasLabel = UI.text({ Text = "БЫЛО", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.76), Size = UDim2.fromOffset(300, 30), TextColor3 = Color3.fromRGB(200, 215, 240), TextTransparency = 1, Parent = root })
+	UI.outline(wasLabel, 2.5)
 	local top = UI.text({ Text = "НОВОЕ УЛУЧШЕНИЕ!", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.76), Size = UDim2.fromOffset(420, 34), TextColor3 = Color3.fromRGB(255, 215, 70), TextTransparency = 1, Parent = root })
 	UI.outline(top, 3)
 	local title = UI.text({ Text = "ПОЛУЧЕНО: " .. UI.upper(tierName) .. "!", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.85), Size = UDim2.fromOffset(860, 74), Outline = 5, Parent = root })
@@ -139,7 +203,7 @@ local function reveal(kind: string, tierName: string)
 	tScale.Parent = title
 	local btn = UI.button("green", "ОТЛИЧНО!", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.95), Size = UDim2.fromOffset(220, 52), Visible = false, Parent = root })
 
-	-- белая вспышка
+	-- белая вспышка (вход и момент смены модели)
 	local flash = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.25, Parent = gui })
 
 	controller.Sfx:Fire("record")
@@ -147,13 +211,32 @@ local function reveal(kind: string, tierName: string)
 	tween(bg, 0.3, { BackgroundTransparency = 0.3 })
 	tween(rays, 0.6, { Size = UDim2.fromOffset(980, 980) }, Enum.EasingStyle.Back)
 	tween(halo, 0.6, { Size = UDim2.fromOffset(520, 520) }, Enum.EasingStyle.Back)
-	tween(vpScale, 0.6, { Scale = 1 }, Enum.EasingStyle.Back)
-	task.delay(0.3, function()
+	tween(vpScale, 0.4, { Scale = 0.85 }, Enum.EasingStyle.Back)
+	tween(wasLabel, 0.25, { TextTransparency = 0.2 })
+	local swapped = false
+	task.delay(SWAP_AT, function()
+		if not gui.Parent then
+			return
+		end
+		swapped = true
+		-- вспышка, старая модель исчезает, новая появляется «пружинкой»
+		flash.BackgroundTransparency = 0.15
+		tween(flash, 0.4, { BackgroundTransparency = 1 })
+		oldModel:Destroy()
+		model.Parent = vp
+		vpScale.Scale = 0.55
+		tween(vpScale, 0.7, { Scale = 1 }, Enum.EasingStyle.Elastic)
+		flashNewParts(model, oldKeys)
+		tween(wasLabel, 0.15, { TextTransparency = 1 })
+		local wasOutline = wasLabel:FindFirstChildOfClass("UIStroke")
+		if wasOutline then
+			tween(wasOutline, 0.15, { Transparency = 1 })
+		end
 		tween(top, 0.3, { TextTransparency = 0 })
 		tween(tScale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
 		controller.Sfx:Fire("reward")
 	end)
-	task.delay(0.9, function()
+	task.delay(SWAP_AT + 0.7, function()
 		if btn.Parent then
 			btn.Visible = true
 			UI.pop(btn)
@@ -176,7 +259,8 @@ local function reveal(kind: string, tierName: string)
 		local t = os.clock() - t0
 		rays.Rotation = t * 18
 		local zoom = 1 + 0.9 * math.exp(-t * 3.5) -- «наезд» камеры
-		local ang = math.rad(-35) + t * 0.6
+		-- старая модель крутится быстро (обзор «было»), новая — спокойный облёт
+		local ang = math.rad(-35) + (if swapped then SWAP_AT * 2.4 + (t - SWAP_AT) * 0.6 else t * 2.4)
 		local eye = center + Vector3.new(math.sin(ang) * dist * zoom, dist * 0.42 * zoom, math.cos(ang) * dist * zoom)
 		vcam.CFrame = CFrame.lookAt(eye, center)
 		title.Rotation = math.sin(t * 3) * 2
@@ -198,6 +282,7 @@ local function reveal(kind: string, tierName: string)
 		task.delay(0.3, function()
 			conn:Disconnect()
 			gui:Destroy()
+			model:Destroy() -- если закрыли до смены модели, новая ещё не в ViewportFrame
 			if current == gui then
 				current = nil
 			end
@@ -209,7 +294,7 @@ local function reveal(kind: string, tierName: string)
 			close()
 		end
 	end)
-	task.delay(5, close)
+	task.delay(5.5, close)
 end
 
 revealEvent.Event:Connect(reveal)
