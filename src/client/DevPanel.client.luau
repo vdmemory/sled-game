@@ -16,6 +16,7 @@ end
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local UI = require(Shared:WaitForChild("UIKit"))
+local C = UI.C
 local SledModels = require(Shared:WaitForChild("SledModels"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
