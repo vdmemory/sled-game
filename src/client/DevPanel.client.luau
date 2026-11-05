@@ -131,9 +131,11 @@ local function note(text: string)
 end
 -- ряд кнопок
 local function buttonRow(buttons: { any })
-	local row = UI.new("Frame", { LayoutOrder = nextOrder(), Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, ZIndex = 52, Parent = content })
+	-- кнопки переносятся на новую строку, если не влезают по ширине (UIGridLayout с авто-высотой)
+	local row = UI.new("Frame", { LayoutOrder = nextOrder(), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = 52, Parent = content })
 	local rl = Instance.new("UIListLayout")
 	rl.FillDirection = Enum.FillDirection.Horizontal
+	rl.Wraps = true
 	rl.Padding = UDim.new(0, 8)
 	rl.Parent = row
 	for _, b in buttons do
