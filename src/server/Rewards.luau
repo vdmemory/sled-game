@@ -120,11 +120,11 @@ local function grant(player: Player, d, coins: number?, gems: number?, what: str
 	if coins then
 		local n = Config.rewardCoins(coins, d.Level)
 		d.Coins += n
-		Analytics.economy(player, "Source", "Coins", n, d.Coins, Enum.AnalyticsEconomyTransactionType.Reward.Name, what or "Reward")
+		Analytics.economy(player, "Source", "Coins", n, d.Coins, Enum.AnalyticsEconomyTransactionType.TimedReward.Name, what or "Reward")
 	end
 	if gems then
 		d.Gems += gems
-		Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.Reward.Name, what or "Reward")
+		Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.TimedReward.Name, what or "Reward")
 	end
 end
 
