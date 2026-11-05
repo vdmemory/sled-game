@@ -254,10 +254,11 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	return c
 end
 
--- Уведомление сверху (тёмная плашка, как «DAILY TASK COMPLETED!»)
+-- Уведомление сверху (тёмная плашка, как «DAILY TASK COMPLETED!»): под плашкой сундука (140–190)
+-- в лобби и под подсказкой рогатки (до 190) в заезде
 local noticeBox = UI.new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 132),
+	Position = UDim2.new(0.5, 0, 0, 198),
 	Size = UDim2.fromOffset(440, 54),
 	BackgroundColor3 = C.navy,
 	BackgroundTransparency = 0.15,
@@ -479,10 +480,12 @@ UI.corner(knob, 1000)
 
 -- Подсказка управления
 local controlsHint = UI.text({
-	Text = if TOUCH then "Веди пальцем — руль · 🔥 — ракета · 🔄 в прыжке — флип" else "A/D — руль · Shift — ракета · Пробел в прыжке — флип",
+	Text = if TOUCH
+		then "Веди пальцем — руль · 🔥 — ракета · ⤴ — прыжок · 🔄 в полёте — трюки (держи / тап / 2 тапа)"
+		else "A/D — руль · Shift — ракета · Ctrl — прыжок · Пробел в полёте — трюки (держи, +S / +A/D, 2 тапа)",
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -16),
-	Size = UDim2.fromOffset(560, 24),
+	Size = UDim2.fromOffset(760, 24),
 	TextTransparency = 0.2,
 	Visible = false,
 	Parent = runUi,

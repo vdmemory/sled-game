@@ -253,8 +253,13 @@ Config.GRAVITY_ALONG = 60 -- «игровая» гравитация вдоль 
 Config.DRAG = 0.0012 -- сопротивление воздуха (× v²)
 Config.STOP_SPEED = 3 -- ниже этой скорости...
 Config.STOP_TIME = 1.5 -- ...столько секунд = остановился
-Config.STEER_SPEED = 45 -- максимальная боковая скорость
-Config.STEER_RESPONSE = 6 -- как быстро боковая скорость догоняет руль (инерция)
+Config.STEER_SPEED = 45 -- максимальная боковая скорость (на скорости до STEER_REF_SPEED)
+Config.STEER_REF_SPEED = 100 -- выше этой скорости руль растёт пропорционально ей: время смены полосы постоянно
+Config.STEER_RESPONSE = 7 -- как быстро боковая скорость догоняет руль (инерция)
+-- Боковая скорость руля на текущей скорости (docs/GAME_DESIGN.md → «Скорость и руль»)
+function Config.steerSpeed(speed: number): number
+	return Config.STEER_SPEED * math.max(1, speed / math.max(1, Config.STEER_REF_SPEED))
+end
 Config.WALL_PULL = 140 -- борта жёлоба скатывают обратно к центру
 Config.STEER_TILT = 18 -- наклон ватрушки в повороте (градусы)
 Config.OBSTACLE_SLOWDOWN = 0.6 -- скорость × это при ударе
@@ -262,8 +267,41 @@ Config.BOOST_ADD = 18 -- ускоритель на льду
 Config.RAMP_MIN_SPEED = 30 -- на трамплине не медленнее этого (не застрянешь)
 Config.RAMP_LIFT = 0.45 -- подброс с трамплина (доля скорости вверх)
 Config.ROCKET_THRUST = 40
-Config.FLIP_SPEED = 9 -- рад/с
-Config.FLIP_BOOST = 1.12 -- × скорость за чистый флип
+Config.FLIP_SPEED = 9 -- рад/с: скорость вращения во всех трюках (сальто, бочка, разворот)
+
+-- Прыжок с земли (кнопка «Прыжок»): подброс вверх; высота = v² / (2·196.2) ≈ 4 studs при 40.
+-- Перелетаются низкие препятствия (конусы 1.3, бревно 2.6, барьер 3.2, бочки 3.5), но не
+-- гидрант (4.3), машины (крыша 5.4) и снеговик (13.9) — высоты из server/Props.
+Config.JUMP_SPEED = 40 -- studs/с вверх
+Config.JUMP_COOLDOWN = 0.6 -- сек между прыжками
+Config.JUMP_GROUND_DIST = 1.3 -- после прыжка «в воздухе», пока центр саней выше этого над снегом (обычно ~0.5)
+
+------------------------------------------------------------------ ТРЮКИ (в воздухе)
+-- Клиент копит завершённые трюки за один полёт и при приземлении шлёт список серверу.
+-- kind: pitch (вокруг поперечной оси, dir −1 назад / +1 вперёд), roll (вокруг продольной),
+-- yaw (вокруг вертикали, направление движения не меняется), grab (без вращения — наклон саней).
+-- minAir — минимальное время в воздухе (с), coins — монет за один, boost — × скорость при чистом приземлении.
+Config.TRICK_ORDER = { "flip", "frontflip", "roll", "spin", "grab" }
+Config.TRICKS = {
+	flip = { name = "Сальто", input = "держать Пробел / 🔄", coins = 15, boost = 1.12, minAir = 0, icon = "flip", kind = "pitch", dir = -1 },
+	frontflip = { name = "Переднее сальто", input = "Пробел + S/↓ (руль вперёд)", coins = 20, boost = 1.15, minAir = 0, icon = "flip", kind = "pitch", dir = 1 },
+	roll = { name = "Бочка", input = "Пробел + A/D (руль вбок)", coins = 20, boost = 1.12, minAir = 0, icon = "sparkles", kind = "roll" },
+	spin = { name = "Разворот 360", input = "Пробел дважды в воздухе", coins = 25, boost = 1.1, minAir = 0, icon = "star", kind = "yaw" },
+	grab = { name = "Грэб", input = "короткий тап Пробела (< 0.2 с)", coins = 8, boost = 1.0, minAir = 0.4, icon = "parachute", kind = "grab" },
+}
+Config.TRICK_COMBO_MULT = { 1, 1.5, 2 } -- множитель монет за 1 / 2 / 3+ разных трюков в одном полёте
+Config.TRICK_MAX_COUNT = 5 -- больше одного трюка одного вида за полёт сервер не засчитывает
+Config.TRICK_TAP_TIME = 0.2 -- сек: короче — «грэб», дольше — вращение
+Config.TRICK_DOUBLE_TAP = 0.35 -- сек между нажатиями для «разворота»
+Config.GRAB_TIME = 0.5 -- сек: сколько длится наклон саней в грэбе
+function Config.trickComboMult(distinct: number): number
+	local m = Config.TRICK_COMBO_MULT
+	return m[math.clamp(distinct, 1, #m)]
+end
+-- Сколько полных оборотов физически влезает в полёт (для серверной проверки)
+function Config.maxRotations(airTime: number): number
+	return 1 + math.floor(math.max(0, airTime) * Config.FLIP_SPEED / (2 * math.pi))
+end
 
 ------------------------------------------------------------------ АПГРЕЙДЫ
 -- 4 апгрейда как в оригинале. Ракета качается за гемы, остальные — за монеты.
@@ -312,7 +350,8 @@ Config.F = {
 	launchBase = 48, launchStep = 6, -- сила рогатки = база + шаг × уровень
 	fuelBase = 0.6, fuelStep = 0.3, -- топливо ракеты, сек
 	frictionBase = 9.5, frictionDecay = 0.965, -- трение = база × спад^уровень
-	speedBase = 100, speedStep = 5, -- потолок скорости
+	speedBase = 100, speedStep = 5, -- потолок скорости: наклон на 0-м уровне (studs/с за уровень)
+	speedSoftCap = 200, -- асимптота потолка: выше него потолок не поднимется ни на каком уровне
 	incomeStep = 0.15, -- множитель монет = 1 + шаг × уровень
 	finishPerLevel = 100, -- бонус за финиш = это × уровень
 	rewardGrowth = 0.25, -- рост монетных наград с уровнем
@@ -326,8 +365,16 @@ end
 function Config.friction(level: number): number
 	return Config.F.frictionBase * Config.F.frictionDecay ^ level
 end
+-- Потолок скорости с убывающим ростом: стартует как base + step·level, но плавно упирается в
+-- speedSoftCap (0 → 100, 10 → 139, 20 → 163, 30 → 177, 50 → 191 при 100/5/200).
+-- Расчёт и таблица «уровень → скорость → время смены полосы» — docs/GAME_DESIGN.md.
 function Config.maxSpeed(level: number): number
-	return Config.F.speedBase + Config.F.speedStep * level
+	local base, step, cap = Config.F.speedBase, Config.F.speedStep, Config.F.speedSoftCap
+	local span = cap - base
+	if span <= 0 or step <= 0 then
+		return base -- кап ниже базы или нулевой шаг: потолок не растёт
+	end
+	return cap - span * math.exp(-step * level / span)
 end
 function Config.incomeMult(level: number): number
 	return 1 + Config.F.incomeStep * level
@@ -428,7 +475,7 @@ end
 ------------------------------------------------------------------ ЭКОНОМИКА
 Config.STUDS_PER_COIN = 4
 Config.COIN_PICKUP_VALUE = 3
-Config.COINS_PER_FLIP = 15
+-- Монеты за трюки — в Config.TRICKS[id].coins (× Config.trickComboMult за разные трюки в полёте)
 function Config.finishBonus(level: number): number
 	return Config.F.finishPerLevel * level
 end
@@ -444,7 +491,8 @@ Config.TUNABLES = {
 	{ "UPGRADES.Launch.BaseCost", "Рогатка: цена 1-го ур.", "Прокачка", 5, 1000, 5 },
 	{ "UPGRADES.Launch.Growth", "Рогатка: рост цены ×", "Прокачка", 1.01, 1.5, 0.01 },
 	{ "F.speedBase", "Сани: потолок скорости на 0 ур.", "Прокачка", 50, 300, 5 },
-	{ "F.speedStep", "Сани: + потолка за уровень", "Прокачка", 0, 20, 0.5 },
+	{ "F.speedStep", "Сани: + потолка за уровень (на 0 ур.)", "Прокачка", 0, 20, 0.5 },
+	{ "F.speedSoftCap", "Сани: асимптота потолка", "Прокачка", 100, 400, 5 },
 	{ "F.frictionBase", "Сани: трение на 0 ур.", "Прокачка", 1, 30, 0.5 },
 	{ "F.frictionDecay", "Сани: спад трения за ур.", "Прокачка", 0.8, 1, 0.005 },
 	{ "UPGRADES.Sled.BaseCost", "Сани: цена 1-го ур.", "Прокачка", 5, 1000, 5 },
@@ -465,7 +513,13 @@ Config.TUNABLES = {
 	{ "GEMS_FARM_FINISH", "Гемов за финиш (фарм)", "Экономика", 0, 20, 1 },
 	{ "CRYSTAL_COINS", "Кристалл: монет", "Экономика", 0, 500, 5 },
 	{ "SMASH_COINS", "Разбил препятствие: монет", "Экономика", 0, 100, 1 },
-	{ "COINS_PER_FLIP", "Сальто: монет", "Экономика", 0, 200, 1 },
+	{ "TRICKS.flip.coins", "Сальто: монет", "Экономика", 0, 200, 1 },
+	{ "TRICKS.frontflip.coins", "Переднее сальто: монет", "Экономика", 0, 200, 1 },
+	{ "TRICKS.roll.coins", "Бочка: монет", "Экономика", 0, 200, 1 },
+	{ "TRICKS.spin.coins", "Разворот 360: монет", "Экономика", 0, 200, 1 },
+	{ "TRICKS.grab.coins", "Грэб: монет", "Экономика", 0, 100, 1 },
+	{ "TRICK_COMBO_MULT.2", "Комбо трюков: × за 2-й", "Экономика", 1, 5, 0.1 },
+	{ "TRICK_COMBO_MULT.3", "Комбо трюков: × за 3-й", "Экономика", 1, 10, 0.1 },
 	{ "AIR_COINS_PER_SEC", "Полёт: монет в секунду", "Экономика", 0, 100, 1 },
 
 	{ "MAGNET_CHANCE", "Магнит: шанс на кусок", "Бонусы", 0, 1, 0.01 },
@@ -493,18 +547,31 @@ Config.TUNABLES = {
 	{ "KICKER_CHANCE", "Шанс обрыва с трамплином", "Трасса", 0, 1, 0.01 },
 	{ "GRAVITY_ALONG", "Гравитация вдоль склона", "Трасса", 10, 200, 1 },
 	{ "STEER_SPEED", "Руль: боковая скорость", "Трасса", 10, 120, 1 },
-	{ "OBSTACLE_SLOWDOWN", "Удар: скорость ×", "Трасса", 0, 1, 0.05 },
+	{ "STEER_REF_SPEED", "Руль: растёт со скорости выше", "Трасса", 30, 400, 5 },
+	{ "STEER_RESPONSE", "Руль: отзывчивость", "Трасса", 2, 20, 0.5 },
+	{ "OBSTACLE_SLOWDOWN", "Удар/падение: скорость ×", "Трасса", 0, 1, 0.05 },
+	{ "JUMP_SPEED", "Прыжок: скорость вверх", "Трасса", 10, 80, 1 },
+	{ "JUMP_COOLDOWN", "Прыжок: пауза, с", "Трасса", 0, 3, 0.1 },
+	{ "FLIP_SPEED", "Трюки: скорость вращения, рад/с", "Трасса", 3, 20, 0.5 },
+	{ "TRICKS.flip.boost", "Сальто: буст ×", "Трасса", 1, 1.5, 0.01 },
+	{ "TRICKS.frontflip.boost", "Переднее сальто: буст ×", "Трасса", 1, 1.5, 0.01 },
+	{ "TRICKS.roll.boost", "Бочка: буст ×", "Трасса", 1, 1.5, 0.01 },
+	{ "TRICKS.spin.boost", "Разворот: буст ×", "Трасса", 1, 1.5, 0.01 },
+	{ "TRICKS.grab.minAir", "Грэб: мин. время в воздухе, с", "Трасса", 0, 2, 0.1 },
 }
 Config.TUNABLE_DEFAULTS = {} :: { [string]: number }
 
--- Значение по пути "A.B.C"
+-- Значение по пути "A.B.C" (числовой сегмент — индекс массива: "TRICK_COMBO_MULT.2")
+local function pathKey(part: string): any
+	return tonumber(part) or part
+end
 function Config.getPath(path: string): any
 	local t: any = Config
 	for part in string.gmatch(path, "[^%.]+") do
 		if type(t) ~= "table" then
 			return nil
 		end
-		t = t[part]
+		t = t[pathKey(part)]
 	end
 	return t
 end
@@ -512,12 +579,12 @@ function Config.setPath(path: string, value: any)
 	local parts = string.split(path, ".")
 	local t: any = Config
 	for i = 1, #parts - 1 do
-		t = t[parts[i]]
+		t = t[pathKey(parts[i])]
 		if type(t) ~= "table" then
 			return
 		end
 	end
-	t[parts[#parts]] = value
+	t[pathKey(parts[#parts])] = value
 end
 for _, tn in Config.TUNABLES do
 	Config.TUNABLE_DEFAULTS[tn[1]] = Config.getPath(tn[1])

@@ -74,11 +74,11 @@ local function open(p: GuiObject)
 	end
 end
 
--- Короткое сообщение под заголовком лобби
+-- Короткое сообщение под плашкой сундука (0.33 высоты: на 660 это 195–241, плашка кончается на 190)
 local msg = UI.text({
 	Text = "",
 	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.2),
+	Position = UDim2.fromScale(0.5, 0.33),
 	Size = UDim2.fromOffset(520, 46),
 	TextColor3 = Color3.fromRGB(255, 225, 90),
 	Visible = false,
@@ -152,12 +152,14 @@ UI.stroke(gearBg, 2.5, C.white, 0.3)
 UI.icon("gear", { Position = UDim2.fromScale(0.14, 0.14), Size = UDim2.fromScale(0.72, 0.72), Parent = gearBg })
 UI.bounce(gear)
 
--- Жёлтая плашка сундука под заголовком
+-- Жёлтая плашка сундука под заголовком. Верх лобби (HUD): валюты 10–50, «УРОВЕНЬ N» 56–102,
+-- строка мира 100–124 → плашка с 140 (сундук торчит над ней до 132, не задевая строку мира),
+-- низ 190; «НАЖМИ, ЧТОБЫ ИГРАТЬ» начинается не выше 354 даже на самом низком экране (660).
 local chestPill = UI.new("TextButton", {
 	Text = "",
 	AutoButtonColor = false,
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 130),
+	Position = UDim2.new(0.5, 0, 0, 140),
 	Size = UDim2.fromOffset(230, 50),
 	BackgroundTransparency = 0,
 	Parent = lobby,
@@ -166,8 +168,8 @@ UI.grad(chestPill, Color3.fromRGB(255, 225, 80), Color3.fromRGB(245, 175, 30))
 UI.corner(chestPill, 1000)
 UI.stroke(chestPill, 3)
 UI.bounce(chestPill)
--- нарисованный сундук вылезает за левый край плашки (как в оригинале)
-UI.chest(chestPill, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 14, 0.5, -6), Size = UDim2.fromOffset(78, 70), ZIndex = 4 })
+-- нарисованный сундук вылезает за левый край плашки (как в оригинале): центр 161, высота 58 → 132…190
+UI.chest(chestPill, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 14, 0.5, -4), Size = UDim2.fromOffset(64, 58), ZIndex = 4 })
 local chestShine = UI.new("Frame", { Position = UDim2.new(0, 40, 0, 4), Size = UDim2.new(1, -60, 0, 5), BackgroundColor3 = C.white, BackgroundTransparency = 0.5, ZIndex = 2, Parent = chestPill })
 UI.corner(chestShine, 1000)
 local chestInner = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(1, -66, 1, -14), BackgroundColor3 = C.navy, BackgroundTransparency = 0.05, ZIndex = 2, Parent = chestPill })
