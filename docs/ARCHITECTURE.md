@@ -21,9 +21,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 | Папка | Куда в игре | Что там |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
-| `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `Track` (генерация трассы и лобби), `Props` (low-poly модели), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (свет миров, частицы, пламя ракеты), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало») |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби), `Props` (low-poly модели ландшафта и препятствий), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
+| `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (свет и осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, флаги на ветру) |
 
 ## Как устроен заезд
 
@@ -43,6 +43,33 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 Машины, поезда и кабинки канатки (тег `Mover`) двигает каждый клиент сам по серверному времени
 (`Traffic.client`) — плавно и одинаково у всех.
+
+### Борта трассы
+
+`Track.buildCrossSection` ставит у каждого куска (кроме жёлоба поворота, где стенками служат
+ледяные пояса) по одному невидимому борту с каждой стороны у края дна: `Wall`, `CanCollide`,
+`Transparency=1`, `CanQuery=false` (луч санок вниз и `GetPartBoundsInBox` его не видят), наклон
+наружу `Config.WALL_TILT`, высота `Config.WALL_HEIGHT` (на приземлении после обрыва — вдвое выше),
+отступ `Config.WALL_OFFSET`. Так санки не уезжают на сугроб и не проваливаются на стыке с куском без
+сугроба (дорога, озеро). Снаружи остаётся общий `Barrier` у внешней кромки. Если санки всё же
+оказались вне трассы, сервер заканчивает заезд как `fell` (`|x| > 2·TRACK_WIDTH` или `y < −60`)
+или `stopped` (скорость ниже `STOP_SPEED` дольше `STOP_TIME`).
+
+### Лобби и витрина
+
+Сервер (`Lobby.build` через `Track.buildLobby`) строит общую архитектуру: площадку, плиту спавна,
+пирс к обрыву с фонарями и гирляндами, арку-вывеску (`ArchBeam.Sign`), подиумы саней, табло,
+костёр, флагштоки (тег `LobbyFlag`, атрибут `BaseCF`), спавн; под стартовой площадкой витрины —
+невидимый `PreviewFloor` и зону посадки `LaunchPad` (в `Main.server`). Всё, что зависит от мира,
+у каждого игрока своё и не реплицируется: `LobbyScene.client` при входе и при изменении
+`Level`/`FarmWorld`/`InRun` (вне заезда) уничтожает старую сцену и строит заново
+`Track.new(-1, уровень, 0, previewOrigin, Config.LOBBY_PREVIEW_SEGMENTS)` (папка `TrackPreview`,
+только первые N кусков, без стены в конце) и папку `LobbyDecor` (`Lobby.dress(theme)`: деревья,
+кактусы, кристаллы, горы, шары, сияние), перекрашивает `LobbyGround`/`PlazaRing`, пишет название
+мира на арку и ставит себе атрибут `LobbyTheme` — по нему `Effects.client` плавно
+(`Config.LOBBY_LOOK_TWEEN`) меняет небо, дымку, время суток и осадки (снег / пепел у вулкана /
+сухо в каньоне и на конфетной горе). Локальная витрина монет не даёт: `SledController` собирает
+монеты только рядом со своими санями в заезде (за 2000 studs от лобби).
 
 ## Ремоуты (`ReplicatedStorage.Remotes`)
 
@@ -77,11 +104,13 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LevelLength`, `ThemeName`, `*Level` (апгрейды), `Sled`, `SledRarity`, `OwnedSleds`, `Trail`, `OwnedTrails`, `Set*` (настройки),
 `Rewards` (JSON: задания, подарки, сундук), в заезде — `InRun`, `Launched`, `RunDistance`,
-`RunCoins`, `RunGems`, `Combo`, `Finished`.
+`RunCoins`, `RunGems`, `Combo`, `Finished`. Только у клиента (ставит сам, не реплицируется):
+`LobbyTheme` (тема витрины лобби, `LobbyScene` → `Effects`), `LowQuality`.
 
 ## Теги CollectionService
 
-`Obstacle`, `Coin`, `Gem`, `Crystal`, `Magnet`, `Boost`, `Mover`, бонусы `Shield`/`X2`/`Fuel`/`Ring`.
+`Obstacle`, `Coin`, `Gem`, `Crystal`, `Magnet`, `Boost`, `Mover`, бонусы `Shield`/`X2`/`Fuel`/`Ring`,
+`LobbyFlag` (флаги лобби, качает клиент).
 У лёгких препятствий — атрибут `Breakable`.
 
 ## Настройка на лету

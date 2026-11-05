@@ -9,7 +9,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Lighting = game:GetService("Lighting")
 
 local Config = require(ReplicatedStorage.Shared.Config)
-local Track = require(script.Parent.Track)
+local Track = require(ReplicatedStorage.Shared.Track) -- общий модуль: сервер строит трассы заездов, клиент — витрину лобби
 local Data = require(script.Parent.DataService)
 local Rewards = require(script.Parent.Rewards)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
@@ -608,9 +608,20 @@ StartRun.OnServerEvent:Connect(startRun)
 
 -- Мостик лобби ведёт к старту трассы: впереди видна «витринная» трасса, а на краю мостика —
 -- зона посадки. Шагнул в неё — садишься в свои санки у рогатки (как в Roblox-референсе).
+-- Сама витринная трасса — трасса текущего мира игрока — строится у каждого локально
+-- (client/LobbyScene, Config.LOBBY_PREVIEW_SEGMENTS); сервер держит только невидимый пол под
+-- стартовой площадкой (опора персонажа одинаковая у всех) и зону посадки.
 do
 	local previewOrigin = CFrame.new(Config.LOBBY_POS + Vector3.new(0, 0, -70))
-	Track.new(-1, 1, 0, previewOrigin)
+	local floor = Instance.new("Part")
+	floor.Name = "PreviewFloor"
+	floor.Anchored = true
+	floor.Transparency = 1
+	floor.CanQuery = false
+	floor.CastShadow = false
+	floor.Size = Vector3.new(Config.TRACK_WIDTH + 56, 4, 30)
+	floor.CFrame = previewOrigin * CFrame.new(0, -2.05, 15) -- чуть ниже видимого пола витрины
+	floor.Parent = workspace
 	local pad = Instance.new("Part")
 	pad.Name = "LaunchPad"
 	pad.Anchored = true

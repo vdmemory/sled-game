@@ -3,6 +3,7 @@
 
 local Players = game:GetService("Players")
 local SledModels = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("SledModels"))
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 local RunService = game:GetService("RunService")
 local CollectionService = game:GetService("CollectionService")
 
@@ -408,10 +409,38 @@ local LOOKS = {
 	{ clock = 13, atmo = { Color = Color3.fromRGB(255, 210, 235), Decay = Color3.fromRGB(240, 140, 200), Density = 0.26, Haze = 0.8 }, cc = { TintColor = Color3.fromRGB(255, 240, 248), Saturation = 0.35 } },
 }
 
+-- Осадки по теме: снег (по умолчанию), пепел с искрами у вулкана, ничего в каньоне и на конфетной
+-- горе, редкие блёстки на сиянии. nil — эмиттер выключен.
+local SNOW_DEFAULT = { color = Color3.new(1, 1, 1), rate = 120, size = 0.35, speed = NumberRange.new(10, 16), light = 0.4 }
+local PRECIP: { [number]: any } = {
+	[3] = false, -- каньон: сухо
+	[5] = { color = Color3.fromRGB(200, 255, 230), rate = 50, size = 0.3, speed = NumberRange.new(6, 10), light = 1 },
+	[6] = { color = Color3.fromRGB(110, 100, 100), rate = 70, size = 0.45, speed = NumberRange.new(5, 9), light = 0 },
+	[7] = false, -- конфетная гора: солнечно
+}
+local function applyPrecip(theme: number)
+	local p = PRECIP[theme]
+	if p == nil then
+		p = SNOW_DEFAULT
+	end
+	if not p then
+		snow.Rate = 0
+		return
+	end
+	snow.Color = ColorSequence.new(p.color)
+	snow.Size = NumberSequence.new(p.size, p.size * 0.7)
+	snow.Speed = p.speed
+	snow.LightEmission = p.light
+	snow.Rate = if player:GetAttribute("LowQuality") then math.min(p.rate, 40) else p.rate
+end
+
+-- В заезде — тема уровня (RunTheme), в лобби — тема витринной трассы (LobbyTheme от LobbyScene):
+-- небо, дымка, время суток и осадки меняются у этого игрока плавно
 local function applyWorldLook()
-	local theme = if player:GetAttribute("InRun") then player:GetAttribute("RunTheme") or 1 else 1
+	local inRun = player:GetAttribute("InRun")
+	local theme = if inRun then player:GetAttribute("RunTheme") or 1 else player:GetAttribute("LobbyTheme") or 1
 	local look = LOOKS[((theme - 1) % #LOOKS) + 1]
-	local info = TweenInfo.new(1.5, Enum.EasingStyle.Sine)
+	local info = TweenInfo.new(if inRun then 1.5 else Config.LOBBY_LOOK_TWEEN, Enum.EasingStyle.Sine)
 	TweenService:Create(Lighting, info, { ClockTime = look.clock }):Play()
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmo then
@@ -421,9 +450,11 @@ local function applyWorldLook()
 	if cc then
 		TweenService:Create(cc, info, look.cc):Play()
 	end
+	applyPrecip(((theme - 1) % #LOOKS) + 1)
 end
 player:GetAttributeChangedSignal("InRun"):Connect(applyWorldLook)
 player:GetAttributeChangedSignal("RunTheme"):Connect(applyWorldLook)
+player:GetAttributeChangedSignal("LobbyTheme"):Connect(applyWorldLook)
 task.delay(2, applyWorldLook)
 
 ------------------------------------------------------------------ Авто-качество (FPS на телефонах)
@@ -444,7 +475,7 @@ fpsConn = RunService.RenderStepped:Connect(function(dt)
 	if slowWindows >= 2 and not lowQuality then
 		lowQuality = true
 		player:SetAttribute("LowQuality", true)
-		snow.Rate = 40
+		snow.Rate = math.min(snow.Rate, 40)
 		local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 		if bloom then
 			bloom.Enabled = false
