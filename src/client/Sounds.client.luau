@@ -32,6 +32,7 @@ local ONE_SHOTS = {
 	boost = { "impact_water.mp3", 0.5, 1.6 },
 	coin = { "volume_slider.ogg", 0.6, 1.8 },
 	flip = { "action_get_up.mp3", 0.8, 1.4 },
+	jump = { "action_jump.mp3", 0.55, 1.35 }, -- прыжок с земли: короткий «хоп» (тот же ID, что у рогатки, выше тоном)
 	finish = { "impact_explosion_03.mp3", 0.35, 1.2 },
 	smash = { "impact_explosion_03.mp3", 0.25, 1.8 },
 	record = { "electronicpingshort.wav", 0.6, 1 },

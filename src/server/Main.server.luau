@@ -249,6 +249,7 @@ type Run = {
 	smashes: number?,
 	airTotal: number?,
 	flips: number?,
+	tricks: number?, -- всего трюков за заезд (аналитика «Tricks»)
 	gems: number?,
 	combo: number?,
 	x2Until: number?,
@@ -875,22 +876,66 @@ Smash.OnServerEvent:Connect(function(player)
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 end)
 
-Trick.OnServerEvent:Connect(function(player, flips)
+-- Трюки за один полёт: list = { { id, count }, … }, airTime — сколько летел (с).
+-- Проверки: известные id, целые count ≤ TRICK_MAX_COUNT, не чаще раза в 0.8 с, оборотов не больше,
+-- чем влезает в полёт при FLIP_SPEED (+1 на щедрое округление), грэбов ≤ 2.
+-- Монеты = Σ coins × count × множитель комбо за число разных трюков (docs/GAME_DESIGN.md → «Трюки»).
+Trick.OnServerEvent:Connect(function(player, list, airTime)
 	local run = runs[player]
-	if not run or typeof(flips) ~= "number" then
+	if not run or not run.launched or run.crashed or typeof(list) ~= "table" then
 		return
 	end
 	local now = os.clock()
-	if now - run.lastTrick < 1 then
+	if now - run.lastTrick < 0.8 then
 		return
 	end
 	run.lastTrick = now
-	run.flips = (run.flips or 0) + math.clamp(math.floor(flips), 0, 3)
-	local add = Tuning.forPlayer(player, function()
-		return math.clamp(math.floor(flips), 0, 3) * Config.COINS_PER_FLIP
+	local air = if typeof(airTime) == "number" then math.clamp(airTime, 0, 10) else 0
+	local counts: { [string]: number } = {}
+	local distinct, rotations, grabs = 0, 0, 0
+	for i, item in list do
+		if typeof(i) ~= "number" or i > #Config.TRICK_ORDER or typeof(item) ~= "table" then
+			break
+		end
+		local id, count = item.id, item.count
+		local def = if typeof(id) == "string" then Config.TRICKS[id] else nil
+		if not def or counts[id] or typeof(count) ~= "number" or count ~= count then
+			continue
+		end
+		count = math.clamp(math.floor(count), 0, Config.TRICK_MAX_COUNT)
+		if count == 0 then
+			continue
+		end
+		counts[id] = count
+		distinct += 1
+		if def.kind == "grab" then
+			grabs += count
+		else
+			rotations += count
+		end
+	end
+	if distinct == 0 or rotations > Config.maxRotations(air) or grabs > 2 then
+		return
+	end
+	local add, flips, total = 0, 0, 0
+	Tuning.forPlayer(player, function()
+		local mult = Config.trickComboMult(distinct)
+		local sum = 0
+		for id, count in counts do
+			local def = Config.TRICKS[id]
+			sum += def.coins * count
+			total += count
+			if def.kind == "pitch" then
+				flips += count -- задание дня «Сделай N сальто» — любые сальто
+			end
+		end
+		add = math.floor(sum * mult)
 	end)
+	run.flips = (run.flips or 0) + flips
+	run.tricks = (run.tricks or 0) + total
 	run.bonusCoins += add
 	player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
+	Analytics.custom(player, "Tricks", total)
 end)
 
 local function buyUpgrade(player: Player, name: any): (boolean, string?)

@@ -51,7 +51,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `StartRun` | Event | клиент → начать заезд |
 | `Launch` | Event | клиент → выстрел рогатки (сила 0..1) |
 | `Crash` | Event | клиент → врезался (сервер делает ragdoll) |
-| `Air`, `Trick`, `Smash`, `Crystal`, `CoinGrab` | Event | клиент → время в воздухе, флипы, разбил препятствие, кристалл, монета магнитом |
+| `Air`, `Trick`, `Smash`, `Crystal`, `CoinGrab` | Event | клиент → время в воздухе, трюки за полёт (`Trick(list { id, count }, airTime)` — сервер проверяет id, count ≤ 5, оборотов ≤ влезающих в полёт), разбил препятствие, кристалл, монета магнитом |
 | `Restart`, `Back` | Event | клиент → заново / в лобби с рогатки |
 | `RunEnded` | Event | сервер → итог заезда |
 | `TaskDone` | Event | сервер → задание выполнено |

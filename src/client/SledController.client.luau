@@ -107,6 +107,22 @@ local function readSteer(seat: VehicleSeat): number
 	end
 	return math.clamp(steer, -1, 1)
 end
+-- «Руль вперёд» для переднего сальто: S / стрелка вниз, стик к себе, палец ведёт вниз
+local function readPitchDown(): boolean
+	if UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down) then
+		return true
+	end
+	if controls then
+		local ok, mv = pcall(controls.GetMoveVector, controls)
+		if ok and typeof(mv) == "Vector3" and mv.Z > 0.5 then
+			return true
+		end
+	end
+	if swipeInput and swipeInput.Position.Y - stickOrigin.Value.Y > SWIPE_FULL * 0.8 then
+		return true
+	end
+	return false
+end
 
 -- Состояние для HUD и эффектов (читают эти значения)
 local state = Instance.new("Folder")
@@ -128,7 +144,7 @@ local shieldOn = value("ShieldOn", "BoolValue") -- щит: одно столкн
 local x2Left = value("X2Left") -- сек до конца «x2 монеты»
 state.Parent = script
 
--- Звуковые события для Sounds-скрипта: sfx:Fire("launch" | "land" | "hit" | "boost" | "coin" | "flip")
+-- Звуковые события для Sounds-скрипта: sfx:Fire("launch" | "land" | "hit" | "boost" | "coin" | "flip" | "jump")
 local sfx = Instance.new("BindableEvent")
 sfx.Name = "Sfx"
 sfx.Parent = script
@@ -165,9 +181,24 @@ local airTime = 0
 local started = false
 local fuel = 0
 local rocketHeld, flipHeld = false, false
-local airborne, flipping = false, false
-local flipAngle = 0
+local airborne = false
 local lastObstacle, lastBoost = 0, 0
+
+-- Прыжок с земли: jumpQueued — нажали кнопку (съедается в ближайшем кадре на земле),
+-- jumping — после подброса считаем себя «в воздухе», пока центр саней выше JUMP_GROUND_DIST
+local jumpQueued, jumping, lastJump = false, false, 0
+
+-- Трюки (docs/GAME_DESIGN.md → «Трюки»). trick — текущее вращение { id, def, angle, dir, released };
+-- завершённые за полёт копятся в airTricks и при приземлении уходят одним Trick:FireServer(list, airTime)
+type Trick = { id: string, def: any, angle: number, dir: number, released: boolean }
+local trick: Trick? = nil
+local airTricks: { [string]: number } = {}
+local airTrickOrder: { string } = {} -- порядок первых выполнений (для комбо и подписи)
+local trickHeldSince = 0 -- когда зажали Пробел
+local trickStartedThisPress = false -- в этом нажатии уже началось вращение (не считать тапом)
+local lastTapAt = 0 -- короткий тап в воздухе: второй в TRICK_DOUBLE_TAP = разворот
+local pendingGrab = false -- тап ждёт окно двойного нажатия, потом становится грэбом
+local grabUntil = 0 -- анимация грэба (наклон саней)
 
 ------------------------------------------------------------------ ввод
 -- Рогатка: зажал → тянешь вниз (санки отъезжают назад, резинка натягивается) → отпустил = выстрел.
@@ -270,7 +301,35 @@ UIS.InputEnded:Connect(function(input)
 	end
 end)
 
-local function onFlip(_, inputState: Enum.UserInputState)
+-- Трюки: начать вращение / засчитать выполненный
+local function startTrick(id: string, dir: number?)
+	local def = Config.TRICKS[id]
+	if not def then
+		return
+	end
+	trick = { id = id, def = def, angle = 0, dir = dir or def.dir or 1, released = false }
+	pendingGrab = false
+end
+local function completeTrick(id: string)
+	if not airTricks[id] then
+		airTricks[id] = 0
+		table.insert(airTrickOrder, id)
+	end
+	airTricks[id] += 1
+	local def = Config.TRICKS[id]
+	trickPopup:Fire("✨ " .. def.name .. (if airTricks[id] > 1 then " x" .. airTricks[id] else ""))
+end
+local function clearAirTricks()
+	table.clear(airTricks)
+	table.clear(airTrickOrder)
+	trick = nil
+	pendingGrab = false
+	trickStartedThisPress = false
+end
+
+-- Пробел / 🔄: у рогатки — натяжение; в воздухе — трюки (удержание = вращение, тап = грэб,
+-- двойной тап = разворот). Какое вращение — решает кадр физики по рулю (см. Heartbeat).
+local function onTrickKey(_, inputState: Enum.UserInputState)
 	if awaitingLaunch.Value or (pulling and keyPull) then
 		if inputState == Enum.UserInputState.Begin then
 			beginPull(nil)
@@ -279,7 +338,30 @@ local function onFlip(_, inputState: Enum.UserInputState)
 		end
 		return Enum.ContextActionResult.Sink
 	end
-	flipHeld = inputState == Enum.UserInputState.Begin
+	local now = os.clock()
+	if inputState == Enum.UserInputState.Begin then
+		flipHeld = true
+		trickHeldSince = now
+		trickStartedThisPress = false
+		if airborne and not trick and now - lastTapAt < Config.TRICK_DOUBLE_TAP then
+			startTrick("spin")
+			trickStartedThisPress = true
+			lastTapAt = 0
+		end
+	elseif inputState == Enum.UserInputState.End then
+		flipHeld = false
+		if airborne and not trick and not trickStartedThisPress and now - trickHeldSince < Config.TRICK_TAP_TIME then
+			lastTapAt = now
+			pendingGrab = true -- станет грэбом, если за TRICK_DOUBLE_TAP не пришло второе нажатие
+		end
+	end
+	return Enum.ContextActionResult.Sink
+end
+-- Прыжок с земли (Ctrl / W / ButtonX / ⤴): срабатывает в ближайшем кадре на снегу
+local function onJump(_, inputState: Enum.UserInputState)
+	if inputState == Enum.UserInputState.Begin and not awaitingLaunch.Value then
+		jumpQueued = true
+	end
 	return Enum.ContextActionResult.Sink
 end
 local function onRocket(_, inputState: Enum.UserInputState)
@@ -579,6 +661,7 @@ local function stopRiding()
 		humanoid.JumpPower = 50
 	end
 	ContextActionService:UnbindAction("Flip")
+	ContextActionService:UnbindAction("Jump")
 	ContextActionService:UnbindAction("Rocket")
 	if controls then
 		pcall(controls.Enable, controls)
@@ -606,8 +689,10 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	fwd = Vector3.new(0, 0, -1)
 	started = false
 	crashed = false
-	airborne, flipping, flipHeld, rocketHeld = false, false, false, false
-	flipAngle = 0
+	airborne, flipHeld, rocketHeld = false, false, false
+	jumpQueued, jumping, lastJump = false, false, 0
+	clearAirTricks()
+	lastTapAt, grabUntil = 0, 0
 	magnetUntil = 0
 	magnetLeft.Value = 0
 	x2Until = 0
@@ -623,9 +708,13 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	hum.JumpPower = 0
 	hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
 
-	ContextActionService:BindActionAtPriority("Flip", onFlip, true, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
+	ContextActionService:BindActionAtPriority("Flip", onTrickKey, true, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
 	ContextActionService:SetTitle("Flip", "🔄")
 	ContextActionService:SetPosition("Flip", UDim2.new(1, -230, 1, -100))
+	-- Прыжок: на телефоне круглая кнопка над 🔄 (тот же столбик под большой палец, руль — левее)
+	ContextActionService:BindActionAtPriority("Jump", onJump, true, Enum.ContextActionPriority.High.Value, Enum.KeyCode.LeftControl, Enum.KeyCode.W, Enum.KeyCode.ButtonX)
+	ContextActionService:SetTitle("Jump", "⤴")
+	ContextActionService:SetPosition("Jump", UDim2.new(1, -230, 1, -190))
 	ContextActionService:BindActionAtPriority(
 		"Rocket",
 		onRocket,
@@ -762,8 +851,8 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 	if not crashed then
-		local a, b = lastPos or s.Position, s.Position
-		local ab = b - a
+		local p0, p1 = lastPos or s.Position, s.Position
+		local ab = p1 - p0
 		local len2 = ab:Dot(ab)
 		for i = #nearCoins, 1, -1 do
 			local coin = nearCoins[i]
@@ -772,8 +861,8 @@ RunService.Heartbeat:Connect(function(dt)
 				continue
 			end
 			local p = coin.Position
-			local t = if len2 > 0 then math.clamp((p - a):Dot(ab) / len2, 0, 1) else 0
-			local d = p - (a + ab * t)
+			local t = if len2 > 0 then math.clamp((p - p0):Dot(ab) / len2, 0, 1) else 0
+			local d = p - (p0 + ab * t)
 			if Vector3.new(d.X, 0, d.Z).Magnitude < COIN_PICK_R and d.Y > -3 and d.Y < 7 then
 				hideLocal(coin)
 				Remotes.CoinGrab:FireServer(coin)
@@ -837,8 +926,20 @@ RunService.Heartbeat:Connect(function(dt)
 	local hit = workspace:Raycast(s.Position, Vector3.new(0, -4, 0), rayParams)
 	local vel = s.AssemblyLinearVelocity
 	local steer = readSteer(s)
+	local now = os.clock()
+	-- После прыжка с ровного места луч до снега короче 4 studs почти весь полёт — поэтому
+	-- «в воздухе» считаем по высоте центра саней над снегом (JUMP_GROUND_DIST)
+	local grounded = hit ~= nil and (not jumping or hit.Distance <= Config.JUMP_GROUND_DIST)
+	-- Грэб: тап в воздухе, за TRICK_DOUBLE_TAP не стало разворотом
+	if pendingGrab and now - lastTapAt >= Config.TRICK_DOUBLE_TAP then
+		pendingGrab = false
+		if airborne and not trick and airTime >= Config.TRICKS.grab.minAir then
+			grabUntil = now + Config.GRAB_TIME
+			completeTrick("grab")
+		end
+	end
 
-	if hit then
+	if grounded and hit then
 		-- На земле: считаем скорость сами
 		local n = hit.Normal
 		updateForward(hit.Instance)
@@ -862,23 +963,39 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 		speed = math.max(0, speed)
 
-		-- Руль с инерцией + борта скатывают к центру (right.Y > 0 — мы на наклонном борту)
-		lateral += (steer * Config.STEER_SPEED - lateral) * math.min(1, dt * Config.STEER_RESPONSE)
+		-- Руль с инерцией + борта скатывают к центру (right.Y > 0 — мы на наклонном борту).
+		-- Боковая скорость растёт вместе с продольной (Config.steerSpeed): время смены полосы
+		-- не зависит от скорости (docs/GAME_DESIGN.md → «Скорость и руль»)
+		local steerMax = Config.steerSpeed(speed)
+		lateral += (steer * steerMax - lateral) * math.min(1, dt * Config.STEER_RESPONSE)
 		lateral -= Config.WALL_PULL * right.Y * dt
 
 		local vn = vel:Dot(n)
 		if onRamp then
 			vn = math.max(vn, speed * Config.RAMP_LIFT)
 		end
+		-- Прыжок: подброс вверх по нормали; дальше тот же путь, что и с трамплина (airborne → трюки)
+		if jumpQueued and not onRamp and not airborne and now - lastJump >= Config.JUMP_COOLDOWN then
+			lastJump = now
+			jumping = true
+			-- на борту жёлоба (Bank) подброс слабее: от стенки не оттолкнёшься как от ровного снега
+			vn = math.max(vn, Config.JUMP_SPEED * (if hit.Instance.Name == "Bank" then 0.7 else 1))
+			sfx:Fire("jump")
+		end
+		jumpQueued = false
+		if jumping and not airborne and now - lastJump > Config.JUMP_COOLDOWN then
+			jumping = false -- подброс не оторвал от снега (горка в борт) — сбрасываем режим
+		end
 		s.AssemblyLinearVelocity = d * speed + right * lateral + n * vn
 		a.Enabled = true
 		-- Наклон в поворот: ватрушка кренится и чуть разворачивается по направлению движения
-		local tilt = math.rad(Config.STEER_TILT) * math.clamp(lateral / Config.STEER_SPEED, -1, 1)
+		local tilt = math.rad(Config.STEER_TILT) * math.clamp(lateral / steerMax, -1, 1)
 		a.CFrame = CFrame.lookAt(Vector3.zero, d, n) * CFrame.Angles(0, -tilt * 0.5, -tilt)
 
 		-- Приземление
 		if airborne then
 			airborne = false
+			jumping = false
 			if airTime > 0.35 then
 				sfx:Fire("land")
 			end
@@ -887,21 +1004,51 @@ RunService.Heartbeat:Connect(function(dt)
 				Remotes.Air:FireServer(airTime)
 				trickPopup:Fire(string.format("✈ Air time %.1fс  +%d", airTime, math.floor(math.min(airTime, 4) * Config.AIR_COINS_PER_SEC)))
 			end
-			if flipping then
-				local upright = s.CFrame.UpVector:Dot(n) > 0.5
-				local flips = math.floor((flipAngle + math.pi / 2) / (2 * math.pi))
-				if not upright then
-					speed *= 0.5
-					trickPopup:Fire("😵 Кривое приземление")
-				elseif flips >= 1 then
-					speed *= Config.FLIP_BOOST ^ flips
-					Remotes.Trick:FireServer(flips)
-					sfx:Fire("flip")
-					trickPopup:Fire((if flips > 1 then "Флип x" .. flips else "Флип") .. "! ⚡")
+			-- Грэб, который ещё ждал окно двойного тапа, засчитываем перед итогом
+			if pendingGrab and not trick and airTime >= Config.TRICKS.grab.minAir then
+				completeTrick("grab")
+			end
+			-- Недокрученный трюк: ≥ 3/4 оборота прощаем, иначе смотрим, как сели
+			local fell = false
+			local t = trick
+			if t then
+				if math.floor((t.angle + math.pi / 2) / (2 * math.pi)) >= 1 then
+					completeTrick(t.id)
+				else
+					local upright
+					if t.def.kind == "yaw" then
+						local rest = t.angle % (2 * math.pi)
+						upright = rest < math.pi / 3 or rest > 5 * math.pi / 3
+					else
+						upright = s.CFrame.UpVector:Dot(n) > 0.5
+					end
+					fell = not upright
 				end
 			end
-			flipping = false
-			flipAngle = 0
+			if fell then
+				speed *= Config.OBSTACLE_SLOWDOWN
+				trickPopup:Fire("😵 Падение!")
+				sfx:Fire("smash")
+			elseif #airTrickOrder > 0 then
+				-- Итог полёта: список серверу, буст и подпись («Сальто + Бочка! ×1.5 +52»)
+				local list = {}
+				local names = {}
+				local coins, boost = 0, 1
+				for _, id in airTrickOrder do
+					local def = Config.TRICKS[id]
+					local count = math.min(airTricks[id], Config.TRICK_MAX_COUNT)
+					table.insert(list, { id = id, count = count })
+					table.insert(names, def.name .. (if count > 1 then " x" .. count else ""))
+					coins += def.coins * count
+					boost *= def.boost ^ count
+				end
+				local mult = Config.trickComboMult(#airTrickOrder)
+				speed *= boost
+				Remotes.Trick:FireServer(list, airTime)
+				sfx:Fire("flip")
+				trickPopup:Fire(table.concat(names, " + ") .. "! " .. (if mult > 1 then "×" .. mult .. " " else "") .. "+" .. math.floor(coins * mult) .. " 💰")
+			end
+			clearAirTricks()
 		end
 		airTime = 0
 	else
@@ -911,21 +1058,67 @@ RunService.Heartbeat:Connect(function(dt)
 		local rightH = fwd:Cross(Vector3.yAxis)
 		local along = vel:Dot(fwd)
 		speed = math.max(0, along)
-		lateral += (steer * Config.STEER_SPEED * 0.6 - lateral) * math.min(1, dt * Config.STEER_RESPONSE * 0.5)
+		lateral += (steer * Config.steerSpeed(speed) * 0.6 - lateral) * math.min(1, dt * Config.STEER_RESPONSE * 0.5)
 		local newVel = fwd * along + rightH * lateral + Vector3.new(0, vel.Y, 0)
 		if useRocket then
 			newVel += fwd * Config.ROCKET_THRUST * dt
 		end
 		s.AssemblyLinearVelocity = newVel
 
-		if flipHeld then
-			flipping = true
+		-- Отпустил и снова зажал — докручиваем тот же трюк
+		if trick and trick.released and flipHeld and not trickStartedThisPress then
+			trick.released = false
+			trickStartedThisPress = true
+		end
+		-- Удержание Пробела дольше тапа начинает вращение; какое — решает руль в этот момент
+		if flipHeld and not trick and not trickStartedThisPress and now - trickHeldSince >= Config.TRICK_TAP_TIME then
+			if readPitchDown() then
+				startTrick("frontflip")
+			elseif math.abs(steer) > 0.5 then
+				startTrick("roll", if steer > 0 then 1 else -1)
+			else
+				startTrick("flip")
+			end
+			trickStartedThisPress = true
+		end
+		local t = trick
+		if t then
+			local kind = t.def.kind
+			if not flipHeld and kind ~= "yaw" and not t.released then
+				local rest = t.angle % (2 * math.pi)
+				if rest < math.pi / 6 or rest > 11 * math.pi / 6 then
+					trick = nil -- отпустил почти ровно (оборот уже засчитан) — сани выравниваются
+					t = nil
+				else
+					t.released = true -- отпустил на полпути: сани замирают как есть, приземление покажет
+				end
+			end
+		end
+		if t then
+			local kind = t.def.kind
 			a.Enabled = false
-			s.AssemblyAngularVelocity = -rightH * Config.FLIP_SPEED
-			flipAngle += Config.FLIP_SPEED * dt
+			if t.released then
+				s.AssemblyAngularVelocity = Vector3.zero
+			else
+				local axis = if kind == "pitch" then rightH elseif kind == "roll" then fwd else Vector3.yAxis
+				s.AssemblyAngularVelocity = axis * (Config.FLIP_SPEED * t.dir)
+				t.angle += Config.FLIP_SPEED * dt
+				if t.angle >= 2 * math.pi then
+					completeTrick(t.id)
+					if kind == "yaw" then
+						trick = nil -- разворот одиночный: дальше сани выравниваются
+					else
+						t.angle -= 2 * math.pi -- удержание крутит дальше (Сальто x2…)
+					end
+				end
+			end
 		else
 			a.Enabled = true
-			a.CFrame = CFrame.lookAt(Vector3.zero, fwd, Vector3.yAxis)
+			local pose = CFrame.lookAt(Vector3.zero, fwd, Vector3.yAxis)
+			if grabUntil > now then
+				pose *= CFrame.Angles(math.rad(25), 0, 0) -- грэб: нос вверх
+			end
+			a.CFrame = pose
 		end
 	end
 	speedValue.Value = speed

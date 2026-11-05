@@ -382,6 +382,30 @@ tabs["Бонусы"] = function()
 	end
 end
 
+-- Трюки в воздухе: карточки из Config.TRICKS + формула комбо (числа — вкладка «Настройка»)
+tabs["Трюки"] = function()
+	heading("Трюки в полёте — Config.TRICKS")
+	note("В воздухе Пробел / 🔄: держать — вращение (какое — решает руль в момент нажатия), короткий тап — грэб, два тапа — разворот. Завершённые трюки копятся за полёт и начисляются при чистом приземлении; недокрученный трюк = «Падение» (скорость × " .. Config.OBSTACLE_SLOWDOWN .. ", монеты за полёт сгорают).")
+	local g = cardGrid()
+	for i, id in Config.TRICK_ORDER do
+		local t = Config.TRICKS[id]
+		card(g, i, t.name, {
+			"Ввод: " .. t.input,
+			"Монет: " .. t.coins .. "   Буст: ×" .. t.boost,
+			"Мин. в воздухе: " .. t.minAir .. " с",
+			"Ось: " .. (if t.kind == "pitch" then (if (t.dir or -1) < 0 then "сальто назад" else "сальто вперёд") elseif t.kind == "roll" then "продольная (бочка)" elseif t.kind == "yaw" then "вертикальная (360°)" else "без вращения"),
+		}, false, nil, nil, function(c)
+			local pic = UI.new("Frame", { Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 118), BackgroundTransparency = 0, ZIndex = 53, Parent = c })
+			UI.grad(pic, Color3.fromRGB(120, 190, 255), Color3.fromRGB(60, 130, 230))
+			UI.corner(pic, 10)
+			UI.icon(t.icon, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(84, 84), ZIndex = 54, Parent = pic })
+		end)
+	end
+	local m = Config.TRICK_COMBO_MULT
+	note(string.format("Комбо: монеты за полёт = Σ(монеты × число) × множитель за число РАЗНЫХ трюков: 1 → ×%s, 2 → ×%s, 3+ → ×%s. Буст скорости перемножается за каждый трюк. Пример: Сальто + Бочка = (%d + %d) × %s = %d монет.", m[1], m[2], m[3], Config.TRICKS.flip.coins, Config.TRICKS.roll.coins, m[2], math.floor((Config.TRICKS.flip.coins + Config.TRICKS.roll.coins) * m[2])))
+	note("Прыжок с земли (Ctrl / W / ⤴): вверх " .. Config.JUMP_SPEED .. " studs/с ≈ " .. string.format("%.1f", Config.JUMP_SPEED ^ 2 / (2 * workspace.Gravity)) .. " studs высоты, пауза " .. Config.JUMP_COOLDOWN .. " с. Перелетаются конусы, бревно, барьер, бочки; машины и снеговик — нет. Вращение " .. Config.FLIP_SPEED .. " рад/с → оборот за " .. string.format("%.2f", 2 * math.pi / Config.FLIP_SPEED) .. " с.")
+end
+
 tabs["Инструменты"] = function()
 	heading("Валюта")
 	buttonRow({
@@ -596,7 +620,7 @@ tabs["Настройка"] = function()
 	end
 end
 
-local TAB_ORDER = { "Рогатка", "Сани", "Ракета", "Доход", "Миры", "Бонусы", "Настройка", "Инструменты" }
+local TAB_ORDER = { "Рогатка", "Сани", "Ракета", "Доход", "Миры", "Бонусы", "Трюки", "Настройка", "Инструменты" }
 function tabs.redraw()
 	clear()
 	order = 0
