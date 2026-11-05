@@ -7,8 +7,9 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
-local Props = require(script.Parent.Props)
+local Props = require(ReplicatedStorage.Shared.Props)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
+local Lobby = require(ReplicatedStorage.Shared.Lobby)
 
 local part, deco = Props.part, Props.deco
 
@@ -171,7 +172,7 @@ local function makeX2(at: CFrame, parent: Instance)
 end
 local function makeFuel(at: CFrame, parent: Instance)
 	powerHit("fuel", at, Vector3.new(4.5, 4.5, 4.5), parent)
-	local can = deco({ Size = Vector3.new(2.6, 3.2, 1.3), CFrame = at, Color = Color3.fromRGB(220, 40, 40) }, parent)
+	deco({ Size = Vector3.new(2.6, 3.2, 1.3), CFrame = at, Color = Color3.fromRGB(220, 40, 40) }, parent)
 	deco({ Size = Vector3.new(1.4, 0.35, 0.5), CFrame = at * CFrame.new(-0.3, 1.8, 0), Color = Color3.fromRGB(40, 40, 45) }, parent) -- ручка
 	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, 0.6, 0.6), CFrame = at * CFrame.new(0.85, 1.85, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(255, 210, 50) }, parent) -- крышка
 	deco({ Size = Vector3.new(1.8, 1.0, 1.35), CFrame = at * CFrame.new(0, -0.2, 0), Color = Color3.fromRGB(255, 210, 50) }, parent) -- полоса
@@ -491,13 +492,22 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 end
 
 ------------------------------------------------------------------ класс
-function Track.new(slot: number, level: number, bestH: number?, origin: CFrame?)
+-- slot — номер слота игрока (расположение по X); origin — явная точка старта (витрина лобби);
+-- maxSegments — витрина: строить только первые N кусков (без стриминга и без стены в конце).
+-- Модуль общий: сервер строит трассы заездов, клиент — локальную витрину за мостиком лобби.
+function Track.new(slot: number, level: number, bestH: number?, origin: CFrame?, maxSegments: number?)
 	local self = setmetatable({}, Track)
 	self.level = level
 	self.bestH = bestH or 0
 	self.theme = Config.themeOf(level)
 	self.origin = origin or CFrame.new(Config.TRACKS_ORIGIN + Vector3.new(slot * Config.SLOT_SPACING, 0, 0))
 	self.segments, self.length = buildProfile(self.origin, level)
+	self.preview = maxSegments ~= nil
+	if maxSegments then
+		for i = #self.segments, maxSegments + 1, -1 do
+			self.segments[i] = nil
+		end
+	end
 	self.built = {} :: { [number]: Model }
 	self.hint = 1
 	self.folder = Instance.new("Folder")
@@ -549,7 +559,7 @@ end
 -- Поперечное сечение: дно + пояса сугроба/льда, полка и невидимые стенки
 local ICE_FLOOR = Color3.fromRGB(165, 210, 245)
 local ICE_WALL = Color3.fromRGB(130, 190, 240)
-local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, m: Instance, alt: number, theme: number)
+local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, m: Instance, alt: number, theme: number, landing: boolean?)
 	-- Куски перекрываются, чтобы на поворотах не было щелей по внешнему краю;
 	-- соседние куски чуть сдвинуты по высоте, чтобы перекрытия не мерцали
 	local overlap = if chute then 8 else 2
@@ -607,6 +617,24 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 			Transparency = 1,
 			CanQuery = false,
 		}, m)
+		-- Невидимый борт у края дна (Config.WALL_*): санки больше не уезжают на сугроб и не
+		-- проваливаются там, где у соседнего куска сугроба нет (дорога, озеро, приземление).
+		-- В жёлобе бортами служат сами ледяные пояса. На приземлении после обрыва борт вдвое выше:
+		-- санки прилетают сверху и не должны перелететь его. CanQuery=false — луч санок вниз и
+		-- GetPartBoundsInBox его не видят; наклон наружу — скатываешься, а не прилипаешь.
+		local wallH = Config.WALL_HEIGHT * (if landing then 2 else 1)
+		if not chute and wallH > 0 then
+			local tilt = math.rad(Config.WALL_TILT)
+			part("Part", {
+				Name = "Wall",
+				Size = Vector3.new(0.6, wallH + 2, len + overlap),
+				CFrame = cf * CFrame.new(side * (floorW / 2 + Config.WALL_OFFSET), -1.5, -len / 2)
+					* CFrame.Angles(0, 0, -side * tilt) * CFrame.new(0, (wallH + 2) / 2, 0),
+				Transparency = 1,
+				CanQuery = false,
+				CastShadow = false,
+			}, m)
+		end
 	end
 	if chute then
 		-- Белые разводы на льду жёлоба (как в трейлере)
@@ -635,7 +663,7 @@ function Track:buildSegment(i: number)
 	local m = Instance.new("Model")
 	m.Name = "Segment_" .. i
 
-	buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme)
+	buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme, seg.kind == "landing")
 
 	if seg.kind == "road" or seg.kind == "rail" then
 		self:buildRoad(seg, rng, m, seg.kind == "rail")
@@ -874,7 +902,7 @@ function Track:buildSegment(i: number)
 		end
 	end
 
-	if i == #self.segments - 1 then
+	if i == #self.segments - 1 and not self.preview then
 		part("Part", {
 			Name = "EndWall",
 			Size = Vector3.new(prof.out * 2 + 4, 30, 4),
@@ -1012,164 +1040,10 @@ function Track:destroy()
 end
 
 ------------------------------------------------------------------ лобби
--- Лобби как в Roblox-референсе: деревянный мостик к рогатке, подиумы с витринными санками,
--- доска лидеров и табло «Следующее обновление».
-local function board(name: string, at: CFrame, title: string, parent: Instance): TextLabel
-	local m = Instance.new("Model")
-	m.Name = name
-	for _, sx in { -1, 1 } do
-		part("Part", { Size = Vector3.new(1, 16, 1), CFrame = at * CFrame.new(sx * 9, 8, 0.6), Material = Enum.Material.Wood, Color = Color3.fromRGB(120, 80, 45) }, m)
-	end
-	local panel = part("Part", { Size = Vector3.new(18, 12, 0.6), CFrame = at * CFrame.new(0, 10, 0), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, m)
-	deco({ Size = Vector3.new(18.6, 0.8, 1.4), CFrame = at * CFrame.new(0, 16.3, 0), Material = Enum.Material.Snow, Color = SNOW }, m)
-	local sg = Instance.new("SurfaceGui")
-	sg.Face = Enum.NormalId.Front
-	sg.CanvasSize = Vector2.new(600, 400)
-	sg.LightInfluence = 0.3
-	sg.Parent = panel
-	local head = Instance.new("TextLabel")
-	head.BackgroundTransparency = 1
-	head.Size = UDim2.new(1, 0, 0, 80)
-	head.Font = Enum.Font.FredokaOne
-	head.TextScaled = true
-	head.TextColor3 = Color3.fromRGB(255, 220, 90)
-	head.Text = title
-	head.Parent = sg
-	local body = Instance.new("TextLabel")
-	body.Name = "List"
-	body.BackgroundTransparency = 1
-	body.Position = UDim2.new(0, 30, 0, 90)
-	body.Size = UDim2.new(1, -60, 1, -110)
-	body.Font = Enum.Font.FredokaOne
-	body.TextScaled = true
-	body.TextColor3 = Color3.new(1, 1, 1)
-	body.TextXAlignment = Enum.TextXAlignment.Left
-	body.TextYAlignment = Enum.TextYAlignment.Top
-	body.Text = "…"
-	body.Parent = sg
-	m.Parent = parent
-	return body
-end
-
--- Витрина: подиум с подсветкой и настоящей моделью саней (как подиумы в Roblox-референсе)
-local function showcaseSled(at: CFrame, sledId: string, rarityIdx: number, caption: string, parent: Instance)
-	local rarity = Config.RARITIES[rarityIdx]
-	local col = rarity.color or Color3.fromRGB(240, 70, 120)
-	part("Part", { Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 13, 13), CFrame = at * CFrame.new(0, 1, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(235, 240, 250) }, parent)
-	local ring = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 13.6, 13.6), CFrame = at * CFrame.new(0, 1.9, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = col }, parent)
-	local holder = Instance.new("Model")
-	holder.Name = "Showcase"
-	local showCF = at * CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-10), math.rad(30), 0)
-	SledModels.build(holder, showCF, sledId, {
-		main = col,
-		accent = Color3.new(1, 1, 1):Lerp(col, 0.35),
-		material = rarity.material,
-		glow = rarityIdx == 5,
-		shine = rarity.shine,
-	}, nil, true)
-	-- прокачанная витрина: топовые ракеты и обвес
-	SledModels.extras(holder, showCF, sledId, 4, if rarityIdx == 5 then 5 else 3, Color3.new(1, 1, 1):Lerp(col, 0.35), nil)
-	holder.Parent = parent
-	local glow = Instance.new("PointLight")
-	glow.Color = col
-	glow.Range = 16
-	glow.Brightness = 1.5
-	glow.Parent = ring
-	local anchor = deco({ Size = Vector3.new(1, 1, 1), CFrame = at * CFrame.new(0, 10, 0), Transparency = 1 }, parent)
-	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(220, 50)
-	bb.MaxDistance = 90
-	bb.Parent = anchor
-	local t = Instance.new("TextLabel")
-	t.Size = UDim2.fromScale(1, 1)
-	t.BackgroundTransparency = 1
-	t.Font = Enum.Font.FredokaOne
-	t.TextScaled = true
-	t.TextColor3 = Color3.new(1, 1, 1)
-	t.TextStrokeTransparency = 0.3
-	t.Text = caption
-	t.Parent = bb
-end
-
+-- Архитектура лобби живёт в shared/Lobby (Lobby.build — сервер, Lobby.dress — клиент по миру);
+-- обёртка оставлена для Main.server.
 function Track.buildLobby()
-	local p = Config.LOBBY_POS
-	local base = CFrame.new(p)
-	local lobby = Instance.new("Model")
-	lobby.Name = "Lobby"
-	-- Площадка лобби заканчивается обрывом: дальше вниз уходит трасса (её видно с мостика)
-	part("Part", {
-		Size = Vector3.new(150, 4, 90),
-		CFrame = base * CFrame.new(0, -2, 5),
-		Material = Enum.Material.Snow,
-		Color = SNOW,
-	}, lobby)
-	local rng = Random.new(7)
-	for x = -70, 70, 18 do
-		Props.pine(rng, base * CFrame.new(x + rng:NextNumber(-4, 4), 0, 48), lobby)
-	end
-	for z = -36, 40, 18 do
-		for _, x in { -70, 70 } do
-			Props.pine(rng, base * CFrame.new(x, 0, z + rng:NextNumber(-4, 4)), lobby)
-		end
-	end
-	Props.snowman(rng, base * CFrame.new(-16, 0, 14) * CFrame.Angles(0, math.rad(160), 0), lobby)
-
-	-- Деревянный мостик к старту трассы (как в Roblox-референсе): дойди до края — сядешь в сани
-	for z = -6, -60, -3 do
-		part("Part", { Size = Vector3.new(14, 0.6, 2.6), CFrame = base * CFrame.new(0, 0.3, z), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(150, 105, 65) }, lobby)
-	end
-	for _, sx in { -1, 1 } do
-		deco({ Size = Vector3.new(0.8, 1, 56), CFrame = base * CFrame.new(sx * 7.4, 1.2, -33), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
-		for z = -6, -60, -8 do
-			deco({ Size = Vector3.new(0.6, 2, 0.6), CFrame = base * CFrame.new(sx * 7.4, 1, z), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
-		end
-	end
-	-- Светящаяся стрелка-указатель у края мостика
-	local sign = deco({ Size = Vector3.new(1, 1, 1), CFrame = base * CFrame.new(0, 6, -62), Transparency = 1 }, lobby)
-	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(240, 60)
-	bb.MaxDistance = 120
-	bb.Parent = sign
-	local t = Instance.new("TextLabel")
-	t.Size = UDim2.fromScale(1, 1)
-	t.BackgroundTransparency = 1
-	t.Font = Enum.Font.FredokaOne
-	t.TextScaled = true
-	t.TextColor3 = Color3.fromRGB(255, 225, 80)
-	t.TextStrokeTransparency = 0.2
-	t.Text = "▼ САДИСЬ В САНИ ▼"
-	t.Parent = bb
-
-	-- Подиумы с витринными санками
-	showcaseSled(base * CFrame.new(-24, 0, -24), "board", 2, "Доска · Gold", lobby)
-	showcaseSled(base * CFrame.new(24, 0, -24), "plane", 5, "Сани-самолёт · Galaxy", lobby)
-
-	-- Доска лидеров и табло обновления (лицом к точке появления)
-	local lbAt = CFrame.lookAt((base * CFrame.new(34, 0, -10)).Position, p)
-	board("Leaderboard", lbAt, "🏆 Лучшие игроки", lobby)
-	local upAt = CFrame.lookAt((base * CFrame.new(-34, 0, -10)).Position, p)
-	local upText = board("NextUpdate", upAt, "⏳ Следующее обновление", lobby)
-	task.spawn(function()
-		while lobby.Parent do
-			local left = math.max(0, Config.NEXT_UPDATE - os.time())
-			upText.TextXAlignment = Enum.TextXAlignment.Center
-			upText.Text = if left > 0
-				then string.format("%dд %dч %dм\n\nНовый мир и\nновые санки!", left // 86400, (left % 86400) // 3600, (left % 3600) // 60)
-				else "Уже скоро!"
-			task.wait(30)
-		end
-	end)
-
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Anchored = true
-	spawn.Neutral = true
-	spawn.Size = Vector3.new(12, 1, 12)
-	spawn.CFrame = CFrame.new(p + Vector3.new(0, 0.5, 0))
-	spawn.Duration = 0
-	spawn.Transparency = 1
-	spawn.CanCollide = false
-	spawn.Parent = lobby
-	lobby.Parent = workspace
+	Lobby.build()
 end
 
 return Track

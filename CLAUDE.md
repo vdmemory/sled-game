@@ -12,11 +12,11 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 
 | Про что запрос | Агент | Его файлы |
 | --- | --- | --- |
-| Трассы, треки, участки, повороты, обрывы, дороги/трафик, миры как ландшафт, лобби как место; препятствия — виды, правила и логика размещения, плотность, сложность по уровням, расстановка бонусов | `track-architect` | `server/Track.luau`, `server/Props.luau`, `Config` (раздел ТРАССА, THEMES) |
+| Трассы, треки, участки, повороты, обрывы, дороги/трафик, миры как ландшафт, лобби как место; препятствия — виды, правила и логика размещения, плотность, сложность по уровням, расстановка бонусов | `track-architect` | `shared/Track.luau`, `shared/Props.luau`, `shared/Lobby.luau`, `Config` (раздел ТРАССА, THEMES) |
 | Деньги и направление: монетизация (что/почём/когда продавать), доход и прогноз, KPI (retention, сессия, конверсия, ARPDAU, Creator Rewards), приоритеты роадмапа по выручке, привлечение игроков (иконка, реклама, Discovery), риски платформы, «стоит ли» | `producer` | `docs/BUSINESS.md`, цифры Creator Hub Analytics (присылает владелец), `Config.PRODUCTS`/геймпассы через `game-designer` |
 | Правила игры, прогрессия, внутриигровая экономика (монеты/гемы), цены апгрейдов и тиры, бонусы и их шансы, задания, подарки, сундуки, баланс, «как должно работать»; вписывает в код Robux-товары по ТЗ продюсера | `game-designer` | `Config.luau` (баланс), `server/Rewards.luau`, `server/DataService.luau`, `server/Main.server.luau` (правила), `docs/GAME_DESIGN.md` |
 | Средства передвижения детально: геометрия, посадка, точки крепления, обвес по тирам, ракеты/моторы, рогатка/катапульта, новый транспорт | `vehicle-engineer` | `shared/SledModels.luau`, `Config.SLEDS/TIERS`, `Main.makeSled` |
-| Внешний вид: стиль и цвета моделей, пропсы, UI/UX (окна, HUD, кнопки, иконки), эффекты, свет, пейзаж, анимации, звук | `art-director` | `server/Props.luau` (вид), `shared/UIKit.luau`, `client/HUD`, `client/LobbyMenus`, `client/Effects`, `client/Reveal`, `client/Sounds`, `assets/ui` |
+| Внешний вид: стиль и цвета моделей, пропсы, UI/UX (окна, HUD, кнопки, иконки), эффекты, свет, пейзаж, анимации, звук | `art-director` | `shared/Props.luau` (вид), `shared/Lobby.luau` (вид лобби), `shared/UIKit.luau`, `client/HUD`, `client/LobbyMenus`, `client/Effects`, `client/Reveal`, `client/Sounds`, `assets/ui` |
 | Идеи: «что дальше», «чего не хватает», «что у конкурентов», новые механики/миры/события, анализ игроков и отзывов, тренды Roblox | `idea-scout` | интернет, Creator Hub Analytics (цифры присылает владелец), `docs/IDEAS.md` |
 | Проверить, протестировать, пройти трассу, найти баги, оценить сложность/скорость/плотность препятствий, «почему не работает», FPS на телефоне | `qa-tester` | играет на staging через компьютер владельца; `docs/TESTING.md` |
 | Код-ревью, архитектура, структура модулей, деплой, CI, DataStore/ремоуты/безопасность, производительность, «сделай правильно» | `code-reviewer` | всё `src/`, `scripts/`, `default.project.json`, `docs/ARCHITECTURE.md` |
@@ -73,9 +73,9 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 
 | Папка | В игре | Что там |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | `Config` (баланс, TUNABLES), `UIKit` (стиль UI, иконки), `SledModels` (сани, ракеты, рогатка, обвес тиров), `UIDecals` (генерируется) |
-| `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, DevAction), `Track` (генерация трассы, лобби), `Props` (модели ландшафта/препятствий), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (настройки на лету), `UIImages.server` (декали → картинки) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика и ввод), `HUD`, `LobbyMenus`, `DevPanel` (владелец), `Effects`, `Sounds`, `Traffic`, `Reveal`, `ConfigSync` |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (баланс, TUNABLES), `UIKit` (стиль UI, иконки), `SledModels` (сани, ракеты, рогатка, обвес тиров), `Track` (генерация трассы; общий для сервера и витрины лобби), `Props` (модели ландшафта/препятствий), `Lobby` (архитектура лобби и декор по миру), `UIDecals` (генерируется) |
+| `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, DevAction), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (настройки на лету), `UIImages.server` (декали → картинки) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика и ввод), `HUD`, `LobbyMenus`, `DevPanel` (владелец), `Effects`, `Sounds`, `Traffic`, `Reveal`, `LobbyScene` (витрина и декор лобби под свой мир), `ConfigSync` |
 | `assets/ui` | Decal-ы в Roblox | 50 иконок Fluent Emoji 3D (MIT), `decals.json` |
 | `scripts` | CI | `publish.sh` (сборка, загрузка иконок, публикация), `upload_ui_assets.py`, `fetch_metrics.py` (Open Cloud Analytics → CSV), `metrics_report.py`, `weekly-metrics.yml.example` |
 | `docs` | — | `GAME_DESIGN`, `ARCHITECTURE`, `PLAYBOOK` (как сделать похожую игру), `TEAM` (роли агентов), `TESTING`, `IDEAS` (бэклог идей), `BUSINESS` (монетизация, KPI, гипотезы), `METRICS` (цифры во времени, события в игре), `WEEKLY` (понедельничный авто-обзор), `ENGINEERING` (стандарт кода и доки), `CHANGELOG` |

@@ -12,7 +12,7 @@ Roblox-версия мобильной Sled Surfers: рогатка запуск
 | Система | Файл |
 |---|---|
 | Все настройки (физика, трасса, цены, бонусы, задания) + настройка на лету | `src/shared/Config.luau`, `src/server/Tuning.luau` |
-| Трасса по seed уровня, 7 миров, препятствия, дороги, лобби | `src/server/Track.luau`, `src/server/Props.luau` |
+| Трасса по seed уровня, 7 миров, препятствия, дороги, лобби | `src/shared/Track.luau`, `src/shared/Props.luau`, `src/shared/Lobby.luau` |
 | Сохранение прогресса (DataStore) | `src/server/DataService.luau` |
 | Заезды, монеты, апгрейды, тиры, покупки, лидерборд | `src/server/Main.server.luau` |
 | Задания дня, подарки, сундуки | `src/server/Rewards.luau` |

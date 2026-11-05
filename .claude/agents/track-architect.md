@@ -18,12 +18,12 @@ Part/Wedge, Raycast для посадки объектов на поверхно
 Трасса генерируется кодом, детерминированно по уровню (`seed = level`): игрок может её выучить.
 
 ## Твои файлы
-- `src/server/Track.luau` — `buildProfile` (последовательность участков: пологий, крутой, обрыв с
+- `src/shared/Track.luau` — `buildProfile` (последовательность участков: пологий, крутой, обрыв с
   трамплином `kicker`, поворот жёлобом `curve`, дорога `road`), `buildSegment` (ряды препятствий
   по полосам `LANES`, монеты линиями, бонусы, трамплины), `buildCrossSection` (дно, борта, цвета
   темы), `dressSegment` (декор обочин по теме), `buildRoad`/`setMover` (дороги, поезда, канатка),
-  `ensureAround`/`progressOf` (стриминг вперёд, прогресс), `buildLobby`.
-- `src/server/Props.luau` — low-poly модели: препятствия (`Props.obstacle(theme, …)` выбирает по
+  `ensureAround`/`progressOf` (стриминг вперёд, прогресс); лобби — `src/shared/Lobby.luau` (`build` сервер, `dress` клиент по миру), витрина — `client/LobbyScene`.
+- `src/shared/Props.luau` — low-poly модели: препятствия (`Props.obstacle(theme, …)` выбирает по
   теме), транспорт (`Props.traffic`), декор обочин, горы, трамплин `Props.ramp`.
 - `src/shared/Config.luau`, разделы ТРАССА и THEMES: углы `GENTLE_ANGLE`/`STEEP_ANGLE`, `KICKER_*`,
   `CURVE_*`, `OBSTACLE_ROWS`, `SAFE_START`, `ROAD_AT`, `roadCount`, `carsPerLane`, `levelLength`,
