@@ -11,6 +11,7 @@ local Props = require(ReplicatedStorage.Shared.Props)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
 local Lobby = require(ReplicatedStorage.Shared.Lobby)
 local SafeLine = require(ReplicatedStorage.Shared.SafeLine)
+local Islands = require(ReplicatedStorage.Shared.Islands)
 
 local part, deco = Props.part, Props.deco
 
@@ -375,6 +376,55 @@ local function dressSegment(theme: number, rng: Random, cf: CFrame, len: number,
 	end
 end
 
+------------------------------------------------------------------ разметка и «вау» на трассе (#40, art)
+-- Поверх обочин мира: цветные кромки дна (цвет мира) — трасса читается как дорожка и скорость
+-- видна по бегущим полосам; флажки-слалом на сугробах по бокам (ритм, не на дне — препятствий
+-- не закрывают); иногда большая арка над пологим куском. Свой Random — раскладка препятствий,
+-- монет и бонусов куска не сдвигается.
+local function dressTrack(theme: number, rng: Random, seg, m: Instance)
+	local kind = seg.kind
+	local straight = kind == "gentle" or kind == "steep" or kind == "start" or kind == "landing" or kind == "kicker" or kind == "isleIn" or kind == "wave"
+	if not straight then
+		return
+	end
+	local cf, len = seg.cf, seg.length
+	local accent = Islands.accent(theme)
+	if Config.EDGE_STRIPES then
+		for _, side in { -1, 1 } do
+			deco({ Size = Vector3.new(1.4, 0.06, len), CFrame = cf * CFrame.new(side * (W / 2 - 2.2), 0.03, -len / 2), Color = accent, Transparency = 0.1 }, m)
+		end
+	end
+	if (kind == "gentle" or kind == "steep") and rng:NextNumber() < Config.SLALOM_CHANCE then
+		-- на первом поясе сугроба (14°), 6 studs за краем дна; цвета чередуются по сторонам
+		local bankY = 6 * math.tan(math.rad(SNOW_PROFILE.banks[1].angle))
+		local k = 0
+		for z = 14, len - 8, 32 do
+			k += 1
+			for _, side in { -1, 1 } do
+				local col = if (k + (if side > 0 then 1 else 0)) % 2 == 0 then accent else Color3.fromRGB(245, 245, 250)
+				Islands.pennant(cf * CFrame.new(side * (W / 2 + 6), bankY, -z) * CFrame.Angles(0, if side > 0 then math.pi else 0, 0), col, 5, m)
+			end
+		end
+	end
+	if kind == "gentle" and seg.hStart > Config.SAFE_START and rng:NextNumber() < Config.ARCH_CHANCE then
+		-- большая арка: ледяные блоки полукругом над всей шириной (декор, сквозь неё едем)
+		local r = BANK_OUT + 4
+		local z = len * rng:NextNumber(0.35, 0.65)
+		local iceCol = if theme == 7 then Color3.fromRGB(255, 190, 225) elseif theme == 3 then Color3.fromRGB(230, 170, 120) else Color3.fromRGB(150, 205, 245)
+		for j = 0, 12 do
+			local a = math.pi * j / 12
+			deco({
+				Size = Vector3.new(7, 6, 5),
+				CFrame = cf * CFrame.new(math.cos(a) * r, BANK_TOP * 0.3 + math.sin(a) * r * 0.6, -z) * CFrame.Angles(0, 0, a),
+				Material = Enum.Material.Ice,
+				Color = if j % 4 == 0 then accent else iceCol,
+				Transparency = 0.05,
+				CastShadow = true,
+			}, m)
+		end
+	end
+end
+
 ------------------------------------------------------------------ профиль уровня
 -- Трасса — цепочка кусков. У каждого куска свой уклон (pitch) и направление (yaw).
 -- Повороты собраны из коротких кусков, каждый чуть довёрнут, и одеты ледяным жёлобом.
@@ -387,10 +437,22 @@ type Segment = {
 	hStart: number, -- пройденный путь по горизонтали до начала куска
 	hLen: number,
 	chute: boolean,
+	yawJoint: boolean?, -- направление сменилось на стыке с прошлым куском
+	floorAhead: boolean?, -- на следующем стыке сменится направление: пол заходит вперёд на 1 stud
+	vis: number?, -- длина визуальной части сечения (борта, кромка, земля) от начала куска; 0 — только пол
+	ci: number?, -- номер «визуального» куска поворота (для арок и монет)
+	isle: any?, -- островки: план островка / зазора (shared/Islands)
+	crest: any?, -- волна: номер гребня (подъём) или false (спуск)
 }
+
+-- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
+local BREAK_AFTER = { kicker = true, isleIn = true, isle = true, gap = true }
 
 local function buildProfile(origin: CFrame, level: number): ({ Segment }, number)
 	local rng = Random.new(level * 7919 + 17)
+	local isleRng = Random.new(level * 3571 + 7)
+	local curveIndex = 0
+	local lastIsle: number? = nil
 	local L = Config.levelLength(level)
 	local segs: { Segment } = {}
 	local pos = origin.Position
@@ -398,12 +460,15 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	local h = 0
 	local forceNext: string? = nil
 	local lastTurn = 1
+	local prevAngle = 0 -- стартовая площадка ровная
+	local prevYaw = 0
 
-	local function add(kind: string, angle: number, length: number, chute: boolean?)
+	-- Кусок как есть (без скругления стыка)
+	local function push(kind: string, angle: number, length: number, chute: boolean?, extra: { [string]: any }?): Segment
 		local cf = CFrame.new(pos) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(-math.rad(angle), 0, 0)
 		local endPos = cf:PointToWorldSpace(Vector3.new(0, 0, -length))
 		local hLen = length * math.cos(math.rad(angle))
-		table.insert(segs, {
+		local seg: Segment = {
 			kind = kind,
 			angle = angle,
 			yaw = yaw,
@@ -412,12 +477,43 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 			hStart = h,
 			hLen = hLen,
 			chute = chute == true,
-		})
+			yawJoint = math.abs(yaw - prevYaw) > 1e-6,
+		}
+		if extra then
+			for k, v in extra do
+				(seg :: any)[k] = v
+			end
+		end
+		if seg.yawJoint and segs[#segs] then
+			-- клин по внешнему краю поворота закрывает пол прошлого куска: там, где новый кусок
+			-- выше, продолжение прошлого прячется под ним, где ниже — сани сходят на него вниз
+			segs[#segs].floorAhead = true
+		end
+		table.insert(segs, seg)
 		h += hLen
 		pos = endPos
+		prevAngle, prevYaw = angle, yaw
 		if kind == "kicker" then
 			pos -= Vector3.new(0, Config.KICKER_DROP, 0)
 		end
+		return seg
+	end
+
+	-- Кусок со скруглённым стыком (#40): если уклон меняется больше SMOOTH_KINK, перед куском
+	-- встают переходные куски длиной FILLET_LEN с промежуточными уклонами — излом на каждом
+	-- стыке ≤ SMOOTH_KINK, сани не «втыкаются» в склон и не подлетают на изломе.
+	local function add(kind: string, angle: number, length: number, chute: boolean?, extra: { [string]: any }?): Segment
+		local last = segs[#segs]
+		if not (last and BREAK_AFTER[last.kind]) then
+			local d = angle - prevAngle
+			local n = math.ceil(math.abs(d) / math.max(0.1, Config.SMOOTH_KINK) - 1e-6) - 1
+			local a0 = prevAngle
+			local iceRun = chute == true or (last ~= nil and last.chute)
+			for j = 1, n do
+				push("fillet", a0 + d * j / (n + 1), Config.FILLET_LEN, iceRun)
+			end
+		end
+		return push(kind, angle, length, chute, extra)
 	end
 
 	-- Поворот из коротких кусков. Направление выбираем так, чтобы трасса не уходила далеко вбок
@@ -437,16 +533,72 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		local pieces = math.max(3, math.floor(math.deg(total) / Config.CURVE_STEP + 0.5))
 		local step = total / pieces * dir
 		local pitch = rng:NextNumber(Config.CURVE_PITCH[1], Config.CURVE_PITCH[2])
-		for _ = 1, pieces do
-			if math.abs(yaw + step) <= maxYaw then
-				yaw += step
-			end
-			add("curve", pitch, Config.CURVE_PIECE, true)
+		local last = segs[#segs]
+		if last and last.kind == "curve" then
+			pitch = last.angle -- поворот сразу за поворотом — тот же уклон (излом + доворот на одном стыке)
 		end
+		-- Пол куска поворота — из CURVE_SUBSTEPS частей, каждая довёрнута на шаг / n: ступенька
+		-- на краю дна x·sin(шаг/n)·tg(уклон) ≤ 0.2 stud. Борта и декор строит первая часть на весь кусок.
+		local sub = math.max(1, Config.CURVE_SUBSTEPS)
+		for piece = 1, pieces do
+			local turn = math.abs(yaw + step) <= maxYaw
+			curveIndex += 1
+			for k = 1, sub do
+				-- первая часть поворота не доворачивает: на стыке, где меняется уклон, направление
+				-- не меняется (иначе ступеньки складываются на краю дна)
+				if turn and not (piece == 1 and k == 1) then
+					yaw += step / sub
+				end
+				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex }
+				if k == 1 then
+					add("curve", pitch, Config.CURVE_PIECE / sub, true, extra)
+				else
+					push("curve", pitch, Config.CURVE_PIECE / sub, true, extra)
+				end
+			end
+		end
+	end
+
+	-- Волны-бугры (#40): серия «вниз → вверх» — сани ныряют и на гребне слегка подлетают; переходы
+	-- между уклонами — те же скругления (излом ≤ SMOOTH_KINK), монеты на каждом гребне
+	local function waves()
+		local count = isleRng:NextInteger(Config.WAVE_COUNT[1], Config.WAVE_COUNT[2])
+		for k = 1, count do
+			add("wave", Config.WAVE_DOWN[1], Config.WAVE_DOWN[2], false, { crest = false })
+			add("wave", Config.WAVE_UP[1], Config.WAVE_UP[2], false, { crest = k })
+		end
+	end
+
+	-- Островки над пропастью (#40): разгон с ускорителем → [зазор → островок] × n → зазор →
+	-- склон приземления. План — Islands.plan (баллистика, свой seed). Не строим, если цепочка не
+	-- помещается до финиша. Ответ: построили ли.
+	local function islands(): boolean
+		local spec = Islands.plan(level, isleRng)
+		local total = Config.ISLE_IN[2] + 90
+		for k, g in spec.gaps do
+			total += g.gap + (if spec.isles[k] then spec.isles[k].len else 0)
+		end
+		if h + total > L - 80 then
+			return false
+		end
+		add("isleIn", Config.ISLE_IN[1], Config.ISLE_IN[2])
+		for k, g in spec.gaps do
+			push("gap", math.deg(math.atan2(g.drop, g.gap)), math.sqrt(g.gap * g.gap + g.drop * g.drop), false, { isle = g })
+			local isle = spec.isles[k]
+			if isle then
+				push("isle", isle.pitch, isle.len, false, { isle = isle })
+			end
+		end
+		push("landing", 18, 90)
+		lastIsle = h
+		return true
 	end
 
 	add("start", 7, 110)
 	local nextForced = 1
+	-- островки: свой генератор (не сдвигает раскладку остальных кусков уровня)
+	local isleOn = level >= Config.ISLE_FROM_LEVEL
+	local isleNext: number? = if isleOn then L * Config.ISLE_AT else nil
 	local nextRoad = 1
 	local roads = Config.roadCount(level)
 	local railDone = false
@@ -466,6 +618,11 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		elseif forceNext == "landing" then
 			add("landing", 18, 90)
 			forceNext = nil
+		elseif isleNext and h >= isleNext then
+			isleNext = nil
+			if not islands() then
+				add("gentle", rng:NextNumber(Config.GENTLE_ANGLE[1], Config.GENTLE_ANGLE[2]), 120)
+			end
 		elseif forcedAt and h >= L * forcedAt then
 			add("kicker", 6, 100)
 			forceNext = "landing"
@@ -473,7 +630,14 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		else
 			local t = rng:NextNumber()
 			local steep = Config.steepChance(level)
-			if h > 220 and t < Config.CURVE_CHANCE then
+			-- доп. цепочка островков (шанс растёт с уровнем, не чаще ISLE_MIN_SPACING)
+			local extraIsle = isleOn and isleRng:NextNumber() < Config.isleChance(level)
+				and lastIsle ~= nil and h - lastIsle >= Config.ISLE_MIN_SPACING
+			if extraIsle and islands() then
+				-- построили островки вместо обычного куска
+			elseif level >= Config.WAVE_FROM_LEVEL and h > 300 and isleRng:NextNumber() < Config.WAVE_CHANCE then
+				waves()
+			elseif h > 220 and t < Config.CURVE_CHANCE then
 				curve()
 			elseif t < Config.CURVE_CHANCE + steep then
 				add("steep", rng:NextNumber(Config.STEEP_ANGLE[1], Config.STEEP_ANGLE[2]), 90)
@@ -507,11 +671,23 @@ function Track.new(slot: number, level: number, bestH: number?, origin: CFrame?,
 	self.rowPlan = SafeLine.plan(self.segments, level)
 	self.preview = maxSegments ~= nil
 	if maxSegments then
-		for i = #self.segments, maxSegments + 1, -1 do
+		-- витрина: первые maxSegments «настоящих» кусков (переходы и части пола поворота не считаем)
+		local keep, major = #self.segments, 0
+		for i, seg in self.segments do
+			if seg.kind ~= "fillet" and seg.vis ~= 0 then
+				major += 1
+				if major > maxSegments then
+					keep = i - 1
+					break
+				end
+			end
+		end
+		for i = #self.segments, keep + 1, -1 do
 			self.segments[i] = nil
 		end
 	end
 	self.built = {} :: { [number]: Model }
+	self.clears = {} :: { [number]: { any } } -- заливки Terrain по кускам (стираются вместе с куском)
 	self.hint = 1
 	self.folder = Instance.new("Folder")
 	self.folder.Name = if origin then "TrackPreview" else "Track_" .. slot
@@ -562,10 +738,18 @@ end
 -- Поперечное сечение: дно + пояса сугроба/льда, полка и невидимые стенки
 local ICE_FLOOR = Color3.fromRGB(165, 210, 245)
 local ICE_WALL = Color3.fromRGB(130, 190, 240)
-local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, m: Instance, alt: number, theme: number, landing: boolean?)
-	-- Куски перекрываются, чтобы на поворотах не было щелей по внешнему краю;
-	-- соседние куски чуть сдвинуты по высоте, чтобы перекрытия не мерцали
+-- seg.vis — длина визуальной части (борта, кромка, земля, барьер) от начала куска: поворот и
+-- переход строят её одним куском на несколько частей пола; 0 — только пол (и невидимые борта).
+local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, m: Instance, alt: number, theme: number, landing: boolean?, seg: Segment?)
+	-- Визуальные части перекрываются, чтобы на поворотах не было щелей по внешнему краю;
+	-- соседние куски чуть сдвинуты по высоте, чтобы перекрытия не мерцали.
+	-- Пол (ходовая часть, #40) — без сдвига и встык: верх соседних полов совпадает на стыке, и
+	-- нет ни ступенек 0.03, ни «губы» перекрытия на изломе. Только перед стыком, где сменится
+	-- направление (поворот), пол заходит вперёд на 1 stud — закрыть клин по внешнему краю.
 	local overlap = if chute then 8 else 2
+	local floorCF = cf
+	local ahead = if seg and seg.floorAhead then 1 else 0
+	local visLen = if seg and seg.vis ~= nil then seg.vis else len
 	cf = cf * CFrame.new(0, alt * 0.03, 0)
 	local floorW = prof.floorW or W
 	local lake = prof == LAKE_PROFILE
@@ -576,50 +760,58 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 	local groundMat = if theme == 3 then Enum.Material.Sand elseif theme == 6 then Enum.Material.Basalt else Enum.Material.Snow
 	part("Part", {
 		Name = "Floor",
-		Size = Vector3.new(floorW, 4, len + overlap),
-		CFrame = cf * CFrame.new(0, -2, -len / 2),
+		Size = Vector3.new(floorW, 4, len + ahead),
+		CFrame = floorCF * CFrame.new(0, -2, -(len + ahead) / 2),
 		Material = if chute or lake then Enum.Material.Glacier else Enum.Material.Snow,
 		Color = if lake then Color3.fromRGB(175, 220, 250) elseif chute then ICE_FLOOR else snowFloor,
 		Reflectance = if chute or lake then 0.12 else 0,
 	}, m)
+	-- переходный кусок без визуальной части: свои борта (сугроб/лёд по краю) есть, кромку и
+	-- землю держит первый кусок перехода
+	local fillet = seg ~= nil and seg.kind == "fillet"
+	local bankLen = if fillet then len else visLen
 	for _, side in { -1, 1 } do
 		local x, y = floorW / 2, 0
-		for k, b in prof.banks do
-			local a = math.rad(b.angle)
-			part("Part", {
-				Name = "Bank",
-				Size = Vector3.new(b.width, 2, len + overlap),
-				CFrame = cf * CFrame.new(side * x, y, -len / 2) * CFrame.Angles(0, 0, side * a) * CFrame.new(side * b.width / 2, -1, 0),
-				Material = if chute then Enum.Material.Glacier else Enum.Material.Snow,
-				Color = if chute then ICE_WALL:Lerp(Color3.new(1, 1, 1), (k - 1) * 0.12) else snowBank,
-				Reflectance = if chute then 0.1 else 0,
-			}, m)
-			x += b.width * math.cos(a)
-			y += b.width * math.sin(a)
+		if bankLen > 0 then
+			for k, b in prof.banks do
+				local a = math.rad(b.angle)
+				part("Part", {
+					Name = "Bank",
+					Size = Vector3.new(b.width, 2, bankLen + overlap),
+					CFrame = cf * CFrame.new(side * x, y, -bankLen / 2) * CFrame.Angles(0, 0, side * a) * CFrame.new(side * b.width / 2, -1, 0),
+					Material = if chute then Enum.Material.Glacier else Enum.Material.Snow,
+					Color = if chute then ICE_WALL:Lerp(Color3.new(1, 1, 1), (k - 1) * 0.12) else snowBank,
+					Reflectance = if chute then 0.1 else 0,
+				}, m)
+				x += b.width * math.cos(a)
+				y += b.width * math.sin(a)
+			end
 		end
-		-- Округлая снежная кромка
-		deco({
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(len + overlap + 1, 6, 6),
-			CFrame = cf * CFrame.new(side * (prof.out + 1), prof.top - 1.2, -len / 2) * CFrame.Angles(0, math.rad(90), 0),
-			Material = Enum.Material.Snow,
-			Color = SNOW,
-		}, m)
-		part("Part", {
-			Name = "Ground",
-			Size = Vector3.new(150, 2, len + overlap),
-			CFrame = cf * CFrame.new(side * (prof.out + 75), prof.top - 1, -len / 2),
-			Material = groundMat,
-			Color = if theme == 1 or theme == 2 then SNOW else themeCfg.ground,
-			CanCollide = false,
-		}, m)
-		part("Part", {
-			Name = "Barrier",
-			Size = Vector3.new(2, 40, len + overlap),
-			CFrame = cf * CFrame.new(side * (prof.out + 2), prof.top + 10, -len / 2),
-			Transparency = 1,
-			CanQuery = false,
-		}, m)
+		if visLen > 0 then
+			-- Округлая снежная кромка
+			deco({
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(visLen + overlap + 1, 6, 6),
+				CFrame = cf * CFrame.new(side * (prof.out + 1), prof.top - 1.2, -visLen / 2) * CFrame.Angles(0, math.rad(90), 0),
+				Material = Enum.Material.Snow,
+				Color = SNOW,
+			}, m)
+			part("Part", {
+				Name = "Ground",
+				Size = Vector3.new(150, 2, visLen + overlap),
+				CFrame = cf * CFrame.new(side * (prof.out + 75), prof.top - 1, -visLen / 2),
+				Material = groundMat,
+				Color = if theme == 1 or theme == 2 then SNOW else themeCfg.ground,
+				CanCollide = false,
+			}, m)
+			part("Part", {
+				Name = "Barrier",
+				Size = Vector3.new(2, 40, visLen + overlap),
+				CFrame = cf * CFrame.new(side * (prof.out + 2), prof.top + 10, -visLen / 2),
+				Transparency = 1,
+				CanQuery = false,
+			}, m)
+		end
 		-- Невидимый борт у края дна (Config.WALL_*): санки больше не уезжают на сугроб и не
 		-- проваливаются там, где у соседнего куска сугроба нет (дорога, озеро, приземление).
 		-- В жёлобе бортами служат сами ледяные пояса. На приземлении после обрыва борт вдвое выше:
@@ -630,7 +822,7 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 			local tilt = math.rad(Config.WALL_TILT)
 			part("Part", {
 				Name = "Wall",
-				Size = Vector3.new(0.6, wallH + 2, len + overlap),
+				Size = Vector3.new(0.6, wallH + 2, len + 2),
 				CFrame = cf * CFrame.new(side * (floorW / 2 + Config.WALL_OFFSET), -1.5, -len / 2)
 					* CFrame.Angles(0, 0, -side * tilt) * CFrame.new(0, (wallH + 2) / 2, 0),
 				Transparency = 1,
@@ -639,12 +831,12 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 			}, m)
 		end
 	end
-	if chute then
+	if chute and visLen > 0 and not fillet then
 		-- Белые разводы на льду жёлоба (как в трейлере)
 		for _, x in { -W * 0.3, -W * 0.05, W * 0.2 } do
 			deco({
-				Size = Vector3.new(0.8, 0.05, len + overlap),
-				CFrame = cf * CFrame.new(x, 0.03, -len / 2),
+				Size = Vector3.new(0.8, 0.05, visLen + overlap),
+				CFrame = cf * CFrame.new(x, 0.03, -visLen / 2),
 				Color = Color3.new(1, 1, 1),
 				Transparency = 0.45,
 			}, m)
@@ -665,10 +857,32 @@ function Track:buildSegment(i: number)
 		else SNOW_PROFILE
 	local m = Instance.new("Model")
 	m.Name = "Segment_" .. i
+	-- островки и пропасть (#40) строит shared/Islands; остальное — общее сечение трассы
+	local special = seg.kind == "isle" or seg.kind == "gap"
+	local visLen = if seg.vis ~= nil then seg.vis else len
+	if special then
+		local kit = {
+			coin = makeCoin,
+			shield = makeShield,
+			x2 = makeX2,
+			fuel = makeFuel,
+			magnet = makeMagnet,
+			dress = function(dcf: CFrame, dprof)
+				dressSegment(self.theme, rng, dcf, len, m, dprof)
+			end,
+		}
+		self.clears[i] = if seg.kind == "isle" then Islands.buildIsle(self, seg, m, rng, kit) else Islands.buildGap(self, seg, m, rng, kit)
+	else
+		buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme, seg.kind == "landing", seg)
+	end
+	if seg.kind == "isleIn" then
+		Islands.buildIn(self, seg, m)
+	end
+	dressTrack(self.theme, Random.new(self.level * 7907 + i * 13), seg, m)
 
-	buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme, seg.kind == "landing")
-
-	if seg.kind == "road" or seg.kind == "rail" then
+	if special or seg.kind == "fillet" or visLen <= 0 then
+		-- островки, переходы и части пола поворота: без проплешин и декора обочин
+	elseif seg.kind == "road" or seg.kind == "rail" then
 		self:buildRoad(seg, rng, m, seg.kind == "rail")
 	elseif seg.kind == "lake" then
 		-- трещинки и блики на льду
@@ -706,8 +920,8 @@ function Track:buildSegment(i: number)
 		end
 	end
 
-	if seg.kind ~= "road" and seg.kind ~= "rail" then
-		dressSegment(self.theme, rng, cf, len, m, prof)
+	if not special and seg.kind ~= "road" and seg.kind ~= "rail" and seg.kind ~= "fillet" and visLen > 0 then
+		dressSegment(self.theme, rng, cf, visLen, m, prof)
 	end
 
 	-- Канатная дорога над местом приземления: кабинки едут поперёк трассы
@@ -730,13 +944,13 @@ function Track:buildSegment(i: number)
 	end
 
 	-- Арка-тоннель над ледяным жёлобом (как в Roblox-референсе)
-	if seg.kind == "curve" and i % 9 == 0 then
+	if seg.kind == "curve" and visLen > 0 and (seg.ci or 0) % 9 == 0 then
 		local r = prof.out + 3
 		for k = 0, 10 do
 			local a = math.pi * k / 10
 			deco({
 				Size = Vector3.new(5, 5, 4),
-				CFrame = cf * CFrame.new(math.cos(a) * r, prof.top * 0.3 + math.sin(a) * r * 0.75, -len / 2) * CFrame.Angles(0, 0, a),
+				CFrame = cf * CFrame.new(math.cos(a) * r, prof.top * 0.3 + math.sin(a) * r * 0.75, -visLen / 2) * CFrame.Angles(0, 0, a),
 				Material = Enum.Material.Ice,
 				Color = Color3.fromRGB(120, 170, 225),
 			}, m)
@@ -744,7 +958,7 @@ function Track:buildSegment(i: number)
 	end
 
 	-- Флаг рекорда: где игрок остановился в лучшей попытке
-	if self.bestH > 0 and self.bestH >= seg.hStart and self.bestH < seg.hStart + seg.hLen then
+	if not special and self.bestH > 0 and self.bestH >= seg.hStart and self.bestH < seg.hStart + seg.hLen then
 		local z = (self.bestH - seg.hStart) / math.cos(math.rad(seg.angle))
 		local at = cf * CFrame.new(W / 2 - 4, 0, -z)
 		deco({ Size = Vector3.new(0.5, 12, 0.5), CFrame = at * CFrame.new(0, 6, 0), Color = Color3.fromRGB(240, 240, 240) }, m)
@@ -832,9 +1046,15 @@ function Track:buildSegment(i: number)
 				end
 			end
 		end
-	elseif seg.kind == "curve" and i % 2 == 0 then
+	elseif seg.kind == "wave" and seg.crest then
+		-- монеты на гребне волны: линия по центру подъёма, чуть выше — ловятся в подлёте
+		local lane = 2 + (seg.crest % (Config.LANES - 2))
+		for k = 1, 3 do
+			makeCoin(cf * CFrame.new(laneX(lane), 3.5, -(len * 0.35 + k * 4)), m)
+		end
+	elseif seg.kind == "curve" and visLen > 0 and (seg.ci or 0) % 2 == 0 then
 		-- В жёлобе — дорожка монет, которая «едет» по дуге
-		makeCoin(cf * CFrame.new(laneX(3 + (i // 2) % 2), 3, -len / 2), m)
+		makeCoin(cf * CFrame.new(laneX(3 + ((seg.ci or 0) // 2) % 2), 3, -visLen / 2), m)
 	end
 
 	-- Гемы и кристалл в фиксированных местах уровня, магниты — на прямых
@@ -845,15 +1065,26 @@ function Track:buildSegment(i: number)
 		end
 		return nil
 	end
+	-- над пропастью гем/кристалл висят в вершине дуги монет (ловятся в прыжке)
+	local function bonusAt(z: number, y: number): CFrame
+		if seg.kind == "gap" then
+			local arc = seg.isle.arc
+			local p = arc[math.max(1, math.ceil(#arc / 2))]
+			local look = cf.LookVector
+			local flat = CFrame.lookAt(cf.Position, cf.Position + Vector3.new(look.X, 0, look.Z))
+			return flat * CFrame.new(0, (if p then p[2] else 8) + y - 3, -(if p then p[1] else len / 2))
+		end
+		return cf * CFrame.new(laneX(rng:NextInteger(2, Config.LANES - 1)), y, -z)
+	end
 	for _, f in Config.GEMS_ON_TRACK do
 		local z = zAt(self.length * f)
 		if z then
-			makeGem(cf * CFrame.new(laneX(rng:NextInteger(2, Config.LANES - 1)), 3, -z), m)
+			makeGem(bonusAt(z, 3), m)
 		end
 	end
 	local zc = zAt(self.length * Config.CRYSTAL_AT)
 	if zc then
-		makeCrystal(cf * CFrame.new(laneX(rng:NextInteger(2, Config.LANES - 1)), 0, -zc), rng, m)
+		makeCrystal(bonusAt(zc, 0), rng, m)
 	end
 	if (seg.kind == "gentle" or seg.kind == "steep") and seg.hStart > Config.SAFE_START and rng:NextNumber() < Config.MAGNET_CHANCE then
 		makeMagnet(cf * CFrame.new(laneX(rng:NextInteger(1, Config.LANES)), 3, -len * 0.15), m)
@@ -1006,6 +1237,8 @@ function Track:ensureAround(h: number)
 		elseif not wanted and self.built[idx] then
 			self.built[idx]:Destroy()
 			self.built[idx] = nil
+			Islands.clear(self.clears[idx]) -- скалы Terrain островков
+			self.clears[idx] = nil
 		end
 	end
 end
@@ -1014,7 +1247,8 @@ end
 -- Ищем кусок рядом с прошлым (hint), на который точка проецируется лучше всего.
 function Track:progressOf(pos: Vector3): (number, number, number)
 	local best, bestScore, bestT, bestRel = nil, math.huge, 0, Vector3.zero
-	local from, to = math.max(1, self.hint - 4), math.min(#self.segments, self.hint + 10)
+	-- окно поиска: куски пола поворота и переходы короткие (3–4 studs) — смотрим дальше вперёд
+	local from, to = math.max(1, self.hint - 8), math.min(#self.segments, self.hint + 40)
 	for i = from, to do
 		local seg = self.segments[i]
 		local rel = seg.cf:PointToObjectSpace(pos)
@@ -1038,6 +1272,10 @@ function Track:progressOf(pos: Vector3): (number, number, number)
 end
 
 function Track:destroy()
+	for idx, c in self.clears do
+		Islands.clear(c)
+		self.clears[idx] = nil
+	end
 	self.folder:Destroy()
 end
 

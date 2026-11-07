@@ -558,6 +558,7 @@ local x2Until = 0
 local coinScan = 10
 local nearCoins: { BasePart } = {}
 local lastPos: Vector3? = nil
+local STEP_SAME_NORMAL = math.cos(math.rad(1.5)) -- нормали пола до и после ступеньки почти совпадают
 local COIN_PICK_R = 3.6 -- радиус подбора монеты (по горизонтали)
 local magnetScan = 0
 local function hideLocal(p: BasePart)
@@ -1040,6 +1041,12 @@ RunService.Heartbeat:Connect(function(dt)
 			speed = math.max(maxSpeed, speed - 30 * dt) -- буст плавно гаснет
 		end
 		speed = math.max(0, speed)
+		-- Трамплин-ускоритель островков (#40, shared/Islands): скорость вылета в окне LaunchMin…LaunchMax —
+		-- прыжок до следующего островка всегда достаёт и не перелетает его
+		local launchLo, launchHi = hit.Instance:GetAttribute("LaunchMin"), hit.Instance:GetAttribute("LaunchMax")
+		if onRamp and typeof(launchLo) == "number" and typeof(launchHi) == "number" then
+			speed = math.clamp(speed, launchLo, launchHi)
+		end
 
 		-- Руль с инерцией + борта скатывают к центру (right.Y > 0 — мы на наклонном борту).
 		-- Боковая скорость растёт вместе с продольной (Config.steerSpeed): время смены полосы
@@ -1050,7 +1057,21 @@ RunService.Heartbeat:Connect(function(dt)
 
 		local vn = vel:Dot(n)
 		if onRamp then
-			vn = math.max(vn, speed * Config.RAMP_LIFT)
+			local lift = hit.Instance:GetAttribute("Lift")
+			vn = math.max(vn, speed * (if typeof(lift) == "number" then lift else Config.RAMP_LIFT))
+		end
+		-- Подсадка на ступеньку (#40): пол впереди выше на 0.05…STEP_UP_MAX при почти той же нормали
+		-- (стык кусков, а не склон или трамплин) — поднимаем сани заранее, чтобы край плиты саней не
+		-- ударился о торец. Скорость считаем сами, поэтому она не теряется.
+		if not onRamp and speed > 5 and Config.STEP_UP_MAX > 0 then
+			local probe = s.Position + d * (Config.STEP_PROBE + speed * dt) + n * (Config.STEP_UP_MAX + 0.5)
+			local ahead = workspace:Raycast(probe, -n * (Config.STEP_UP_MAX + 2.5), rayParams)
+			if ahead and ahead.Instance.Name ~= "Ramp" and ahead.Normal:Dot(n) > STEP_SAME_NORMAL then
+				local rise = (ahead.Position - hit.Position):Dot(n)
+				if rise > 0.05 and rise <= Config.STEP_UP_MAX then
+					s.CFrame += n * rise
+				end
+			end
 		end
 		-- Прыжок: подброс вверх по нормали; дальше тот же путь, что и с трамплина (airborne → трюки)
 		if jumpQueued and not onRamp and not airborne and now - lastJump >= Config.JUMP_COOLDOWN then

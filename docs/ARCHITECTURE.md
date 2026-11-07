@@ -21,7 +21,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 | Папка | Куда в игре | Что там |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Props` (low-poly модели ландшафта и препятствий), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props` (low-poly модели ландшафта и препятствий), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
 | `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
 | `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (свет и осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
 
@@ -76,6 +76,31 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 сугроба (дорога, озеро). Снаружи остаётся общий `Barrier` у внешней кромки. Если санки всё же
 оказались вне трассы, сервер заканчивает заезд как `fell` (`|x| > 2·TRACK_WIDTH` или `y < −60`)
 или `stopped` (скорость ниже `STOP_SPEED` дольше `STOP_TIME`).
+
+### Профиль трассы, гладкость и островки (#40)
+- `Track.buildProfile` собирает куски через `add` (скругляет стык: переходные куски `fillet`,
+  если уклон меняется больше `SMOOTH_KINK`) или `push` (как есть — после обрыва/ускорителя).
+  У куска: `vis` — длина визуальной части сечения (поворот: борта/декор строит 1-я из
+  `CURVE_SUBSTEPS` частей пола, остальные — только `Floor`), `yawJoint`/`floorAhead` — пол
+  заходит вперёд на 1 stud перед стыком со сменой направления. Пол (`Floor`) — без сдвига по
+  высоте и встык; визуальные части — с перекрытием и сдвигом 0.03 (от мерцания).
+- `shared/Islands`: чистая баллистика (`takeoff`, `landX`, `coinArc`, `plan` — без Instance) +
+  постройка (`buildIn`, `buildIsle`, `buildGap`, `buildLauncher`). Куски `isleIn` → `gap` →
+  `isle` … → `gap` → `landing`; у `isle`/`gap` в `seg.isle` план. Ускоритель — `Ramp` с атрибутами
+  `LaunchMin`/`LaunchMax`/`Lift` (читает `SledController`: окно скорости вылета, подброс) и
+  дорожка `Boost` перед ним (обычный ускоритель: +`BOOST_ADD`, `PowerUp` → `AntiCheat.onBoost`).
+- **Smooth Terrain** (скалы под островками, стены каньона) — только на сервере и не в витрине:
+  каждая заливка запоминается в `track.clears[i]`, при выходе куска из стриминга и в
+  `Track:destroy` стирается `FillBlock(Air)` (`Islands.clear`). Луч античита (`Include` папки
+  трассы) Terrain не видит; луч санок видит, но скалы ниже траекторий. Пропасть без коллизий —
+  падение заканчивает заезд как `fell` (`y < −60`).
+- `Track:progressOf` ищет кусок в окне hint −8…+40 (куски пола поворота и переходы короткие).
+- `SafeLine.plan` пропускает `fillet` при проверке «после приземления первые 60 studs чистые».
+- `SledController`: «подсадка» на ступеньку ≤ `STEP_UP_MAX` впереди (луч из `STEP_PROBE`, та же
+  нормаль ±1.5°) — сани поднимаются по нормали до удара о торец. Код трюков не менялся.
+- Проверки (luau CLI + шимы Roblox-API с настоящей CFrame-математикой): `scratchpad/smooth/` —
+  `check_tail.luau` (стыки ур. 1–30), `isle_tail.luau` (баллистика ур. 1–50), `parts_tail.luau`
+  (Part-ы на кусок и в окне стриминга); сборка `python3 build.py <src/shared> <tail>`.
 
 ### Лобби и витрина
 
@@ -133,7 +158,8 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 
 ## Теги CollectionService
 
-`Obstacle`, `Coin`, `Gem`, `Crystal`, `Magnet`, `Boost`, `Mover`, бонусы `Shield`/`X2`/`Fuel`/`Ring`,
+`Obstacle`, `Coin`, `Gem`, `Crystal`, `Magnet`, `Boost` (в т.ч. дорожка перед ускорителем
+островков), `Mover`, бонусы `Shield`/`X2`/`Fuel`/`Ring`,
 `LobbyFlag` (флаги лобби, качает клиент).
 У лёгких препятствий — атрибут `Breakable`.
 

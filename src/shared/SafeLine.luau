@@ -65,7 +65,13 @@ function SafeLine.plan(segs: { any }, level: number): { [number]: { Row } }
 			local i = j - 1
 			local maxBlocked = math.clamp(1 + (level - 1) // 3 + i // 16, 1, 3)
 			maxBlocked = math.min(maxBlocked, lanes - 2) -- в ряду свободно ≥ 2
-			local prev = segs[j - 1]
+			-- после приземления (обрыв, островки) первые 60 studs чистые; переходные куски
+			-- скругления (#40) между приземлением и этим куском пропускаем
+			local back = j - 1
+			while segs[back] and segs[back].kind == "fillet" do
+				back -= 1
+			end
+			local prev = segs[back]
 			local safeUntil = if prev and prev.kind == "landing" then 60 else 0
 			local rows = {}
 			for row = 1, Config.OBSTACLE_ROWS do
