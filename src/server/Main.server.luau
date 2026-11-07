@@ -159,6 +159,7 @@ local function postLevel(player: Player, level: number)
 	end
 end
 local boardGui: TextLabel? = nil
+local boardNames: { [number]: string } = {} -- кэш ников: не дёргать web API 10 раз в минуту
 task.spawn(function()
 	local lobby = workspace:WaitForChild("Lobby", 30)
 	local board = lobby and lobby:FindFirstChild("Leaderboard")
@@ -169,8 +170,13 @@ task.spawn(function()
 			local lines = {}
 			for rank, entry in pages:GetCurrentPage() do
 				local id = tonumber(string.sub(entry.key, 3)) or 0
-				local okName, name = pcall(Players.GetNameFromUserIdAsync, Players, id)
-				table.insert(lines, string.format("%d. %s — ур. %d", rank, if okName then name else "?", entry.value))
+				local name = boardNames[id]
+				if not name then
+					local okName, res = pcall(Players.GetNameFromUserIdAsync, Players, id)
+					name = if okName then res else nil
+					boardNames[id] = name
+				end
+				table.insert(lines, string.format("%d. %s — ур. %d", rank, name or "?", entry.value))
 			end
 			boardGui.Text = if #lines > 0 then table.concat(lines, "\n") else "Пока пусто — будь первым!"
 		end
@@ -194,6 +200,9 @@ local function onPlayerAdded(player: Player)
 	end
 
 	Data.load(player)
+	if not player.Parent then -- вышел, пока грузился профиль
+		return
+	end
 	Tuning.loadPlayer(player) -- персональные настройки владельца для этого игрока (атрибут ConfigOverrides)
 	local d0 = Data.get(player)
 	if d0 then
@@ -266,6 +275,9 @@ type Run = {
 	magnetCoins: number?, -- монет притянуто магнитом (задание magnetCoins)
 }
 local runs: { [Player]: Run } = {}
+-- Заезд закончен, но санки/трасса ещё не убраны и персонаж не пересоздан (пауза в endRun).
+-- Пока игрок здесь, новый заезд не начинаем: иначе отложенный LoadCharacter убьёт новый заезд.
+local ending: { [Player]: boolean } = {}
 
 local startRun: (Player) -> ()
 
@@ -276,6 +288,7 @@ local function endRun(player: Player, reason: string)
 	end
 	run.ended = true
 	runs[player] = nil
+	ending[player] = true
 
 	local d = Data.get(player)
 	local level = run.level
@@ -399,6 +412,7 @@ local function endRun(player: Player, reason: string)
 		if slots[run.slot] == player then
 			slots[run.slot] = nil
 		end
+		ending[player] = nil
 		if player.Parent then
 			player:LoadCharacter()
 			if reason == "restart" then
@@ -493,7 +507,7 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 end
 
 startRun = function(player: Player)
-	if runs[player] or not player:GetAttribute("Loaded") then
+	if runs[player] or ending[player] or not player:GetAttribute("Loaded") then
 		return
 	end
 	local d = Data.get(player)
@@ -798,7 +812,7 @@ end
 Launch.OnServerEvent:Connect(function(player, power)
 	local run = runs[player]
 	local d = Data.get(player)
-	if not run or run.launched or not d or typeof(power) ~= "number" then
+	if not run or run.launched or not d or typeof(power) ~= "number" or power ~= power then
 		return
 	end
 	power = math.clamp(power, 0.25, 1)
@@ -823,7 +837,8 @@ end)
 -- Air time: монеты за время в полёте (с ограничением, чтобы не накручивали)
 Air.OnServerEvent:Connect(function(player, seconds)
 	local run = runs[player]
-	if not run or not run.launched or run.crashed or typeof(seconds) ~= "number" then
+	-- seconds ~= seconds — NaN: math.min/floor его не отсекают, и NaN попал бы в монеты профиля
+	if not run or not run.launched or run.crashed or typeof(seconds) ~= "number" or seconds ~= seconds then
 		return
 	end
 	local sec: number = seconds
@@ -876,10 +891,10 @@ Smash.OnServerEvent:Connect(function(player)
 	if not run or not run.launched or run.crashed then
 		return
 	end
-	run.smashes = (run.smashes or 0) + 1
-	if run.smashes > 40 then
+	if (run.smashes or 0) >= 40 then -- потолок за заезд: и монеты, и прогресс задания «разбей N»
 		return
 	end
+	run.smashes = (run.smashes or 0) + 1
 	local add = Tuning.forPlayer(player, function()
 		return Config.SMASH_COINS
 	end)
@@ -901,7 +916,7 @@ Trick.OnServerEvent:Connect(function(player, list, airTime)
 		return
 	end
 	run.lastTrick = now
-	local air = if typeof(airTime) == "number" then math.clamp(airTime, 0, 10) else 0
+	local air = if typeof(airTime) == "number" and airTime == airTime then math.clamp(airTime, 0, 10) else 0
 	local counts: { [string]: number } = {}
 	local distinct, rotations, grabs = 0, 0, 0
 	for i, item in list do
@@ -1095,12 +1110,14 @@ MarketplaceService.ProcessReceipt = function(info)
 	local player = Players:GetPlayerByUserId(info.PlayerId)
 	local d = player and Data.get(player)
 	local handler = PRODUCT_HANDLERS[info.ProductId]
-	if not player or not d or not handler then
+	-- профиль не загрузился (сохранение отключено) — не выдаём: покупка потерялась бы при выходе
+	if not player or not d or not handler or not Data.canSave(player) then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	d.Receipts = d.Receipts or {}
 	if table.find(d.Receipts, info.PurchaseId) then
-		return Enum.ProductPurchaseDecision.PurchaseGranted
+		-- уже выдано в этой сессии, но прошлое сохранение могло не пройти — подтверждаем только сохранённое
+		return if Data.save(player) then Enum.ProductPurchaseDecision.PurchaseGranted else Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	if runs[player] then
 		endRun(player, "back")
@@ -1115,7 +1132,9 @@ MarketplaceService.ProcessReceipt = function(info)
 		table.remove(d.Receipts, 1)
 	end
 	syncPlayer(player)
-	Data.save(player)
+	if not Data.save(player) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet -- Roblox повторит вызов; чек уже в Receipts — второй выдачи не будет
+	end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
@@ -1361,6 +1380,7 @@ Players.PlayerRemoving:Connect(function(player)
 		run.track:destroy()
 		slots[run.slot] = nil
 	end
+	ending[player] = nil
 	Rewards.onLeave(player)
 	Tuning.unloadPlayer(player)
 	local d = Data.get(player)
@@ -1381,8 +1401,7 @@ task.spawn(function()
 	end
 end)
 
+-- Сохраняем всех параллельно и ждём (лимит BindToClose — 30 с; последовательные ретраи не влезали)
 game:BindToClose(function()
-	for _, p in Players:GetPlayers() do
-		Data.save(p)
-	end
+	Data.saveAllAndWait(25)
 end)

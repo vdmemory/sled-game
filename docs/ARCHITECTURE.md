@@ -14,7 +14,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | production | тег `v*` → боевой плейс |
 | Секреты | `ROBLOX_API_KEY` (репозиторий), `UNIVERSE_ID` / `PLACE_ID` (переменные окружений staging/production) |
 
-409 «Server busy» = плейс открыт в Studio. После деплоя старые серверы живут ~25 с — перезаходить
+409 «Server busy» = плейс открыт в Studio. После деплоя старые серверы живут ~30–45 с — перезаходить
 после этого.
 
 ## Раскладка (default.project.json)
@@ -82,7 +82,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `Restart`, `Back` | Event | клиент → заново / в лобби с рогатки |
 | `RunEnded` | Event | сервер → итог заезда |
 | `TaskDone` | Event | сервер → задание выполнено |
-| `SetSetting` | Event | клиент → настройка (Sfx/Snow/Shadows) |
+| `SetSetting` | Event | клиент → настройка (Sfx/Music/Snow/Shadows) |
 | `PowerUp` | Event | клиент → подобрал бонус (x2, кольцо, магнит, щит, канистра, ускоритель) |
 | `BuyUpgrade`, `SledAction`, `TrailAction` | Function | покупки/экипировка |
 | `RewardAction` | Function | задания, сундук заданий, подарки, сундук лобби |
@@ -156,7 +156,7 @@ overrides)` пишет нужный ключ (пустой персональн�
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LaunchLevel`, `SledLevel`, `IncomeLevel`, `RocketLevel`,
 `Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings` (`Sfx`, `Snow`, `Shadows`,
-`Music`), `Daily` (задания дня), `ChestAt`, `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
+`Music`), `Daily` (задания дня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
 Onboard, Purchases, Playtime — для аналитики). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
 Если загрузка не удалась, сохранение для игрока отключается (чтобы не затереть прогресс).
 Доска лидеров — `OrderedDataStore` `BestLevel_v1`.

@@ -156,7 +156,7 @@ function UI.button(kind: string, text: string, props: { [string]: any }): TextBu
 		Parent = b,
 	})
 	UI.corner(shine, 1000)
-	local label = UI.text({
+	UI.text({
 		Name = "Label",
 		Text = text,
 		Position = UDim2.new(0, 8, 0, 4),
