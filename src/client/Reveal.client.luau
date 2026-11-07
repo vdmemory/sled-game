@@ -76,7 +76,9 @@ local function partKey(p: BasePart, origin: CFrame): string
 		return math.floor(v * 20 + 0.5) / 20
 	end
 	local c = p.Color
-	return string.format("%s|%s|%s,%s,%s|%d,%d,%d", p.Shape.Name, tostring(p.Size), q(rel.X), q(rel.Y), q(rel.Z), math.floor(c.R * 255), math.floor(c.G * 255), math.floor(c.B * 255))
+	-- Shape есть только у Part (у WedgePart/MeshPart — нет): для них подпись по классу
+	local shape = if p:IsA("Part") then p.Shape.Name else p.ClassName
+	return string.format("%s|%s|%s,%s,%s|%d,%d,%d", shape, tostring(p.Size), tostring(q(rel.X)), tostring(q(rel.Y)), tostring(q(rel.Z)), math.floor(c.R * 255), math.floor(c.G * 255), math.floor(c.B * 255))
 end
 local function partKeys(m: Model): { [string]: number }
 	local keys = {}

@@ -16,6 +16,34 @@
   ставит `AutoLowFps` вместо прямого отключения Bloom/облаков; атрибут `LowQuality` → `GfxTier`.
 - `Config.GRAPHICS` (+ TUNABLES «Графика»): × Bloom, × DOF, × насыщенности, × лучей, мин. контраст,
   виньетка, порог FPS.
+## Рефакторинг без изменения поведения + статическая проверка (#17, #18, #23)
+- **`scripts/check.sh`** (#23): `rojo sourcemap` → `luau-lsp analyze` (типы Roblox API,
+  `globalTypes.None` с тега 1.70.1) → `selene` (`std = "roblox"`, `selene.toml`) →
+  `luau-compile --null` по всем файлам; инструменты с фиксированными версиями ставит сам в
+  `.tools/`. Встроен в `scripts/publish.sh` до публикации (ошибка — деплой отменён; нет сети —
+  предупреждение; `SKIP_CHECK=1`). Ловит намеренно внесённые `Enum.AnalyticsEconomyTransactionType.Reward`
+  и пропавший `local C = UI.C` (19 замечаний в HUD). На текущем коде — 0 замечаний.
+- **Найдено и исправлено инструментами:** `Reveal.partKey` брал `p.Shape` у любой `BasePart`
+  (у WedgePart/MeshPart свойства нет — ошибка при новых деталях обвеса); `Crystal` — `part.Position`
+  у непроверенного `Instance` (добавлен `IsA("BasePart")`); `LoadCharacter` → `LoadCharacterAsync`
+  (deprecated, то же поведение по документации); дубль ветки `hide(true)` в `Tutorial`;
+  неиспользуемые переменные; ложные срабатывания — точечные приведения типов с комментарием.
+  При разбиении luau-lsp поймал цикл require `PlayerState ↔ Runs` (в Roblox — ошибка загрузки).
+- **`Main.server` 1510 → 81 строка** (#17): `Remotes`, `Environment`, `Sleds`, `PlayerState`,
+  `Runs`, `RunEvents`, `Pickups`, `Shop`, `Purchases`, `DevTools` (карта — `docs/ARCHITECTURE.md`).
+  Перенос строк без правок логики; порядок запуска прежний; дубль `setupCoin` → `takeCoin`.
+- **`SledController` 1282 → 384** (#18, идея #42): `client/Sled/State` (общее состояние `st.*` и
+  объекты для HUD/эффектов — по-прежнему под `SledController`), `Input`, `Launch`, `Tricks`,
+  `Contacts`.
+- **`Track` 1289 → папка `shared/Track/`**: `init` (класс, 558), `Profile`, `Sections`, `Dress`,
+  `Items`; **`Props` 1186 → `shared/Props/`**: фасад `init` + `Base`, `Vehicles`, `Obstacles`,
+  `Decor`, `Worlds`, `LobbyDecor`. API `Track.*`/`Props.*` прежний.
+- **Сверка трассы до/после** (детерминизм по seed, luau CLI с шимами Roblox API): 70 уровней
+  (7 миров × 2 круга) — все куски, витрина лобби, `Lobby.build`, `Lobby.dress` × 7 — отпечаток
+  2 724 588 инстансов (класс, имя, все свойства, атрибуты, теги, Terrain) совпадает 1:1; гладкость
+  стыков (31 590, 0 нарушений), баллистика островков 1–50, Part-ы на кусок — 1:1.
+- Документация: `ARCHITECTURE` (карта модулей), `CLAUDE.md`, `ENGINEERING` («Инструменты
+  проверки»), `PLAYBOOK`, роли агентов — новые пути.
 
 ## Островки над пропастью, гладкость трассы, оформление (#40)
 - **Островки** (`shared/Islands`, новый модуль): с 2-го уровня обязательная цепочка на 52% уровня

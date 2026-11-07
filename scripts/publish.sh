@@ -13,6 +13,13 @@ ATTEMPTS="${ATTEMPTS:-6}"
 
 [ -f "$FILE" ] || { echo "Нет файла $FILE"; exit 1; }
 
+# Статическая проверка (scripts/check.sh: luau-lsp с типами Roblox, selene, luau-compile) — до
+# публикации: ошибка в коде останавливает деплой. Инструменты check.sh скачивает сам (фиксированные
+# версии); если скачать не вышло — предупреждение, деплой продолжается. SKIP_CHECK=1 — пропустить.
+if [ -f scripts/check.sh ] && [ -z "${SKIP_CHECK:-}" ]; then
+  bash scripts/check.sh || { echo "::error::scripts/check.sh нашёл ошибки — публикация отменена"; exit 1; }
+fi
+
 # Иконки интерфейса: новые PNG из assets/ui загружаются в Roblox (нужны права ключа на
 # Assets API). Если появились новые ID — пересобираем место, чтобы они попали в игру.
 # ID печатаются в лог деплоя; их сохраняют в репозиторий (assets/ui/decals.json).

@@ -23,7 +23,51 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | --- | --- | --- |
 | `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `WorldLook` (пресеты света и пост-обработки миров, уровни графики), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props` (low-poly модели ландшафта и препятствий), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
 | `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты; детектор FPS → `AutoLowFps`), `PostFX` (свет и пост-обработка миров по пресетам `shared/WorldLook`: Lighting, Atmosphere, Clouds, Sky, ColorCorrection, Bloom, SunRays, DepthOfField — с твином; уровень графики 1–3 → атрибут `GfxTier`; виньетка скорости), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track/` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби; см. «Карта модулей»), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props/` (low-poly модели ландшафта и препятствий, фасад `Props.*`), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
+| `src/server` | `ServerScriptService.Server` | `Main.server` (только порядок запуска и связывание) + `Remotes`, `Environment`, `Sleds`, `PlayerState`, `Runs`, `RunEvents`, `Pickups`, `Shop`, `Purchases`, `DevTools` (см. «Карта модулей»), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (посадка и кадр физики санок) + `Sled/` (`State`, `Input`, `Launch`, `Tricks`, `Contacts` — см. «Карта модулей»), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты; детектор FPS → `AutoLowFps`), `PostFX` (свет и пост-обработка миров по пресетам `shared/WorldLook`: Lighting, Atmosphere, Clouds, Sky, ColorCorrection, Bloom, SunRays, DepthOfField — с твином; уровень графики 1–3 → атрибут `GfxTier`; виньетка скорости), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
+
+## Карта модулей (после разбиения #17/#18, строки — 2026-11-08)
+
+Порог — файл ≤ ~600 строк. Папка с `init.luau` в Rojo — ModuleScript с дочерними модулями:
+`require(Shared.Track)` / `require(Shared.Props)` по-прежнему отдают весь API.
+
+| Модуль | Строк | Что внутри |
+| --- | --- | --- |
+| `server/Main.server` | 81 | порядок запуска: `Tuning.init` → ремоуты в `ReplicatedStorage` → `Sleds.setup` (группа `Riders`, `workspace.Sleds`) → `Environment.setup` (свет) → `Track.buildLobby` → `Weekly.start` → `*.start()` обработчиков → `Runs.startLoop` (Heartbeat) → игроки, автосейв, `BindToClose` |
+| `server/Remotes` | 37 | все ремоуты (папка `Remotes`); `Remotes.folder` кладёт в `ReplicatedStorage` Main |
+| `server/Environment` | 48 | Lighting, облака, цветокоррекция, bloom |
+| `server/Sleds` | 145 | `makeSled` (сиденье, модель/редкость/тиры, след, ракеты, крепления), `ragdoll`, `setRider` |
+| `server/PlayerState` | 158 | `sync` (профиль → атрибуты), `onPlayerAdded`, `postLevel` (OrderedDataStore `BestLevel_v1`), `TutorialStep`, `SetSetting` |
+| `server/Runs` | 532 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`), зона посадки `LaunchPad`, `Restart`/`Back`, Heartbeat (прогресс, античит, финиш, остановка), `onLeave` |
+| `server/RunEvents` | 215 | `Launch`, `Air`, `Crash`, `Smash`, `Trick` |
+| `server/Pickups` | 188 | монеты (касание, магнит `CoinGrab`, комбо), `PowerUp` (x2, кольца, канистра, ускорители), гемы, кристалл |
+| `server/Shop` | 185 | `SledAction`, `TrailAction`, `RewardAction`, `BuyUpgrade`, `WorldAction` |
+| `server/Purchases` | 71 | геймпасс x2, `PRODUCT_HANDLERS`, `ProcessReceipt` (дедуп чеков) |
+| `server/DevTools` | 109 | `DevAction` (только `game.CreatorId`) |
+| `client/SledController` | 384 | посадка/высадка, кадр физики (скорость вдоль склона, руль, подсадка, прыжок, приземление) |
+| `client/Sled/State` | 133 | общее состояние санок (`st.speed`, `st.sled`, `st.trick`…) и объекты под контроллером (`State`, `Sfx`, `RequestLaunch`, `RocketInput`, `TrickPopup`) |
+| `client/Sled/Input` | 109 | руль: клавиатура, PlayerModule, свайп с кольцом (`Stick`) |
+| `client/Sled/Launch` | 117 | рогатка: натяжение, выстрел `Launch(power)` |
+| `client/Sled/Tricks` | 345 | ручные и авто-трюки, `Tricks.land` (итог полёта), `Tricks.air` (кадр в воздухе), кнопки прыжка/ракеты |
+| `client/Sled/Contacts` | 386 | касания (авария, разбивание, щит, бонусы, гемы, кристалл, ускорители), `Contacts.scan` (монеты по отрезку пути, магнит) |
+| `shared/Track/init` | 558 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `destroy` |
+| `shared/Track/Profile` | 244 | `buildProfile` — цепочка кусков уровня (тип `Segment`) |
+| `shared/Track/Sections` | 167 | профили сечений, цвета снега, `sidePoint`, поперечное сечение куска |
+| `shared/Track/Dress` | 231 | оформление миров вдоль трассы и разметка на ней |
+| `shared/Track/Items` | 189 | монеты, гемы, магнит, бонусы, кристалл, `tagObstacle` |
+| `shared/Props/init` | 16 | фасад: подключает модули категорий, отдаёт таблицу `Props` |
+| `shared/Props/Base` | 100 | `part`, `deco`, `pick`, надписи, колёса, общие цвета |
+| `shared/Props/Vehicles` | 207 | машины, трафик, поезд, канатка, знаки |
+| `shared/Props/Obstacles` | 337 | препятствия и `Props.obstacle(theme, …)` |
+| `shared/Props/Decor` | 271 | деревья, постройки, горы, трамплин, шар |
+| `shared/Props/Worlds` | 234 | модели миров 4–7 |
+| `shared/Props/LobbyDecor` | 103 | костёр, флагшток, гирлянда |
+
+Зависимости сервера без циклов: `Remotes`, `Sleds` ← `PlayerState` ← `Runs` ← `RunEvents`,
+`Pickups`, `Shop`, `Purchases`, `DevTools` ← `Main`. Клиент: `State` ← `Input`, `Launch` ←
+`Tricks`; `State` ← `Contacts`; все ← `SledController` (вызывает `State.init(script)` до require
+остальных). Цикл require `luau-lsp` показывает ошибкой (`scripts/check.sh`).
 
 ## Как устроен заезд
 
@@ -107,7 +151,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 Сервер (`Lobby.build` через `Track.buildLobby`) строит общую архитектуру: площадку, плиту спавна,
 пирс к обрыву с фонарями и гирляндами, арку-вывеску (`ArchBeam.Sign`), подиумы саней, табло,
 костёр, флагштоки (тег `LobbyFlag`, атрибут `BaseCF`), спавн; под стартовой площадкой витрины —
-невидимый `PreviewFloor` и зону посадки `LaunchPad` (в `Main.server`). Всё, что зависит от мира,
+невидимый `PreviewFloor` и зону посадки `LaunchPad` (в `server/Runs`). Всё, что зависит от мира,
 у каждого игрока своё и не реплицируется: `LobbyScene.client` при входе и при изменении
 `Level`/`FarmWorld`/`InRun` (вне заезда) уничтожает старую сцену и строит заново
 `Track.new(-1, уровень, 0, previewOrigin, Config.LOBBY_PREVIEW_SEGMENTS)` (папка `TrackPreview`,
@@ -195,7 +239,7 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 восстановление общих (pcall + rethrow). Это безопасно только для синхронного `fn` — Luau не
 прерывает поток до первого yield, поэтому другие игроки подмены не видят; внутри `fn` нельзя
 `task.wait`/DataStore/`InvokeClient`. Повторный вход для того же игрока — просто вызов. Обёрнуто
-в `Main.server`: `BuyUpgrade`, `SledAction`, `TrailAction`, расчёт наград в `endRun` (до первого
+в `server/Shop` (`BuyUpgrade`, `SledAction`, `TrailAction`) и `server/Runs` (расчёт наград в `endRun` (до первого
 yield), `Launch` (сила рогатки), монеты за полёт/трюки/разбитые препятствия/кристалл/кольца/x2,
 `awardCoin`, радиус магнита, генерация трассы (`Track.new`, `ensureAround`).
 
@@ -236,7 +280,7 @@ Onboard, Purchases, Playtime — для аналитики), `Tutorial` (бит�
 перезайди» (сейв в DataStore не тронут, профиль-заглушка не создаётся). В Studio вместо кика —
 игра без сохранения. `ProcessReceipt` выдаёт покупку только при `canSave` и подтверждает только
 после успешной записи.
-Доска лидеров «всё время» — `OrderedDataStore` `BestLevel_v1` (пишет `Main.postLevel`). Поля
+Доска лидеров «всё время» — `OrderedDataStore` `BestLevel_v1` (пишет `PlayerState.postLevel`). Поля
 лидерборда недели (#26): `Title` (id из `Config.WEEKLY.TITLES`, `""` — нет), `TitleUntil` (unix,
 сброс недели), `TitleWeek` (неделя, в которую титул проверен), `WeekPlay = { key, worlds["N"],
 clean }` (где игрок попал в доски на неделе `key`); `migrate` чинит типы и дополняет `WeekPlay`.

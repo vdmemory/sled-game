@@ -23,7 +23,8 @@ UI/UX (читаемость на телефоне, крупные кнопки, 
 - `src/shared/SledModels.luau` — только палитра и материалы (`look.main/accent`, цвета тиров,
   `ROPE_COLORS`); геометрию, крепления и обвес делает `vehicle-engineer` — ему ставишь задачу
   «как должно выглядеть» с референсами.
-- `src/shared/Props.luau` — low-poly модели ландшафта и препятствий (форма и цвет; расстановку
+- `src/shared/Props/` — low-poly модели (фасад `init` + `Base`, `Vehicles`, `Obstacles`, `Decor`,
+  `Worlds`, `LobbyDecor`) ландшафта и препятствий (форма и цвет; расстановку
   решает `track-architect`).
 - `src/shared/UIKit.luau` — дизайн-система: `UI.C` цвета, `UI.KIND` кнопки, `UI.panel`, `UI.tile`,
   `UI.badge`, `UI.currency`, `UI.icon`/`UI.iconText` (3D-иконки из `assets/ui`, фолбэк эмодзи),
@@ -54,7 +55,7 @@ UI/UX (читаемость на телефоне, крупные кнопки, 
 ## Как работать
 1. Посмотри референсы (скриншоты владельца, видео Sled Surfers, Roblox-игры того же жанра,
    Dribbble/Behance «game UI casual») и опиши в двух строках, что берёшь.
-2. Правь, проверь синтаксис (`luau-compile --null`), запиши в `docs/CHANGELOG.md`.
+2. Правь, проверь `scripts/check.sh`, запиши в `docs/CHANGELOG.md`.
 3. Попроси `qa-tester` сделать скриншоты на staging (лобби, заезд, окно) и сверь с замыслом.
 4. В отчёте: что изменилось визуально, где смотреть (экран, тир, мир), что осталось на доработку.
 

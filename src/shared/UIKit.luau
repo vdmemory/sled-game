@@ -50,7 +50,7 @@ function UI.new(class: string, props: { [string]: any }?): any
 		t.TextScaled = true
 		t.BackgroundTransparency = 1
 	end
-	for k, v in props or {} do
+	for k, v in (props or {}) :: { [string]: any } do
 		if k ~= "Parent" and not CUSTOM[k] then
 			(o :: any)[k] = v
 		end

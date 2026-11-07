@@ -25,8 +25,8 @@ create.roblox.com сверяешь через Context7. Стандарт — `do
   `ROPE_GLOW`, `SledModels.build` (точка входа, возвращает высоту посадки).
 - `src/shared/Config.luau` → `SLEDS` (`id`, `name`, `img`, `world`, `bonus`, `prices`, `main`,
   `accent`), `TIERS.Sled/Rocket/Launch` — цифры и названия согласуй с `game-designer`.
-- `src/server/Main.server.luau` → `makeSled` (невидимый `VehicleSeat` + модель + `extras`,
-  атрибуты `RocketNozzle`, `RocketTier`), перестройка рогатки по тиру.
+- `src/server/Sleds.luau` → `makeSled` (невидимый `VehicleSeat` + модель + `extras`,
+  атрибуты `RocketNozzle`, `RocketTier`); перестройка рогатки по тиру — `server/Runs.luau` (`startRun`).
 - `src/client/DevPanel.client.luau` — превью моделей во вкладках Сани/Ракета/Рогатка.
 - `src/client/Effects.client.luau` — пламя по `RocketNozzle` (направление и размер зависят от
   твоей геометрии).
@@ -58,7 +58,7 @@ create.roblox.com сверяешь через Context7. Стандарт — `do
   точку сопла — пламя из `Effects` должно выходить назад, не в корпус и не в персонажа.
 - Рогатка/запуск: `slingshot(tier)` — столбы + резинка-Beam; каждый тир отличается силуэтом
   (форма столбов, навершия, свечение, цвет резинки), а не только цветом.
-- Проверка: `luau-compile --null`, затем `qa-tester` снимает скриншоты модели в лобби
+- Проверка: `scripts/check.sh`, затем `qa-tester` снимает скриншоты модели в лобби
   (витрина), в заезде (сзади-сверху) и в DEV-превью на тирах 0/5/10.
 
 ## Как работать
