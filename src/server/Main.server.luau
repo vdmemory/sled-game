@@ -47,6 +47,7 @@ local BuyUpgrade: RemoteFunction = remote("RemoteFunction", "BuyUpgrade")
 local PowerUp: RemoteEvent = remote("RemoteEvent", "PowerUp") -- подобрал бонус на трассе (x2 / кольцо)
 local DevAction: RemoteFunction = remote("RemoteFunction", "DevAction") -- панель разработчика (только владелец)
 local WorldAction: RemoteFunction = remote("RemoteFunction", "WorldAction") -- фарм пройденного мира / пропуск мира за Robux
+local TutorialStep: RemoteEvent = remote("RemoteEvent", "TutorialStep") -- обучение: шаг i пройден (0 — пропустить всё)
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ Мир
@@ -104,6 +105,7 @@ end
 Track.buildLobby()
 
 ------------------------------------------------------------------ Игроки
+local TUTORIAL_ALL = 2 ^ #Config.TUTORIAL.STEPS - 1 -- все шаги обучения пройдены
 local function syncPlayer(player: Player)
 	local d = Data.get(player)
 	if not d then
@@ -134,6 +136,8 @@ local function syncPlayer(player: Player)
 		table.insert(ownedTrails, k)
 	end
 	player:SetAttribute("OwnedTrails", table.concat(ownedTrails, ","))
+	player:SetAttribute("Tutorial", d.Tutorial or 0) -- client/Tutorial
+	player:SetAttribute("Runs", (d.Stats and d.Stats.Runs) or 0)
 	for key, v in d.Settings do
 		player:SetAttribute("Set" .. key, v)
 	end
@@ -207,6 +211,9 @@ local function onPlayerAdded(player: Player)
 	local d0 = Data.get(player)
 	if d0 then
 		Analytics.onboarding(player, d0, 1)
+		if ((d0.Stats and d0.Stats.Runs) or 0) >= Config.TUTORIAL.MAX_RUNS then
+			d0.Tutorial = TUTORIAL_ALL -- старые игроки: обучение не нужно
+		end
 		player:SetAttribute("JoinedAt", os.clock())
 	end
 	if Config.GAMEPASS_X2_COINS ~= 0 then
@@ -685,6 +692,27 @@ do
 	end)
 end
 
+-- Обучение (client/Tutorial): клиент сообщает показанный шаг. Бит ставится один раз, поэтому
+-- спам безвреден (≤ N+1 событий аналитики за всю жизнь игрока); награды за шаги нет.
+TutorialStep.OnServerEvent:Connect(function(player, step)
+	local d = Data.get(player)
+	if not d or typeof(step) ~= "number" or step ~= step // 1 or step < 0 or step > #Config.TUTORIAL.STEPS then
+		return
+	end
+	local mask = d.Tutorial or 0
+	local new = if step == 0 then TUTORIAL_ALL else bit32.bor(mask, 2 ^ (step - 1))
+	if new == mask then
+		return
+	end
+	d.Tutorial = new
+	player:SetAttribute("Tutorial", new)
+	if step == 0 then
+		Analytics.custom(player, "TutorialSkip", (d.Stats and d.Stats.Runs) or 0)
+	else
+		Analytics.custom(player, "TutorialStep", step)
+	end
+end)
+
 SetSetting.OnServerEvent:Connect(function(player, key, value)
 	local d = Data.get(player)
 	if not d or typeof(key) ~= "string" or typeof(value) ~= "boolean" or d.Settings[key] == nil then
@@ -1128,6 +1156,11 @@ DevAction.OnServerInvoke = function(player, action, a, b, c)
 			d.OwnedSleds[model.id .. ":" .. k] = true
 		end
 		d.Sled, d.SledRarity = model.id, r
+	elseif action == "resetTutorial" then
+		d.Tutorial = 0
+		if d.Stats then
+			d.Stats.Runs = 0 -- подсказки только для первых заездов; Onboard не трогаем (воронка не задвоится)
+		end
 	elseif action == "resetDaily" then
 		d.Daily = nil
 		d.ChestAt = 0
