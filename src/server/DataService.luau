@@ -1,9 +1,21 @@
--- Сохранение прогресса через DataStore.
--- Для продакшена позже стоит перейти на ProfileStore (защита от дюпа и одновременных сессий).
+-- Сохранение прогресса через DataStore с сессионной блокировкой (свой lock на UpdateAsync).
+-- В записи поле `_session = { jobId, ts }`: пишет только сервер, чей jobId в блокировке.
+-- Подробно — docs/ARCHITECTURE.md, раздел «Сохранение».
 
 local DataStoreService = game:GetService("DataStoreService")
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
 
 local store = DataStoreService:GetDataStore("SledData_v1")
+
+-- В Studio JobId пустой — свой уникальный id, чтобы две сессии Studio не считались одним сервером
+local JOB_ID = if game.JobId ~= "" then game.JobId else "studio-" .. HttpService:GenerateGUID(false)
+local LOCK_POLL = 5 -- секунд между попытками взять чужую блокировку
+local KICK_LOAD = "Не удалось загрузить прогресс, перезайди. Прогресс цел."
+local KICK_LOST = "Прогресс открыт на другом сервере, перезайди."
 
 local DEFAULT = {
 	Coins = 0,
@@ -36,19 +48,23 @@ local function deepCopy(t: any): any
 	return c
 end
 
-type Profile = { data: { [string]: any }, canSave: boolean }
+type Profile = { data: { [string]: any }, canSave: boolean, released: boolean?, busy: boolean? }
 
 local Data = {}
 local profiles: { [Player]: Profile } = {}
+local shuttingDown = false -- после BindToClose каждое сохранение снимает блокировку
 
-local function retry(fn: () -> any): (boolean, any)
-	for attempt = 1, 3 do
+local function retry(fn: () -> any, attempts: number?): (boolean, any)
+	local n = attempts or 3
+	for attempt = 1, n do
 		local ok, res = pcall(fn)
 		if ok then
 			return true, res
 		end
 		warn("[Data] попытка " .. attempt .. ": " .. tostring(res))
-		task.wait(attempt * 2)
+		if attempt < n then
+			task.wait(attempt * 2)
+		end
 	end
 	return false, nil
 end
@@ -57,43 +73,114 @@ local function key(player: Player): string
 	return "u_" .. player.UserId
 end
 
-function Data.load(player: Player)
-	local ok, saved = retry(function()
-		return store:GetAsync(key(player))
+-- Блокировка чужая и живая (не наша и обновлялась недавно)
+local function lockedByOther(rec: any, now: number): boolean
+	local s = type(rec) == "table" and rec._session
+	return type(s) == "table" and s.jobId ~= JOB_ID and now - (tonumber(s.ts) or 0) < Config.DATA_LOCK_STALE
+end
+
+-- Одна попытка взять блокировку. Возвращает (ok, запись|nil, "taken"|"locked")
+local function tryLock(k: string, force: boolean): (boolean, any, string)
+	local state = "taken"
+	local ok, rec = retry(function()
+		return store:UpdateAsync(k, function(old)
+			state = "taken" -- функция может вызываться повторно — состояние считаем заново
+			local now = os.time()
+			if not force and lockedByOther(old, now) then
+				state = "locked"
+				return nil -- отмена записи
+			end
+			local out = if type(old) == "table" then old else {}
+			out._session = { jobId = JOB_ID, ts = now }
+			return out
+		end)
+	end, 5)
+	return ok, rec, state
+end
+
+-- Запись профиля, только если блокировка наша (или свободна). release — снять блокировку.
+-- Возвращает (успех записи, блокировку перехватили)
+local function write(k: string, data: { [string]: any }, release: boolean): (boolean, boolean)
+	local lost = false
+	local ok = retry(function()
+		store:UpdateAsync(k, function(old)
+			lost = false
+			local s = type(old) == "table" and old._session
+			if type(s) == "table" and s.jobId ~= JOB_ID then
+				lost = true -- другой сервер забрал профиль: не затираем его данные
+				return nil
+			end
+			local out = table.clone(data) -- снимок на момент записи (вложенные таблицы не мутируем)
+			out._session = if release then nil else { jobId = JOB_ID, ts = os.time() }
+			return out
+		end)
 	end)
+	return ok and not lost, lost
+end
+
+local function migrate(data: { [string]: any })
+	-- Палитра «Цвета ватрушки» убрана: купленные цвета возвращаем монетами (один раз)
+	if type(data.OwnedSkins) == "table" then
+		local PRICES = { ice = 150, lime = 300, melon = 600, night = 900, lava = 1500, gold = 3000, galaxy = 6000 }
+		for id in data.OwnedSkins do
+			data.Coins += PRICES[id] or 0
+		end
+		data.OwnedSkins = nil
+		data.Skin = nil
+	end
+	-- новые ключи настроек (например, Music) у старых профилей
+	if type(data.Settings) == "table" then
+		for k, v in DEFAULT.Settings do
+			if data.Settings[k] == nil then
+				data.Settings[k] = v
+			end
+		end
+	end
+end
+
+-- Загружает профиль и берёт блокировку. nil — профиля нет (игрок вышел или кикнут).
+function Data.load(player: Player)
+	local k = key(player)
+	local deadline = os.clock() + Config.DATA_LOCK_WAIT
+	local ok, saved, state = tryLock(k, false)
+	-- другой сервер ещё держит профиль (быстрый переход): ждём, пока он сохранит и снимет блокировку
+	while ok and state == "locked" and player.Parent and os.clock() < deadline do
+		task.wait(LOCK_POLL)
+		ok, saved, state = tryLock(k, false)
+	end
+	if ok and state == "locked" and player.Parent then
+		-- не снял за DATA_LOCK_WAIT — забираем; запись старого сервера после этого будет отклонена
+		warn("[Data] забираю блокировку " .. player.Name .. " у " .. tostring(saved and saved._session and saved._session.jobId))
+		ok, saved, state = tryLock(k, true)
+	end
 	if not player.Parent then
-		-- вышел, пока ждали DataStore: PlayerRemoving уже прошёл, профиль не регистрируем —
-		-- иначе он висел бы в памяти и автосейв писал бы устаревшие данные поверх другого сервера
+		-- вышел, пока ждали DataStore: профиль не регистрируем, взятую блокировку снимаем
+		if ok and state == "taken" and type(saved) == "table" then
+			saved._session = nil
+			task.spawn(write, k, saved, true)
+		end
+		return nil
+	end
+	if not ok then
+		-- #16: не пускаем играть «с нулём» — кик, сейв в DataStore не тронут
+		warn("[Data] не удалось загрузить " .. player.Name)
+		if RunService:IsStudio() then
+			-- Studio без доступа к API: играть можно, но без сохранения
+			profiles[player] = { data = deepCopy(DEFAULT), canSave = false }
+			return profiles[player].data
+		end
+		player:Kick(KICK_LOAD)
 		return nil
 	end
 	local data = deepCopy(DEFAULT)
-	if ok and type(saved) == "table" then
-		for k, v in saved do
-			data[k] = v
+	if type(saved) == "table" then
+		for f, v in saved do
+			data[f] = v
 		end
-		-- Палитра «Цвета ватрушки» убрана: купленные цвета возвращаем монетами (один раз)
-		if type(data.OwnedSkins) == "table" then
-			local PRICES = { ice = 150, lime = 300, melon = 600, night = 900, lava = 1500, gold = 3000, galaxy = 6000 }
-			for id in data.OwnedSkins do
-				data.Coins += PRICES[id] or 0
-			end
-			data.OwnedSkins = nil
-			data.Skin = nil
-		end
-		-- новые ключи настроек (например, Music) у старых профилей
-		if type(data.Settings) == "table" then
-			for k, v in DEFAULT.Settings do
-				if data.Settings[k] == nil then
-					data.Settings[k] = v
-				end
-			end
-		end
+		data._session = nil
+		migrate(data)
 	end
-	-- Если загрузка не удалась, не сохраняем — иначе затрём реальный прогресс пустым
-	profiles[player] = { data = data, canSave = ok }
-	if not ok then
-		warn("[Data] не удалось загрузить " .. player.Name .. ", сохранение отключено")
-	end
+	profiles[player] = { data = data, canSave = true }
 	return data
 end
 
@@ -102,26 +189,44 @@ function Data.get(player: Player)
 	return p and p.data
 end
 
--- Можно ли сохранять профиль (загрузился без ошибок)
+-- Можно ли сохранять профиль (загрузился и блокировка наша)
 function Data.canSave(player: Player): boolean
 	local p = profiles[player]
-	return p ~= nil and p.canSave
+	return p ~= nil and p.canSave and not p.released
 end
 
 -- Возвращает true, если запись прошла
-function Data.save(player: Player): boolean
+function Data.save(player: Player, release: boolean?): boolean
 	local p = profiles[player]
-	if not p or not p.canSave then
+	if not p or not p.canSave or p.released then
 		return false
 	end
-	local ok = retry(function()
-		store:SetAsync(key(player), p.data)
-	end)
+	-- записи одного профиля по очереди: иначе автосейв, закончившийся после release, снова взял бы блокировку
+	while p.busy do
+		task.wait(0.1)
+	end
+	if not p.canSave or p.released then
+		return false
+	end
+	p.busy = true
+	local rel = release == true or shuttingDown
+	local ok, lost = write(key(player), p.data, rel)
+	p.busy = false
+	if lost then
+		-- профиль на другом сервере: дальше этот сервер ничего не пишет
+		p.canSave = false
+		warn("[Data] блокировку " .. player.Name .. " перехватил другой сервер")
+		if player.Parent and not shuttingDown then
+			player:Kick(KICK_LOST)
+		end
+	elseif ok and rel then
+		p.released = true
+	end
 	return ok
 end
 
 function Data.release(player: Player)
-	Data.save(player)
+	Data.save(player, true)
 	profiles[player] = nil
 end
 
@@ -131,13 +236,14 @@ function Data.saveAll()
 	end
 end
 
--- Для BindToClose: все сохранения параллельно, ждём завершения не дольше timeout секунд
+-- Для BindToClose: все сохранения параллельно (со снятием блокировки), ждём не дольше timeout секунд
 function Data.saveAllAndWait(timeout: number)
+	shuttingDown = true
 	local pending = 0
 	for player in profiles do
 		pending += 1
 		task.spawn(function()
-			Data.save(player)
+			Data.save(player, true)
 			pending -= 1
 		end)
 	end
