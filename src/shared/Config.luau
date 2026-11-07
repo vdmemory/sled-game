@@ -200,7 +200,7 @@ Config.TASK_POOL = {
 	{ id = "air", text = "Пробудь в воздухе %d с", targets = { 15, 45 }, gems = 5, icon = "parachute" },
 	{ id = "airRun", text = "Пробудь в воздухе %d с за один заезд", targets = { 6, 15 }, gems = 5, icon = "parachute", max = true },
 	{ id = "flips", text = "Сделай %d сальто", targets = { 3, 10 }, gems = 5, icon = "flip" },
-	{ id = "speed", text = "Разгонись до %d км/ч", targets = { 120, 200 }, gems = 5, icon = "stopwatch", max = true },
+	{ id = "speed", text = "Разгонись до %d км/ч", targets = { 100, 160 }, gems = 5, icon = "stopwatch", max = true }, -- км/ч = studs/с × 1.1; без ракеты терминал 70–113, 200 требовал Сани ≥ 34 ур.
 	{ id = "smash", text = "Разбей %d %s", forms = { "препятствие", "препятствия", "препятствий" }, targets = { 5, 15 }, gems = 4, icon = "smash" },
 	{ id = "boosts", text = "Проедь по %d %s", forms = { "ускорителю", "ускорителям", "ускорителям" }, targets = { 4, 12 }, gems = 4, icon = "bolt" },
 	-- бонусы на трассе

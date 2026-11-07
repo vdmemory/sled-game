@@ -197,11 +197,11 @@ local function reveal(kind: string, tierName: string)
 	UI.outline(wasLabel, 2.5)
 	local top = UI.text({ Text = "НОВОЕ УЛУЧШЕНИЕ!", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.76), Size = UDim2.fromOffset(420, 34), TextColor3 = Color3.fromRGB(255, 215, 70), TextTransparency = 1, Parent = root })
 	UI.outline(top, 3)
-	local title = UI.text({ Text = "ПОЛУЧЕНО: " .. UI.upper(tierName) .. "!", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.85), Size = UDim2.fromOffset(860, 74), Outline = 5, Parent = root })
+	local title = UI.text({ Text = "ПОЛУЧЕНО: " .. UI.upper(tierName) .. "!", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.84), Size = UDim2.fromOffset(860, 74), Outline = 5, Parent = root })
 	local tScale = Instance.new("UIScale")
 	tScale.Scale = 0
 	tScale.Parent = title
-	local btn = UI.button("green", "ОТЛИЧНО!", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.95), Size = UDim2.fromOffset(220, 52), Visible = false, Parent = root })
+	local btn = UI.button("green", "ОТЛИЧНО!", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.95), Size = UDim2.fromOffset(240, 64), Visible = false, Parent = root }) -- 595–659 из 660; заголовок кончается на 591
 
 	-- белая вспышка (вход и момент смены модели)
 	local flash = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.25, Parent = gui })

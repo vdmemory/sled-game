@@ -628,23 +628,23 @@ function SledModels.extras(parent: Instance, base: CFrame, id: string, sledTier:
 			b:cyl(0.24, 0.06, p0 + Vector3.new(0, 0.7, 1.25), Vector3.new(0, 0.5, 1), BLACK)
 		end
 	end
+	-- Тиры 9–10 — за спиной персонажа (у спойлера): камера сзади-сверху, спереди их закрывал аватар
 	if sledTier >= 9 then -- сияние: искры и тёплый свет
-		local core = b:ball(0.2, CFrame.new(0, 0.2, 0), WHITE, nil, nil)
+		local core = b:ball(0.2, CFrame.new(0, back[2] + 0.4, back[1]), WHITE, nil, nil)
 		core.Transparency = 1
 		local sp = Instance.new("Sparkles")
 		sp.SparkleColor = Color3.fromRGB(255, 225, 120)
 		sp.Parent = core
 	end
-	if sledTier >= 10 then -- корона чемпиона спереди
-		local lp = m.lights
-		local c = CFrame.new(0, lp.Y + 0.55, lp.Z + 0.1)
+	if sledTier >= 10 then -- корона чемпиона над крылом спойлера (крыло на back[2] + 0.42)
+		local c = CFrame.new(0, back[2] + 1.05, back[1] + 0.2)
 		local gold = Color3.fromRGB(255, 205, 60)
 		b:cyl(0.9, 0.3, c.Position, Vector3.yAxis, gold, Enum.Material.SmoothPlastic).Reflectance = 0.3
 		for k = 0, 4 do
 			local a = k / 5 * math.pi * 2
 			b:wedge(Vector3.new(0.12, 0.45, 0.3), c * CFrame.Angles(0, a, 0) * CFrame.new(0, 0.35, -0.4), gold)
 		end
-		b:ball(0.25, c * CFrame.new(0, 0.3, -0.45), Color3.fromRGB(255, 60, 90), Enum.Material.Neon)
+		b:ball(0.25, c * CFrame.new(0, 0.3, 0.45), Color3.fromRGB(255, 60, 90), Enum.Material.Neon) -- камень к камере
 	end
 	return nozzle
 end

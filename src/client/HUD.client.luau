@@ -87,7 +87,7 @@ local worldLine = UI.text({
 	Text = "",
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 100),
-	Size = UDim2.fromOffset(420, 24),
+	Size = UDim2.fromOffset(420, 28), -- 100–128: плашка сундука с 140, нарисованный сундук с 132
 	Parent = lobby,
 })
 
@@ -315,7 +315,7 @@ local restartBtn = UI.new("TextButton", {
 	Text = "",
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -18, 0, 62),
-	Size = UDim2.fromOffset(60, 60),
+	Size = UDim2.fromOffset(78, 78), -- ≥ 44 px на телефоне при масштабе корня 0.57
 	BackgroundColor3 = C.navy,
 	BackgroundTransparency = 0.35,
 	Parent = runUi,
@@ -356,7 +356,7 @@ for i = 1, SEGMENTS do
 	dialSegments[i] = seg
 end
 local speedLabel = UI.text({ Text = "0", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.44), Size = UDim2.fromOffset(84, 46), Parent = dial })
-UI.text({ Text = "км/ч", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.62), Size = UDim2.fromOffset(60, 20), Parent = dial })
+UI.text({ Text = "км/ч", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.62), Size = UDim2.fromOffset(64, 26), Parent = dial })
 
 -- Кнопка ракеты под спидометром (оранжевый кружок с огнём) + топливо дугой-полоской
 local rocketBtn = UI.new("TextButton", {
@@ -408,7 +408,7 @@ for _, f in Config.GEMS_ON_TRACK do
 end
 local bestMark = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = C.white, BackgroundTransparency = 0, Visible = false, ZIndex = 3, Parent = progress })
 UI.corner(bestMark, 1000)
-UI.text({ Text = "BEST", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 0.5, 0), Size = UDim2.fromOffset(40, 16), Parent = bestMark }) -- слева от метки: справа край экрана
+UI.text({ Text = "BEST", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 0.5, 0), Size = UDim2.fromOffset(56, 24), Parent = bestMark }) -- слева от метки: справа край экрана
 local pctBubble = UI.text({ Text = "0%", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 1, 0), Size = UDim2.fromOffset(56, 24), TextXAlignment = Enum.TextXAlignment.Right, Parent = progress })
 
 -- Магнит и всплывающие «+N»
@@ -481,11 +481,11 @@ UI.corner(knob, 1000)
 -- Подсказка управления
 local controlsHint = UI.text({
 	Text = if TOUCH
-		then "Веди пальцем — руль · 🔥 — ракета · ⤴ — прыжок · 🔄 в полёте — трюки (держи / тап / 2 тапа)"
-		else "A/D — руль · Shift — ракета · Ctrl — прыжок · Пробел в полёте — трюки (держи, +S / +A/D, 2 тапа)",
+		then "Веди пальцем — руль · 🔥 — ракета · ⤴ — прыжок\n🔄 в полёте: держи — сальто, тап — грэб, 2 тапа — разворот"
+		else "A/D — руль · Shift — ракета · Ctrl — прыжок\nПробел в полёте: держи — сальто (+S / +A/D), тап — грэб, 2 тапа — разворот",
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -16),
-	Size = UDim2.fromOffset(760, 24),
+	Size = UDim2.fromOffset(760, 52), -- две строки: в одну (24) текст ужимался до ~8 px на телефоне
 	TextTransparency = 0.2,
 	Visible = false,
 	Parent = runUi,
@@ -823,7 +823,7 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 		else "ЗАЕЗД ОКОНЧЕН"
 	bestBanner.Text = if finished then "🎉 ФИНИШ!" elseif r.newBest then "🏆 НОВЫЙ РЕКОРД!" else ""
 	setRCoins(UI.money(r.coins) .. (if (r.mult or 1) > 1 then "  x" .. r.mult else ""), "coin")
-	setRBonus("Бонус за полёт и трюки: +" .. math.floor(r.bonus or 0), "coin")
+	setRBonus("Монеты на трассе и трюки: +" .. math.floor(r.bonus or 0), "coin")
 	setRGems("+" .. (r.gems or 0), "gem")
 	rDist.Text = (r.distance or 0) .. " м  ·  " .. r.percent .. "% уровня"
 	result.Visible = true

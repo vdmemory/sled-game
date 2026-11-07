@@ -212,7 +212,7 @@ function UI.closeButton(parent: GuiObject, onClick: () -> ()): TextButton
 		AutoButtonColor = false,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(1, -10, 0, 10),
-		Size = UDim2.fromOffset(50, 50),
+		Size = UDim2.fromOffset(64, 64), -- окна на телефоне ужимаются до ~0.6: 64 → ~38 px (было 30)
 		BackgroundTransparency = 0,
 		ZIndex = parent.ZIndex + 10,
 		Parent = parent,

@@ -567,11 +567,11 @@ local function onTouched(hit: BasePart)
 				sfx:Fire("boost")
 			elseif kind == "x2" then
 				x2Until = now + Config.POWERUPS.x2.time
-				trickPopup:Fire("✖2 Монеты x2!")
+				trickPopup:Fire("✨ Монеты x2!")
 				sfx:Fire("record")
 				Remotes.PowerUp:FireServer(hit)
 			elseif kind == "ring" then
-				trickPopup:Fire("💍 Кольцо! +" .. Config.POWERUPS.rings.coins)
+				trickPopup:Fire("⭕ Кольцо! +" .. Config.POWERUPS.rings.coins)
 				sfx:Fire("coin")
 				Remotes.PowerUp:FireServer(hit)
 			end
@@ -1002,7 +1002,7 @@ RunService.Heartbeat:Connect(function(dt)
 			-- Air time: бонус за долгий полёт (как в оригинале)
 			if airTime >= Config.AIR_MIN_TIME then
 				Remotes.Air:FireServer(airTime)
-				trickPopup:Fire(string.format("✈ Air time %.1fс  +%d", airTime, math.floor(math.min(airTime, 4) * Config.AIR_COINS_PER_SEC)))
+				trickPopup:Fire(string.format("✈ Полёт %.1f с  +%d", airTime, math.floor(math.min(airTime, 4) * Config.AIR_COINS_PER_SEC)))
 			end
 			-- Грэб, который ещё ждал окно двойного тапа, засчитываем перед итогом
 			if pendingGrab and not trick and airTime >= Config.TRICKS.grab.minAir then

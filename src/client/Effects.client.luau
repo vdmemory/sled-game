@@ -402,7 +402,9 @@ local LOOKS = {
 	-- 4 Ледяные пещеры: голубая плотная дымка, холодный кадр
 	{ clock = 15, atmo = { Color = Color3.fromRGB(175, 225, 255), Decay = Color3.fromRGB(80, 160, 230), Density = 0.38, Haze = 1.6 }, cc = { TintColor = Color3.fromRGB(225, 242, 255), Saturation = 0.2 } },
 	-- 5 Северное сияние: сумерки, фиолетово-зелёное небо
-	{ clock = 18.6, atmo = { Color = Color3.fromRGB(150, 140, 220), Decay = Color3.fromRGB(60, 160, 140), Density = 0.3, Haze = 1.4 }, cc = { TintColor = Color3.fromRGB(225, 225, 255), Saturation = 0.3 } },
+	-- 18.0, а не 18.6: после 18:00 солнце под горизонтом, и при ExposureCompensation −0.35 трасса
+	-- темнела — препятствия на сине-фиолетовом дне читались хуже всех миров
+	{ clock = 18.0, atmo = { Color = Color3.fromRGB(150, 140, 220), Decay = Color3.fromRGB(60, 160, 140), Density = 0.3, Haze = 1.4 }, cc = { TintColor = Color3.fromRGB(225, 225, 255), Saturation = 0.3 } },
 	-- 6 Снежный вулкан: багровый вечер и дым
 	{ clock = 17.6, atmo = { Color = Color3.fromRGB(235, 180, 160), Decay = Color3.fromRGB(150, 60, 40), Density = 0.36, Haze = 1.8 }, cc = { TintColor = Color3.fromRGB(255, 232, 220), Saturation = 0.25 } },
 	-- 7 Конфетная гора: розовый солнечный день
