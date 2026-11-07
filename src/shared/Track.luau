@@ -10,6 +10,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Props = require(ReplicatedStorage.Shared.Props)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
 local Lobby = require(ReplicatedStorage.Shared.Lobby)
+local SafeLine = require(ReplicatedStorage.Shared.SafeLine)
 
 local part, deco = Props.part, Props.deco
 
@@ -502,6 +503,8 @@ function Track.new(slot: number, level: number, bestH: number?, origin: CFrame?,
 	self.theme = Config.themeOf(level)
 	self.origin = origin or CFrame.new(Config.TRACKS_ORIGIN + Vector3.new(slot * Config.SLOT_SPACING, 0, 0))
 	self.segments, self.length = buildProfile(self.origin, level)
+	-- Раскладка рядов препятствий с безопасной линией — один раз на уровень (SafeLine, #29)
+	self.rowPlan = SafeLine.plan(self.segments, level)
 	self.preview = maxSegments ~= nil
 	if maxSegments then
 		for i = #self.segments, maxSegments + 1, -1 do
@@ -783,30 +786,27 @@ function Track:buildSegment(i: number)
 
 	-- Препятствия и ускорители — на прямых снежных участках
 	if seg.kind == "gentle" or seg.kind == "steep" then
-		local maxBlocked = math.clamp(1 + (self.level - 1) // 3 + i // 16, 1, 3)
-		-- После приземления с обрыва даём место выровняться
-		local prev = self.segments[i]
-		local safeUntil = if prev and prev.kind == "landing" then 60 else 0
-		for row = 1, Config.OBSTACLE_ROWS do
-			local z = len * (row - 0.5) / Config.OBSTACLE_ROWS
+		-- Занятые полосы и безопасная линия заранее посчитаны в SafeLine.plan (детерминированно)
+		local rows = self.rowPlan[i] or {}
+		for r, plan in rows do
+			local z = plan.z
+			for _, lane in plan.blocked do
+				local base = cf * CFrame.new(laneX(lane) + rng:NextNumber(-1.5, 1.5), 0, -z)
+				tagObstacle(Props.obstacle(self.theme, rng, base, m))
+			end
+			-- свободные полосы ряда, кроме безопасной (её держим под линию монет)
 			local free = {}
 			for lane = 1, Config.LANES do
-				table.insert(free, lane)
+				if lane ~= plan.safe and not table.find(plan.blocked, lane) then
+					table.insert(free, lane)
+				end
 			end
-			local h = seg.hStart + z * math.cos(math.rad(seg.angle))
-			local count = if h < Config.SAFE_START or z < safeUntil then 0 else rng:NextInteger(0, maxBlocked)
-			for _ = 1, count do
-				local idx = rng:NextInteger(1, #free)
-				local base = cf * CFrame.new(laneX(free[idx]) + rng:NextNumber(-1.5, 1.5), 0, -z)
-				tagObstacle(Props.obstacle(self.theme, rng, base, m))
-				table.remove(free, idx)
-			end
-			if rng:NextNumber() < Config.BOOST_CHANCE then
-				local idx = rng:NextInteger(1, #free)
+			if #free > 0 and rng:NextNumber() < Config.BOOST_CHANCE then
+				local lane = free[rng:NextInteger(1, #free)]
 				local pad = part("Part", {
 					Name = "Boost",
 					Size = Vector3.new(laneW - 2, 0.3, 10),
-					CFrame = cf * CFrame.new(laneX(free[idx]), 0.15, -(z + 10)),
+					CFrame = cf * CFrame.new(laneX(lane), 0.15, -(z + 10)),
 					Material = Enum.Material.Neon,
 					Color = Color3.fromRGB(80, 230, 255),
 					CanCollide = false,
@@ -815,18 +815,20 @@ function Track:buildSegment(i: number)
 				for k = 0, 1 do
 					deco({
 						Size = Vector3.new(laneW - 5, 0.35, 1.2),
-						CFrame = cf * CFrame.new(laneX(free[idx]), 0.2, -(z + 6 + k * 4)),
+						CFrame = cf * CFrame.new(laneX(lane), 0.2, -(z + 6 + k * 4)),
 						Material = Enum.Material.Neon,
 						Color = Color3.new(1, 1, 1),
 					}, m)
 				end
-				table.remove(free, idx)
 			end
-			if rng:NextNumber() < Config.COIN_LINE_CHANCE and row < Config.OBSTACLE_ROWS then
-				local lane = free[rng:NextInteger(1, #free)]
-				local step = len / Config.OBSTACLE_ROWS
+			-- Линия монет ведёт по безопасной линии от этого ряда к следующему
+			local nextRow = rows[r + 1]
+			if nextRow and rng:NextNumber() < Config.COIN_LINE_CHANCE then
+				local x0, x1 = laneX(plan.safe), laneX(nextRow.safe)
+				local step = nextRow.z - z
 				for k = 1, Config.COINS_PER_LINE do
-					makeCoin(cf * CFrame.new(laneX(lane), 3, -(z + step * k / (Config.COINS_PER_LINE + 1))), m)
+					local f = k / (Config.COINS_PER_LINE + 1)
+					makeCoin(cf * CFrame.new(x0 + (x1 - x0) * f, 3, -(z + step * f)), m)
 				end
 			end
 		end
