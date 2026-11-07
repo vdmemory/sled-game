@@ -110,7 +110,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `RewardAction` | Function | задания, сундук заданий, подарки, сундук лобби |
 | `WorldAction` | Function | фарм пройденного мира / возврат / пропуск мира за Robux (владелец — тест любого мира) |
 | `TutorialStep` | Event | клиент → шаг обучения `i` показан/пройден (0 — пропустить всё); сервер проверяет целое 0…#`TUTORIAL.STEPS`, ставит бит в `Tutorial` один раз (повтор игнорируется), без наград |
-| `DevAction` | Function | только владелец (`UserId == CreatorId`): уровень, валюта, апгрейды, сани, сброс заданий, `resetTutorial` (обучение и `Stats.Runs` = 0), `tune` (сохранить переопределения Config для всех) |
+| `DevAction` | Function | только владелец (`UserId == CreatorId`): уровень, валюта, апгрейды, сани, сброс заданий, `sessionShift` (сессия −5 мин, `Rewards.devShiftSession`), `resetTutorial` (обучение и `Stats.Runs` = 0), `tune` (сохранить переопределения Config для всех) |
 
 ## События между клиентскими скриптами (BindableEvent в `HUD`)
 
@@ -126,7 +126,7 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 ## Атрибуты игрока (сервер → клиент)
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LevelLength`, `ThemeName`, `*Level` (апгрейды), `Sled`, `SledRarity`, `OwnedSleds`, `Trail`, `OwnedTrails`, `Set*` (настройки), `Tutorial` (биты шагов обучения), `Runs` (`Stats.Runs`),
-`Rewards` (JSON: задания, подарки, сундук), в заезде — `InRun`, `Launched`, `RunDistance`,
+`Rewards` (JSON: задания, подарки, сундук; `sessionStart`, `big` — индекс большого подарка), в заезде — `InRun`, `Launched`, `RunDistance`,
 `RunCoins`, `RunGems`, `Combo`, `Finished`. Только у клиента (ставит сам, не реплицируется):
 `LobbyTheme` (тема витрины лобби, `LobbyScene` → `Effects`), `LowQuality`.
 
@@ -179,7 +179,7 @@ overrides)` пишет нужный ключ (пустой персональн�
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LaunchLevel`, `SledLevel`, `IncomeLevel`, `RocketLevel`,
 `Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings` (`Sfx`, `Snow`, `Shadows`,
-`Music`), `Daily` (задания дня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
+`Music`), `Daily` (задания дня; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
 Onboard, Purchases, Playtime — для аналитики), `Tutorial` (биты пройденных шагов `Config.TUTORIAL.STEPS`, порядок не менять; при входе с `Stats.Runs ≥ 3` — все биты). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
 Новые поля — в `DEFAULT`, миграции — `migrate()` в `DataService`.
 

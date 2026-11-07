@@ -259,6 +259,83 @@ chestPill.Activated:Connect(function()
 	end
 end)
 
+------------------------------------------------------------------ Полоска «сессия» (#24)
+-- Под плашкой сундука: y 198–228 (сундук до 190; подсказки обучения и «НАЖМИ, ЧТОБЫ ИГРАТЬ»
+-- не выше 274 даже на экране 660), ширина 230 — как сундук. Шкала 0…SESSION_GOAL_MIN,
+-- метка 🎁 на минуте большого подарка. Текст 24 логических px → ≥ 14 px на телефоне (×0.57).
+local sfx = script.Parent:WaitForChild("SledController"):WaitForChild("Sfx") :: BindableEvent
+local sessionBar = UI.new("TextButton", {
+	Text = "",
+	AutoButtonColor = false,
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 198),
+	Size = UDim2.fromOffset(230, 30),
+	BackgroundColor3 = C.navy,
+	BackgroundTransparency = 0.15,
+	Visible = false,
+	Parent = lobby,
+})
+UI.corner(sessionBar, 1000)
+UI.stroke(sessionBar, 2.5, C.white, 0.2)
+UI.bounce(sessionBar)
+local sessionFill = UI.new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundTransparency = 0, ZIndex = 2, Parent = sessionBar })
+UI.grad(sessionFill, Color3.fromRGB(255, 225, 80), Color3.fromRGB(245, 160, 30))
+UI.corner(sessionFill, 1000)
+local sessionText = UI.text({ Text = "", Position = UDim2.fromOffset(10, 3), Size = UDim2.new(1, -20, 1, -6), TextScaled = true, ZIndex = 4, Parent = sessionBar })
+-- метка большого подарка (подарок торчит над полоской, как сундук над плашкой)
+local bigMark = UI.icon("gift", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(34, 34), ZIndex = 5, Parent = sessionBar })
+local sessionReady = false
+local bigOpening = false -- пока идёт анимация открытия, метку не прячем
+local function updateSessionBar(elapsed: number)
+	local bi = rewards and rewards.big
+	local g = bi and Config.PLAYTIME_GIFTS[bi]
+	local goal = Config.SESSION_GOAL_MIN * 60
+	local bigTaken = g == nil or rewards.gifts[bi] == true
+	-- цель достигнута и подарок забран — полоска больше не нужна
+	sessionBar.Visible = bigOpening or not (bigTaken and elapsed >= goal)
+	sessionFill.Size = UDim2.fromScale(math.clamp(elapsed / goal, 0, 1), 1)
+	bigMark.Visible = bigOpening or not bigTaken
+	if bigOpening then
+		return
+	end
+	local ready = false
+	if g and not bigTaken then
+		bigMark.Position = UDim2.fromScale(math.clamp(g.min * 60 / goal, 0.08, 0.92), 0.5)
+		local left = g.min * 60 - elapsed
+		ready = left <= 0
+		sessionText.Text = if ready then "ЗАБЕРИ БОЛЬШОЙ ПОДАРОК!" else "БОЛЬШОЙ ПОДАРОК " .. clock(left)
+	else
+		sessionText.Text = "ЦЕЛЬ СЕССИИ " .. Config.SESSION_GOAL_MIN .. " МИН · " .. clock(goal - elapsed)
+	end
+	if ready and not sessionReady then -- момент готовности: вспышка и звук
+		UIFx.pulseSelect(sessionBar, "ГОТОВО!")
+		UIFx.bump(bigMark, 1.4)
+		sfx:Fire("reward")
+	end
+	sessionReady = ready
+end
+sessionBar.Activated:Connect(function()
+	local bi = rewards and rewards.big
+	if not sessionReady or not bi then
+		UIFx.shakeNo(sessionBar)
+		return
+	end
+	-- открытие: подарок трясётся → вспышка → монеты и гемы летят в счётчики
+	local ok = rewardAct("gift", bi, bigMark, function(fire)
+		sfx:Fire("record")
+		bigOpening = true
+		UIFx.openChest(bigMark, function()
+			fire()
+			task.delay(0.6, function()
+				bigOpening = false
+			end)
+		end)
+	end)
+	if not ok then
+		UIFx.shakeNo(sessionBar)
+	end
+end)
+
 ------------------------------------------------------------------ Миры
 local worldsWin, worldsBody = panel("МИРЫ", 720, 400)
 local worldsList = scroller(worldsBody, true, 6)
@@ -463,7 +540,8 @@ local giftCells: { GiftCell } = {}
 for i, g in Config.PLAYTIME_GIFTS do
 	local cell = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = giftsArea })
 	UI.corner(cell, 14)
-	UI.stroke(cell, 2.5, Color3.fromRGB(120, 170, 225))
+	-- большой подарок — золотая рамка (#24)
+	UI.stroke(cell, if g.big then 4 else 2.5, if g.big then C.gold else Color3.fromRGB(120, 170, 225))
 	-- награда: крупно одна строка, либо две (монеты + гемы)
 	local both = g.coins ~= nil and g.gems ~= nil
 	local rowCoins, setCoins = UI.iconText({ Position = UDim2.fromOffset(6, if both then 6 else 12), Size = UDim2.new(1, -12, 0, if both then 24 else 40), Color = C.ink, ZIndex = 34, Parent = cell })
@@ -755,6 +833,7 @@ RunService.Heartbeat:Connect(function(dt)
 			nextIn = if nextIn then math.min(nextIn, leftSec) else leftSec
 		end
 	end
+	updateSessionBar(elapsed)
 	giftBadge.Text = tostring(ready)
 	giftBadge.Visible = ready > 0
 	giftTimer.Text = if ready > 0 then "" elseif nextIn then clock(nextIn) else ""

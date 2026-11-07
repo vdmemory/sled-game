@@ -12,6 +12,17 @@ local Analytics = require(script.Parent.Analytics)
 local Rewards = {}
 
 local sessionStart: { [Player]: number } = {}
+local session10Sent: { [Player]: boolean } = {} -- Analytics "Session10min" — раз за сессию
+
+-- Индекс «Большого подарка» (#24) в Config.PLAYTIME_GIFTS
+local function bigIndex(): number?
+	for i, g in Config.PLAYTIME_GIFTS do
+		if g.big then
+			return i
+		end
+	end
+	return nil
+end
 
 local function today(): number
 	return os.time() // 86400
@@ -62,6 +73,11 @@ function Rewards.sync(player: Player)
 	for i in Config.PLAYTIME_GIFTS do
 		gifts[i] = d.GiftsClaimed and d.GiftsClaimed[tostring(i)] == true or false
 	end
+	-- большой подарок — раз в день: после получения он «получен» во всех сессиях до сброса дня
+	local bi = bigIndex()
+	if bi and d.Daily.big then
+		gifts[bi] = true
+	end
 	player:SetAttribute("Rewards", HttpService:JSONEncode({
 		tasks = list,
 		chestClaimed = d.Daily.chest,
@@ -69,6 +85,7 @@ function Rewards.sync(player: Player)
 		chestAt = d.ChestAt,
 		sessionStart = sessionStart[player] or os.time(),
 		gifts = gifts,
+		big = bi, -- клиенту: какой подарок большой (полоска «сессия»)
 		now = os.time(),
 	}))
 end
@@ -84,6 +101,15 @@ end
 
 function Rewards.onLeave(player: Player)
 	sessionStart[player] = nil
+	session10Sent[player] = nil
+end
+
+-- DEV: сдвинуть начало сессии на sec назад (проверка большого подарка без ожидания)
+function Rewards.devShiftSession(player: Player, sec: number)
+	if sessionStart[player] then
+		sessionStart[player] -= sec
+		Rewards.sync(player)
+	end
 end
 
 -- Итоги заезда → прогресс заданий. Возвращает тексты заданий, выполненных этим заездом.
@@ -177,14 +203,18 @@ function Rewards.claimGift(player: Player, index: number): (boolean, any)
 	if not d or not g then
 		return false, "Недоступно"
 	end
+	ensure(d)
 	d.GiftsClaimed = d.GiftsClaimed or {}
-	if d.GiftsClaimed[tostring(index)] then
-		return false, "Уже получено"
+	if d.GiftsClaimed[tostring(index)] or (g.big and d.Daily.big) then
+		return false, if g.big then "Большой подарок — раз в день" else "Уже получено"
 	end
 	if os.time() - (sessionStart[player] or os.time()) < g.min * 60 then
 		return false, "Ещё рано"
 	end
 	d.GiftsClaimed[tostring(index)] = true
+	if g.big then
+		d.Daily.big = true
+	end
 	grant(player, d, g.coins, g.gems, "Gift")
 	Rewards.add(player, "gifts")
 	local parts = {}
@@ -211,5 +241,21 @@ function Rewards.openChest(player: Player): (boolean, any)
 	Rewards.add(player, "chest")
 	return true, "+" .. Config.rewardCoins(Config.CHEST_COINS, d.Level) .. " 💰  +" .. Config.CHEST_GEMS .. " 💎"
 end
+
+-- «Сессия ≥ N мин» (N = минута большого подарка): событие для доли длинных сессий (BUSINESS §6)
+task.spawn(function()
+	while true do
+		task.wait(Config.SESSION_CHECK_SEC)
+		local bi = bigIndex()
+		local need = (if bi then Config.PLAYTIME_GIFTS[bi].min else 10) * 60
+		local now = os.time()
+		for player, start in sessionStart do
+			if not session10Sent[player] and now - start >= need then
+				session10Sent[player] = true
+				Analytics.custom(player, "Session10min")
+			end
+		end
+	end
+end)
 
 return Rewards

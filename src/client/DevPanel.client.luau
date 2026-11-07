@@ -433,6 +433,7 @@ tabs["Инструменты"] = function()
 	heading("Награды")
 	buttonRow({
 		{ "purple", "Сбросить задания, подарки и сундук", function() dev("resetDaily") end },
+		{ "blue", "+5 мин сессии", function() dev("sessionShift") end },
 		{ "grey", "Сбросить обучение (и счётчик заездов)", function() dev("resetTutorial") end },
 	})
 	note("Все действия меняют только твой профиль. Сервер проверяет, что ты — владелец игры; другим игрокам панель не видна и не работает.")
