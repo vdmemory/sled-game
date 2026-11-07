@@ -34,6 +34,9 @@
   `CanCollide=false` для декора; UI не пересоздаётся в цикле; `ContentProvider:PreloadAsync`
   для картинок.
 - Open Cloud publish не принимает Union, SurfaceAppearance, EditableImage/Mesh, BaseWrap.
+  Обход: свои меши генерировать кодом и загружать отдельными ассетами через Open Cloud Assets API
+  (в `scripts/publish.sh`, по образцу `upload_ui_assets.py`), в месте — `MeshPart` с `MeshId`; рельеф —
+  Smooth Terrain из кода.
 
 ## Инструменты проверки
 - `luau-compile --null <файл>` — синтаксис (путь в `CLAUDE.md`); `luau-analyze` — типы и
