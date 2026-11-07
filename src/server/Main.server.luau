@@ -15,6 +15,7 @@ local Rewards = require(script.Parent.Rewards)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
 local Tuning = require(script.Parent.Tuning)
 local Analytics = require(script.Parent.Analytics)
+local AntiCheat = require(script.Parent.AntiCheat)
 Tuning.init() -- настройки из панели разработчика (DataStore) — до постройки лобби и трасс
 
 ------------------------------------------------------------------ Remotes
@@ -273,6 +274,8 @@ type Run = {
 	ended: boolean?,
 	crashedOnTrack: boolean?, -- авария до финишной арки (задания «без аварии»)
 	magnetCoins: number?, -- монет притянуто магнитом (задание magnetCoins)
+	flags: number?, -- мягкие нарушения античита за заезд (server/AntiCheat)
+	ac: any?, -- состояние античита (AntiCheat.start на Launch)
 }
 local runs: { [Player]: Run } = {}
 -- Заезд закончен, но санки/трасса ещё не убраны и персонаж не пересоздан (пауза в endRun).
@@ -297,6 +300,7 @@ local function endRun(player: Player, reason: string)
 	local dist = math.min(run.distance, L)
 	local pct = math.floor(dist / L * 100)
 	local quiet = reason == "back" or reason == "restart"
+	local cheat = reason == "cheat" -- античит: заезд не засчитан, наград нет
 	local clean = not run.crashedOnTrack and reason ~= "fell" -- заезд без аварии
 	local mult, earned = 1, 0
 	local newBest = false
@@ -309,6 +313,9 @@ local function endRun(player: Player, reason: string)
 		mult = (if player:GetAttribute("X2Coins") then 2 else 1)
 			* Config.incomeMult(d and d.IncomeLevel or 0)
 			* (1 + Config.trail(d and d.Trail).bonus / 100)
+		if cheat then
+			return
+		end
 		earned = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + (if finished then Config.finishBonus(level) else 0)) * mult)
 
 		if d then
@@ -396,7 +403,7 @@ local function endRun(player: Player, reason: string)
 			reason = reason,
 			percent = if finished then 100 else pct,
 			coins = earned,
-			bonus = math.floor(run.bonusCoins * mult),
+			bonus = if cheat then 0 else math.floor(run.bonusCoins * mult),
 			distance = math.floor(dist),
 			length = L,
 			level = level,
@@ -421,6 +428,14 @@ local function endRun(player: Player, reason: string)
 			end
 		end
 	end)
+end
+
+-- Вердикт античита «kill»: заезд заканчивается как "cheat" (без наград), событие в аналитику
+local function antiCheatVerdict(player: Player, run: Run, verdict: string?)
+	if verdict == "kill" and runs[player] == run and not run.ended then
+		Analytics.custom(player, "AntiCheatFlag", run.flags or 0)
+		endRun(player, "cheat")
+	end
 end
 
 local function makeSled(player: Player, cf: CFrame): VehicleSeat
@@ -823,6 +838,7 @@ Launch.OnServerEvent:Connect(function(player, power)
 	end
 	local sled = run.sled
 	sled:SetAttribute("LaunchSpeed", Tuning.forPlayer(player, function()
+		AntiCheat.start(run, player, d, power) -- огибающая скорости под персональные настройки
 		return Config.launchSpeed(d.LaunchLevel) * power
 	end))
 	sled.Anchored = false
@@ -841,12 +857,23 @@ Air.OnServerEvent:Connect(function(player, seconds)
 	if not run or not run.launched or run.crashed or typeof(seconds) ~= "number" or seconds ~= seconds then
 		return
 	end
-	local sec: number = seconds
+	local claimed: number = seconds
 	local now = os.clock()
-	if now - (run.lastAir or 0) < 0.8 or sec < Config.AIR_MIN_TIME then
+	if now - (run.lastAir or 0) < 0.8 or claimed < Config.AIR_MIN_TIME then
 		return
 	end
 	run.lastAir = now
+	-- засчитываем не больше полёта, который видел сервер (AntiCheat.air); на земле — ничего
+	local sec, seen = 0, true
+	Tuning.forPlayer(player, function()
+		sec, seen = AntiCheat.air(run, claimed)
+	end)
+	if not seen then
+		antiCheatVerdict(player, run, AntiCheat.flag(run, player, string.format("Air %.1f с без полёта", claimed)))
+	end
+	if sec <= 0 then
+		return
+	end
 	run.airTotal = (run.airTotal or 0) + math.min(sec, 6)
 	local add = Tuning.forPlayer(player, function()
 		return math.floor(math.min(sec, 4) * Config.AIR_COINS_PER_SEC)
@@ -886,12 +913,19 @@ Crash.OnServerEvent:Connect(function(player)
 	end)
 end)
 
-Smash.OnServerEvent:Connect(function(player)
+-- model — разбитая модель с атрибутом Breakable; засчитываем, если она своей трассы, рядом с
+-- санками по серверу и ещё не разбита в этом заезде (AntiCheat.canSmash)
+Smash.OnServerEvent:Connect(function(player, model)
 	local run = runs[player]
 	if not run or not run.launched or run.crashed then
 		return
 	end
 	if (run.smashes or 0) >= 40 then -- потолок за заезд: и монеты, и прогресс задания «разбей N»
+		return
+	end
+	if not Tuning.forPlayer(player, function()
+		return AntiCheat.canSmash(run, model)
+	end) then
 		return
 	end
 	run.smashes = (run.smashes or 0) + 1
@@ -916,7 +950,16 @@ Trick.OnServerEvent:Connect(function(player, list, airTime)
 		return
 	end
 	run.lastTrick = now
-	local air = if typeof(airTime) == "number" and airTime == airTime then math.clamp(airTime, 0, 10) else 0
+	local clientAir = if typeof(airTime) == "number" and airTime == airTime then math.clamp(airTime, 0, 10) else 0
+	-- обороты проверяем по полёту, который видел сервер (AntiCheat.trickAir); не видел — трюки на земле
+	local serverAir = Tuning.forPlayer(player, function()
+		return AntiCheat.trickAir(run, clientAir)
+	end)
+	if not serverAir then
+		antiCheatVerdict(player, run, AntiCheat.flag(run, player, "Trick без полёта"))
+		return
+	end
+	local air: number = serverAir
 	local counts: { [string]: number } = {}
 	local distinct, rotations, grabs = 0, 0, 0
 	for i, item in list do
@@ -946,16 +989,18 @@ Trick.OnServerEvent:Connect(function(player, list, airTime)
 	local add, flips, total = 0, 0, 0
 	Tuning.forPlayer(player, function()
 		local mult = Config.trickComboMult(distinct)
-		local sum = 0
+		local sum, boost = 0, 1
 		for id, count in counts do
 			local def = Config.TRICKS[id]
 			sum += def.coins * count
+			boost *= def.boost ^ count -- тот же буст скорости, что даёт клиент при приземлении
 			total += count
 			if def.kind == "pitch" then
 				flips += count -- задание дня «Сделай N сальто» — любые сальто
 			end
 		end
 		add = math.floor(sum * mult)
+		AntiCheat.onTrick(run, boost)
 	end)
 	run.flips = (run.flips or 0) + flips
 	run.tricks = (run.tricks or 0) + total
@@ -1200,7 +1245,10 @@ PowerUp.OnServerEvent:Connect(function(player, part)
 	if not run or run.ended or typeof(part) ~= "Instance" or not part:IsA("BasePart") then
 		return
 	end
-	if (part.Position - run.sled.Position).Magnitude > 30 then
+	-- только предметы своей трассы и рядом с санками по серверу (с поправкой на пинг)
+	if not part:IsDescendantOf(run.track.folder) or not Tuning.forPlayer(player, function()
+		return AntiCheat.near(run, part.Position)
+	end) then
 		return
 	end
 	-- ускоритель: каждую полосу считаем один раз (для заданий)
@@ -1210,18 +1258,23 @@ PowerUp.OnServerEvent:Connect(function(player, part)
 		if not pads[part] then
 			pads[part] = true
 			run.boosts = (run.boosts or 0) + 1
+			Tuning.forPlayer(player, function()
+				AntiCheat.onBoost(run) -- честный разгон: поднимаем предел скорости
+			end)
 		end
 		return
 	end
 	local kind = if CollectionService:HasTag(part, "Magnet") then "magnet" else part:GetAttribute("Kind")
-	if not (CollectionService:HasTag(part, "PowerUp") or kind == "magnet") or part:GetAttribute("Taken") then
+	if typeof(kind) ~= "string" or not (CollectionService:HasTag(part, "PowerUp") or kind == "magnet") or part:GetAttribute("Taken") then
 		return
 	end
 	part:SetAttribute("Taken", true)
 	local picked = run.picked or {}
 	run.picked = picked
 	picked[kind] = (picked[kind] or 0) + 1
-	if kind == "x2" then
+	if kind == "fuel" then
+		AntiCheat.onFuel(run) -- полный бак: ракета снова может разгонять
+	elseif kind == "x2" then
 		run.x2Until = os.clock() + Tuning.forPlayer(player, function()
 			return Config.POWERUPS.x2.time
 		end)
@@ -1328,13 +1381,19 @@ RunService.Heartbeat:Connect(function(dt)
 			continue
 		end
 		local track = run.track
-		local h, x, y = track:progressOf(sled.Position)
-		run.distance = math.max(run.distance, h)
-		player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
-
-		Tuning.forPlayer(player, function()
+		local pos = sled.Position
+		local h, x, y = track:progressOf(pos)
+		-- путь засчитывается не быстрее предела скорости; телепорт/накрутка → вердикт (server/AntiCheat)
+		local verdict = Tuning.forPlayer(player, function()
+			local v = AntiCheat.tick(run, player, pos, step, h)
 			track:ensureAround(math.max(0, run.distance)) -- синхронно; Config под игрока (см. startRun)
+			return v
 		end)
+		if verdict == "kill" then
+			antiCheatVerdict(player, run, verdict)
+			continue
+		end
+		player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
 		run.maxSpeed = math.max(run.maxSpeed or 0, sled.AssemblyLinearVelocity.Magnitude * 1.1) -- км/ч, как на спидометре
 
 		if not run.launched or run.crashed then

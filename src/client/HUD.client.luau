@@ -820,6 +820,7 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 		elseif r.reason == "crash" then "ВРЕЗАЛСЯ!"
 		elseif r.reason == "fell" then "УЛЕТЕЛ С ТРАССЫ!"
 		elseif r.reason == "stopped" then "ОСТАНОВИЛСЯ"
+		elseif r.reason == "cheat" then "ЗАЕЗД НЕ ЗАСЧИТАН"
 		else "ЗАЕЗД ОКОНЧЕН"
 	bestBanner.Text = if finished then "🎉 ФИНИШ!" elseif r.newBest then "🏆 НОВЫЙ РЕКОРД!" else ""
 	setRCoins(UI.money(r.coins) .. (if (r.mult or 1) > 1 then "  x" .. r.mult else ""), "coin")

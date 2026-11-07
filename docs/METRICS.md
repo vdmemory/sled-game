@@ -41,6 +41,7 @@
 | Economy Sink | Coins/Gems: `Upgrade:<имя>`, `Sled:<id:редкость>`, `Trail:<id>` (Shop) | куда уходят; поле 3 — категория |
 | Custom (значение) | `RunDistance`, `RunPercent`, `SessionMinutes`, `RobuxPurchase` | средние/суммы по дням |
 | Custom (счётчик) | `RunFinished`, `RunCrashed`, `RunStopped` | исходы заездов → доля финишей |
+| Custom (значение) | `AntiCheatFlag` (число флагов) | заезд отменён античитом; рост = чит или ложные срабатывания |
 Счётчики на игроке в сейве: `Stats = { Runs, Finishes, Onboard, Purchases, Playtime }`.
 
 ## Как читать (правила продюсера)
