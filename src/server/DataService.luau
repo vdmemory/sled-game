@@ -39,6 +39,13 @@ local DEFAULT = {
 	-- стрик дней входа (#25): day — последний засчитанный UTC-день, count — длина серии, claimedDay — день
 	-- последней награды, save — серия, которую можно спасти сегодня (0 — нет предложения)
 	Streak = { day = 0, count = 0, claimedDay = 0, save = 0 },
+	-- лидерборд недели (#26, server/Weekly): титул топ-3 прошлой недели (id из Config.WEEKLY.TITLES,
+	-- "" — нет), действует до TitleUntil (сброс недели); TitleWeek — неделя, в которую титул уже
+	-- проверен; WeekPlay — где игрок попал в доски на неделе key (worlds["N"], clean) — по нему ищем титул
+	Title = "",
+	TitleUntil = 0,
+	TitleWeek = "",
+	WeekPlay = { key = "", worlds = {}, clean = false },
 }
 
 local function deepCopy(t: any): any
@@ -133,7 +140,17 @@ local function migrate(data: { [string]: any })
 		data.Skin = nil
 	end
 	-- новые ключи вложенных таблиц (Settings.Music, Streak.save…) у старых профилей
-	for _, f in { "Settings", "Streak" } do
+	-- титул (#26): битые типы → без титула
+	if type(data.Title) ~= "string" then
+		data.Title = ""
+	end
+	if type(data.TitleUntil) ~= "number" then
+		data.TitleUntil = 0
+	end
+	if type(data.TitleWeek) ~= "string" then
+		data.TitleWeek = ""
+	end
+	for _, f in { "Settings", "Streak", "WeekPlay" } do
 		if type(data[f]) ~= "table" then
 			data[f] = deepCopy(DEFAULT[f])
 		end

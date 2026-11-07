@@ -13,7 +13,8 @@ local SNOW = Color3.fromRGB(250, 252, 255)
 
 local Lobby = {}
 
-local function board(name: string, at: CFrame, title: string, parent: Instance): TextLabel
+-- footer — строка «ты: место · очки · сброс» внизу (табло недели, заполняет client/WeeklyBoard)
+local function board(name: string, at: CFrame, title: string, parent: Instance, footer: boolean?): TextLabel
 	local m = Instance.new("Model")
 	m.Name = name
 	for _, sx in { -1, 1 } do
@@ -27,6 +28,7 @@ local function board(name: string, at: CFrame, title: string, parent: Instance):
 	sg.LightInfluence = 0.3
 	sg.Parent = panel
 	local head = Instance.new("TextLabel")
+	head.Name = "Head"
 	head.BackgroundTransparency = 1
 	head.Size = UDim2.new(1, 0, 0, 80)
 	head.Font = Enum.Font.FredokaOne
@@ -38,7 +40,7 @@ local function board(name: string, at: CFrame, title: string, parent: Instance):
 	body.Name = "List"
 	body.BackgroundTransparency = 1
 	body.Position = UDim2.new(0, 30, 0, 90)
-	body.Size = UDim2.new(1, -60, 1, -110)
+	body.Size = UDim2.new(1, -60, 1, if footer then -160 else -110)
 	body.Font = Enum.Font.FredokaOne
 	body.TextScaled = true
 	body.TextColor3 = Color3.new(1, 1, 1)
@@ -46,6 +48,25 @@ local function board(name: string, at: CFrame, title: string, parent: Instance):
 	body.TextYAlignment = Enum.TextYAlignment.Top
 	body.Text = "…"
 	body.Parent = sg
+	if footer then
+		local me = Instance.new("TextLabel")
+		me.Name = "Me"
+		me.BackgroundColor3 = Color3.fromRGB(60, 38, 20)
+		me.BackgroundTransparency = 0.3
+		me.Position = UDim2.new(0, 20, 1, -64)
+		me.Size = UDim2.new(1, -40, 0, 50)
+		me.Font = Enum.Font.FredokaOne
+		me.TextScaled = true
+		me.TextColor3 = Color3.fromRGB(255, 220, 90)
+		me.Text = ""
+		me.Parent = sg
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 12)
+		c.Parent = me
+		local pad = Instance.new("UIPadding")
+		pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
+		pad.Parent = me
+	end
 	m.Parent = parent
 	return body
 end
@@ -216,7 +237,7 @@ function Lobby.build()
 
 	-- Доска лидеров и табло обновления (лицом к точке появления)
 	local lbAt = CFrame.lookAt((base * CFrame.new(34, 0, -10)).Position, p)
-	board("Leaderboard", lbAt, "🏆 Лучшие игроки", lobby)
+	board("Leaderboard", lbAt, "🏆 Неделя", lobby, true)
 	local upAt = CFrame.lookAt((base * CFrame.new(-34, 0, -10)).Position, p)
 	local upText = board("NextUpdate", upAt, "⏳ Следующее обновление", lobby)
 	task.spawn(function()

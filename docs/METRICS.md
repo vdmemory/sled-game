@@ -42,6 +42,7 @@
 | Custom (значение) | `RunDistance`, `RunPercent`, `SessionMinutes`, `RobuxPurchase` | средние/суммы по дням |
 | Custom (счётчик) | `RunFinished`, `RunCrashed`, `RunStopped` | исходы заездов → доля финишей |
 | Custom (значение) | `AntiCheatFlag` (число флагов) | заезд отменён античитом; рост = чит или ложные срабатывания |
+| Custom (значение) | `CheatSuspect` (флаги), `TitleAwarded` (место 1–3) | заезд не пошёл в лидерборд недели; выдан титул недели (#26) |
 Счётчики на игроке в сейве: `Stats = { Runs, Finishes, Onboard, Purchases, Playtime }`.
 
 ## Как читать (правила продюсера)

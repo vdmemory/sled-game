@@ -438,6 +438,14 @@ tabs["Инструменты"] = function()
 		{ "blue", "Стрик: пропуск дня", function() dev("streakSkip") end },
 		{ "grey", "Сбросить обучение (и счётчик заездов)", function() dev("resetTutorial") end },
 	})
+	heading("Лидерборд недели")
+	buttonRow({
+		{ "yellow", "Титул: выдать себе топ-1", function() dev("weeklyTitle", 1) end },
+		{ "grey", "Титул: топ-2", function() dev("weeklyTitle", 2) end },
+		{ "orange", "Титул: топ-3", function() dev("weeklyTitle", 3) end },
+		{ "red", "Титул: снять", function() dev("weeklyTitle", 0) end },
+		{ "blue", "Табло: обновить сейчас", function() dev("weeklyRefresh") end },
+	})
 	note("Все действия меняют только твой профиль. Сервер проверяет, что ты — владелец игры; другим игрокам панель не видна и не работает.")
 end
 

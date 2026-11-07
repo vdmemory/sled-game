@@ -110,7 +110,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `RewardAction` | Function | задания, сундук заданий, подарки, сундук лобби, `streak` (награда дня стрика, раз в UTC-день), `streakSave` (спасти серию за гемы, только в день после пропуска 1 дня и до награды), `streakDecline` |
 | `WorldAction` | Function | фарм пройденного мира / возврат / пропуск мира за Robux (владелец — тест любого мира) |
 | `TutorialStep` | Event | клиент → шаг обучения `i` показан/пройден (0 — пропустить всё); сервер проверяет целое 0…#`TUTORIAL.STEPS`, ставит бит в `Tutorial` один раз (повтор игнорируется), без наград |
-| `DevAction` | Function | только владелец (`UserId == CreatorId`): уровень, валюта, апгрейды, сани, сброс заданий, `sessionShift` (сессия −5 мин, `Rewards.devShiftSession`), `streakNext`/`streakSkip` (дни стрика −1/−2, `Rewards.devStreakShift`), `resetTutorial` (обучение и `Stats.Runs` = 0), `tune` (сохранить переопределения Config для всех) |
+| `DevAction` | Function | только владелец (`UserId == CreatorId`): уровень, валюта, апгрейды, сани, сброс заданий, `weeklyTitle` (титул себе 1..3, 0 — снять), `weeklyRefresh` (табло сейчас), `sessionShift` (сессия −5 мин, `Rewards.devShiftSession`), `streakNext`/`streakSkip` (дни стрика −1/−2, `Rewards.devStreakShift`), `resetTutorial` (обучение и `Stats.Runs` = 0), `tune` (сохранить переопределения Config для всех) |
 
 ## События между клиентскими скриптами (BindableEvent в `HUD`)
 
@@ -127,7 +127,8 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LevelLength`, `ThemeName`, `*Level` (апгрейды), `Sled`, `SledRarity`, `OwnedSleds`, `Trail`, `OwnedTrails`, `Set*` (настройки), `Tutorial` (биты шагов обучения), `Runs` (`Stats.Runs`),
 `Rewards` (JSON: задания, подарки, сундук; `sessionStart`, `big` — индекс большого подарка), в заезде — `InRun`, `Launched`, `RunDistance`,
-`RunCoins`, `RunGems`, `Combo`, `Finished`. Только у клиента (ставит сам, не реплицируется):
+`RunCoins`, `RunGems`, `Combo`, `Finished`; лидерборд недели — `Title`, `TitleUntil`, `WeeklyMe` (JSON), у
+`ReplicatedStorage` — `WeeklyBoard` (JSON). Только у клиента (ставит сам, не реплицируется):
 `LobbyTheme` (тема витрины лобби, `LobbyScene` → `Effects`), `LowQuality`.
 
 ## Теги CollectionService
@@ -197,4 +198,45 @@ Onboard, Purchases, Playtime — для аналитики), `Tutorial` (бит�
 перезайди» (сейв в DataStore не тронут, профиль-заглушка не создаётся). В Studio вместо кика —
 игра без сохранения. `ProcessReceipt` выдаёт покупку только при `canSave` и подтверждает только
 после успешной записи.
-Доска лидеров — `OrderedDataStore` `BestLevel_v1`.
+Доска лидеров «всё время» — `OrderedDataStore` `BestLevel_v1` (пишет `Main.postLevel`). Поля
+лидерборда недели (#26): `Title` (id из `Config.WEEKLY.TITLES`, `""` — нет), `TitleUntil` (unix,
+сброс недели), `TitleWeek` (неделя, в которую титул проверен), `WeekPlay = { key, worlds["N"],
+clean }` (где игрок попал в доски на неделе `key`); `migrate` чинит типы и дополняет `WeekPlay`.
+
+## Лидерборд недели (#26, `server/Weekly`, `client/WeeklyBoard`, `shared/Week`)
+
+| Хранилище | Тип | Ключ / значение |
+| --- | --- | --- |
+| `LB_W<год>-<нед>_<мир>` | OrderedDataStore | `u_<UserId>` → лучшая дистанция за заезд в мире (UpdateAsync max) |
+| `LB_W<год>-<нед>_clean` | OrderedDataStore | `u_<UserId>` → чистые финиши недели (IncrementAsync) |
+| `BestLevel_v1` | OrderedDataStore | `u_<UserId>` → уровень (всё время) |
+| `WeeklyWinners_v1` | DataStore | `W<год>-<нед>` → `{ ["w<N>"] = { UserId топ-3 }, clean = {…} }` |
+
+Неделя — ISO 8601 по UTC (`Week.key/start/reset/prevKey`, проверено на 53-й неделе и стыке лет).
+- `Weekly.onRun` (из `endRun`, синхронно) — результат в очередь в памяти; запись — не чаще
+  `WEEKLY.WRITE_EVERY` (30 с) на игрока, на выходе и в `BindToClose` — сразу; ошибка — обратно в
+  очередь. Фильтр: `farm`, `cheat`, `run.flags ≥ MAX_FLAGS`, `dist > (сейчас − launchTime) ×
+  MAX_AVG_SPEED` → не пишется, custom `CheatSuspect`. `dist ≤ track.length` и прирост пути за тик
+  уже ограничивает `AntiCheat.tick`.
+- Раз в `REFRESH` (60 с) сервер берёт первые 100 записей досок `all`, `clean` и миров, где сейчас
+  есть игроки этого сервера, кладёт топ-10 с никами в `ReplicatedStorage.WeeklyBoard` (JSON) и
+  каждому — `Player.WeeklyMe` (JSON: мир, очки и места; место считается по сотне с учётом свежего
+  своего счёта, вне сотни — нет). Свои очки недели — `GetAsync` один раз на мир/неделю.
+- Титул: при входе / в цикле, если `TitleWeek ≠` текущей и прошло `WINNERS_DELAY` (180 с) после
+  сброса — для досок из `WeekPlay` прошлой недели берётся топ-3 из `WeeklyWinners_v1`; если доски
+  там нет, первый сервер считает её (`GetSortedAsync(…, 3)`) и пишет `UpdateAsync` без перезаписи
+  чужого — все серверы выдают одно и то же. Атрибуты `Title`/`TitleUntil`, custom `TitleAwarded`
+  (значение — место). Клиент рисует плашку `BillboardGui` (UIKit) в своём `PlayerGui` над
+  головой игроков не в заезде; табло (`Leaderboard`: `Head`, `List`, `Me`) заполняет локально.
+- Перед каждым запросом — `GetRequestBudgetForRequestType` с запасом `BUDGET_RESERVE`; нет
+  бюджета — пропуск до следующего цикла.
+
+**Бюджет (лимиты на сервер в минуту: GetSorted 5 + 2·N, GetAsync 60 + 10·N, Set/Update/Increment
+60 + 10·N; ключ — 1 запись / 6 с):**
+
+| Запросы/мин | 1 игрок | 50 игроков | Лимит 1 / 50 |
+| --- | --- | --- | --- |
+| GetSortedAsync: 2 + число разных миров игроков (≤ 40 при уровне ≤ 200) | 3 | ≤ 42 (обычно 2 + 7) | 7 / 105 |
+| GetAsync: свои очки 2 на вход + 1 на новый мир, победители 1 раз в неделю | ≤ 3 | ≤ 100 (50 входов за минуту) | 70 / 560 |
+| Update/Increment досок: ≤ 2 за 30 с на игрока | ≤ 4 | ≤ 200 | 70 / 560 (вместе с автосейвами 25/мин и `BestLevel`) |
+| Раз в неделю: топ-3 по доскам из `WeekPlay` | ≤ 1 + миры | ≤ 1 + миры, с бюджет-гардом | — |
