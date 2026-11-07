@@ -1,5 +1,17 @@
 # Журнал изменений
 
+## Лидерборд недели по мирам и титулы (#26)
+- `shared/Week` (неделя ISO по UTC), `server/Weekly`: доски `LB_W<год>-<нед>_<мир>` (лучшая
+  дистанция) и `_clean` (чистые финиши), запись раз в 30 с на игрока, кэш топ-100 раз в 60 с →
+  `ReplicatedStorage.WeeklyBoard` / `Player.WeeklyMe`; фильтр фарм/«cheat»/флаги/средняя скорость
+  (custom `CheatSuspect`). Бюджет DataStore для 1 и 50 игроков — `ARCHITECTURE.md`.
+- Титулы топ-1/2/3 прошлой недели (`WeeklyWinners_v1`, сейв `Title`/`TitleUntil`/`TitleWeek`/
+  `WeekPlay` + `migrate`), custom `TitleAwarded`; `client/WeeklyBoard` — плашка над головой в лобби.
+- Табло в лобби: страницы «неделя мира / чистые финиши / всё время», строка «ты: место · очки ·
+  до сброса»; серверный цикл старого табло из `Main` убран. Итоги заезда — строка недели и титула.
+- `Config.WEEKLY` (+ TUNABLES «Лидерборд»); DEV → Инструменты: «Титул: выдать себе топ-1/2/3»,
+  «снять», «Табло: обновить сейчас».
+
 ## Стрик дней входа (#25)
 - `Config.STREAK_REWARDS` (7 дней: 100…400 монет, гемы в дни 2/4/6, день 7 — 600 + 25 💎),
   `STREAK_CYCLE_MULT` 1.25, `STREAK_SAVE_GEMS` 10 + `STREAK_SAVE_STEP` 2; хелперы `streakDay`/

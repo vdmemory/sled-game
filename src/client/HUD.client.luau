@@ -777,14 +777,14 @@ end
 tapText.Activated:Connect(start)
 
 ------------------------------------------------------------------ итог заезда («Ты получил»)
-result = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(380, 300), BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
+result = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(380, 326), BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
 local resultScale = Instance.new("UIScale")
 resultScale.Parent = result
 local resultTitle = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.fromOffset(460, 52), Outline = 3, ZIndex = 22, Parent = result })
 local bestBanner = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -58), Size = UDim2.fromOffset(420, 40), TextColor3 = Color3.fromRGB(255, 215, 60), Rotation = -3, ZIndex = 22, Parent = result })
 UI.outline(bestBanner, 3)
 -- Лист итогов: тёмно-синяя карточка с крупной суммой монет, строками бонуса и гемов
-local sheet = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 220), BackgroundTransparency = 0, ZIndex = 20, Parent = result })
+local sheet = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 246), BackgroundTransparency = 0, ZIndex = 20, Parent = result })
 UI.grad(sheet, Color3.fromRGB(56, 78, 124), Color3.fromRGB(32, 46, 82))
 UI.corner(sheet, 20)
 UI.stroke(sheet, 3, C.ink)
@@ -798,9 +798,12 @@ local _, setRBonus = UI.iconText({ Position = UDim2.fromOffset(20, 114), Size = 
 local _, setRGems = UI.iconText({ Position = UDim2.fromOffset(20, 146), Size = UDim2.new(1, -40, 0, 26), ZIndex = 21, Parent = sheet })
 local rDist = UI.text({ Text = "", Position = UDim2.fromOffset(20, 182), Size = UDim2.new(1, -40, 0, 24), TextColor3 = Color3.fromRGB(190, 215, 250), ZIndex = 21, Parent = sheet })
 UI.outline(rDist, 2)
+-- строка лидерборда недели и титула (#26, server/Weekly → RunEnded.week)
+local rWeek = UI.text({ Text = "", Position = UDim2.fromOffset(20, 210), Size = UDim2.new(1, -40, 0, 22), TextColor3 = Color3.fromRGB(255, 215, 90), ZIndex = 21, Parent = sheet })
+UI.outline(rWeek, 2)
 local continueBtn = UI.button("blue", "ПРОДОЛЖИТЬ", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 236),
+	Position = UDim2.new(0.5, 0, 0, 262),
 	Size = UDim2.fromOffset(230, 64),
 	ZIndex = 22,
 	Parent = result,
@@ -828,6 +831,17 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 	setRBonus("Монеты на трассе и трюки: +" .. math.floor(r.bonus or 0), "coin")
 	setRGems("+" .. (r.gems or 0), "gem")
 	rDist.Text = (r.distance or 0) .. " м  ·  " .. r.percent .. "% уровня"
+	local wk = r.week
+	local tid, tUntil = player:GetAttribute("Title"), player:GetAttribute("TitleUntil")
+	local title = nil
+	for _, t in Config.WEEKLY.TITLES do
+		if t.id == tid and typeof(tUntil) == "number" and tUntil > workspace:GetServerTimeNow() then
+			title = t.icon .. " " .. t.name .. "  ·  "
+		end
+	end
+	rWeek.Text = (title or "") .. (if type(wk) ~= "table" then ""
+		elseif wk.excluded then "Неделя: заезд не идёт в табло"
+		else string.format("🏆 Неделя: %s · рекорд %d м", if wk.rank then "#" .. wk.rank else "вне топ-100", wk.best or 0))
 	result.Visible = true
 	resultScale.Scale = 0.7
 	TweenService:Create(resultScale, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Scale = 1 }):Play()

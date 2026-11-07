@@ -16,6 +16,7 @@ local SledModels = require(ReplicatedStorage.Shared.SledModels)
 local Tuning = require(script.Parent.Tuning)
 local Analytics = require(script.Parent.Analytics)
 local AntiCheat = require(script.Parent.AntiCheat)
+local Weekly = require(script.Parent.Weekly) -- лидерборд недели и титулы (#26)
 Tuning.init() -- настройки из панели разработчика (DataStore) — до постройки лобби и трасс
 
 ------------------------------------------------------------------ Remotes
@@ -163,31 +164,8 @@ local function postLevel(player: Player, level: number)
 		task.spawn(pcall, levelBoard.SetAsync, levelBoard, "u_" .. player.UserId, level)
 	end
 end
-local boardGui: TextLabel? = nil
-local boardNames: { [number]: string } = {} -- кэш ников: не дёргать web API 10 раз в минуту
-task.spawn(function()
-	local lobby = workspace:WaitForChild("Lobby", 30)
-	local board = lobby and lobby:FindFirstChild("Leaderboard")
-	boardGui = board and board:FindFirstChild("List", true) :: TextLabel?
-	while okBoard and boardGui do
-		local ok, pages = pcall(levelBoard.GetSortedAsync, levelBoard, false, 10)
-		if ok then
-			local lines = {}
-			for rank, entry in pages:GetCurrentPage() do
-				local id = tonumber(string.sub(entry.key, 3)) or 0
-				local name = boardNames[id]
-				if not name then
-					local okName, res = pcall(Players.GetNameFromUserIdAsync, Players, id)
-					name = if okName then res else nil
-					boardNames[id] = name
-				end
-				table.insert(lines, string.format("%d. %s — ур. %d", rank, name or "?", entry.value))
-			end
-			boardGui.Text = if #lines > 0 then table.concat(lines, "\n") else "Пока пусто — будь первым!"
-		end
-		task.wait(60)
-	end
-end)
+-- Табло в лобби (неделя по мирам, чистые финиши, всё время) — server/Weekly + client/WeeklyBoard
+Weekly.start()
 
 local function onPlayerAdded(player: Player)
 	local ls = Instance.new("Folder")
@@ -226,6 +204,7 @@ local function onPlayerAdded(player: Player)
 		postLevel(player, d0.Level)
 	end
 	Rewards.onJoin(player)
+	Weekly.onJoin(player)
 end
 
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
@@ -402,6 +381,20 @@ local function endRun(player: Player, reason: string)
 		end
 	end)
 
+	-- лидерборд недели: синхронно, только очередь в памяти (фарм и «cheat» не идут, флаги — см. Weekly)
+	local week = if d
+		then Weekly.onRun(player, {
+			level = level,
+			dist = dist,
+			finished = finished,
+			clean = clean,
+			farm = run.farm,
+			cheat = cheat,
+			flags = run.flags,
+			elapsed = if run.launchTime then os.clock() - run.launchTime else 0,
+		})
+		else nil
+
 	player:SetAttribute("InRun", false)
 	player:SetAttribute("Launched", false)
 	if not quiet then
@@ -416,6 +409,7 @@ local function endRun(player: Player, reason: string)
 			newBest = newBest,
 			mult = math.floor(mult * 100 + 0.5) / 100,
 			gems = gems,
+			week = week,
 		})
 	end
 
@@ -1178,6 +1172,10 @@ DevAction.OnServerInvoke = function(player, action, a, b, c)
 		Rewards.devStreakShift(player, 1)
 	elseif action == "streakSkip" then
 		Rewards.devStreakShift(player, 2)
+	elseif action == "weeklyTitle" and typeof(a) == "number" then
+		Weekly.devTitle(player, a) -- титул себе на неделю (1..3, 0 — снять)
+	elseif action == "weeklyRefresh" then
+		Weekly.refreshNow()
 	else
 		return false, "Неизвестное действие"
 	end
@@ -1485,6 +1483,7 @@ Players.PlayerRemoving:Connect(function(player)
 	end
 	ending[player] = nil
 	Rewards.onLeave(player)
+	Weekly.onLeave(player)
 	Tuning.unloadPlayer(player)
 	local d = Data.get(player)
 	local joined = player:GetAttribute("JoinedAt")
@@ -1506,5 +1505,6 @@ end)
 
 -- Сохраняем всех параллельно и ждём (лимит BindToClose — 30 с; последовательные ретраи не влезали)
 game:BindToClose(function()
+	Weekly.flushAll() -- параллельно с сейвами: очередь лидерборда недели
 	Data.saveAllAndWait(25)
 end)
