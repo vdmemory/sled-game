@@ -191,7 +191,8 @@ local jumpQueued, jumping, lastJump = false, false, 0
 
 -- Трюки (docs/GAME_DESIGN.md → «Трюки»). trick — текущее вращение { id, def, angle, dir, released };
 -- завершённые за полёт копятся в airTricks и при приземлении уходят одним Trick:FireServer(list, airTime)
-type Trick = { id: string, def: any, angle: number, dir: number, released: boolean }
+-- auto — авто-трюк (#39): крутится сам со скоростью speed, не «отпускается» и не даёт «Падения»
+type Trick = { id: string, def: any, angle: number, dir: number, released: boolean, auto: boolean?, speed: number? }
 local trick: Trick? = nil
 local airTricks: { [string]: number } = {}
 local airTrickOrder: { string } = {} -- порядок первых выполнений (для комбо и подписи)
@@ -200,6 +201,11 @@ local trickStartedThisPress = false -- в этом нажатии уже нач�
 local lastTapAt = 0 -- короткий тап в воздухе: второй в TRICK_DOUBLE_TAP = разворот
 local pendingGrab = false -- тап ждёт окно двойного нажатия, потом становится грэбом
 local grabUntil = 0 -- анимация грэба (наклон саней)
+-- Авто-трюки (Config.AUTO_TRICK_*): план на полёт выбирается один раз, когда сани поднялись
+-- выше AC_AIR_HEIGHT; autoQueue — что ещё выполнить, autoBonus — нажатия во время авто-трюка
+local autoPlanned = false
+local autoQueue: { string } = {}
+local autoBonus = 0
 
 ------------------------------------------------------------------ ввод
 -- Рогатка: зажал → тянешь вниз (санки отъезжают назад, резинка натягивается) → отпустил = выстрел.
@@ -323,9 +329,75 @@ end
 local function clearAirTricks()
 	table.clear(airTricks)
 	table.clear(airTrickOrder)
+	table.clear(autoQueue)
 	trick = nil
 	pendingGrab = false
 	trickStartedThisPress = false
+	autoPlanned = false
+	autoBonus = 0
+end
+
+-- Сколько ещё секунд до касания снега: высота над трассой под санями, наклон трассы впереди
+-- (второй луч через AUTO_TRICK_LOOKAHEAD с полёта по горизонтали) и вертикальная скорость.
+-- Высота трассы впереди меняется линейно: h + (vy − rate)·t − g·t²/2 = 0.
+local AUTO_UP = Vector3.new(0, 20, 0) -- лучи начинаем выше саней: впереди трасса может быть выше
+local function predictAirLeft(s: BasePart, vel: Vector3): (number, number)
+	local pos = s.Position
+	local down = Vector3.new(0, -(Config.AUTO_TRICK_RAY + AUTO_UP.Y), 0)
+	local below = workspace:Raycast(pos + AUTO_UP, down, rayParams)
+	if not below then
+		return Config.AUTO_TRICK_UNKNOWN_AIR, Config.AUTO_TRICK_RAY
+	end
+	local h = math.max(0, pos.Y - below.Position.Y - 0.5) -- центр саней на снегу ≈ 0.5 над ним
+	local look = Config.AUTO_TRICK_LOOKAHEAD
+	local ahead = workspace:Raycast(pos + Vector3.new(vel.X, 0, vel.Z) * look + AUTO_UP, down, rayParams)
+	local rate = if ahead then (ahead.Position.Y - below.Position.Y) / look else 0
+	local v = vel.Y - rate
+	local g = workspace.Gravity
+	return (v + math.sqrt(math.max(0, v * v + 2 * g * h))) / g, h
+end
+
+local AUTO_ROTATIONS = { "flip", "frontflip", "roll", "spin" }
+-- Трюк-добавка: первый вращательный, которого ещё не было в этом полёте (даёт множитель комбо)
+local function nextDistinctTrick(): string
+	for _, id in AUTO_ROTATIONS do
+		if not airTricks[id] and not table.find(autoQueue, id) and not (trick and trick.id == id) then
+			return id
+		end
+	end
+	return if airTricks.grab then "flip" else "grab"
+end
+
+-- План авто-трюков на полёт: ярус по предсказанному полёту, вариант по умолчанию или случайный,
+-- оборотов не больше, чем сервер засчитает (maxRotations × AUTO_TRICK_SAFE_AIR)
+local function planAutoTricks(total: number)
+	local tier = nil
+	for _, p in Config.AUTO_TRICK_PLANS do
+		if total >= p.air then
+			tier = p
+		end
+	end
+	if not tier then
+		return
+	end
+	local opts = tier.options
+	local pick = opts[1]
+	if #opts > 1 and math.random() < Config.AUTO_TRICK_RANDOM then
+		pick = opts[math.random(2, #opts)]
+	end
+	local maxRot = Config.maxRotations(total * Config.AUTO_TRICK_SAFE_AIR)
+	local rot = 0
+	for _, id in pick do
+		local def = Config.TRICKS[id]
+		if def and not airTricks[id] then
+			if def.kind == "grab" then
+				table.insert(autoQueue, id)
+			elseif rot < maxRot then
+				rot += 1
+				table.insert(autoQueue, id)
+			end
+		end
+	end
 end
 
 -- Пробел / 🔄: у рогатки — натяжение; в воздухе — трюки (удержание = вращение, тап = грэб,
@@ -344,7 +416,11 @@ local function onTrickKey(_, inputState: Enum.UserInputState)
 		flipHeld = true
 		trickHeldSince = now
 		trickStartedThisPress = false
-		if airborne and not trick and now - lastTapAt < Config.TRICK_DOUBLE_TAP then
+		if airborne and trick and trick.auto then
+			-- во время авто-трюка нажатие = «ещё один» в комбо (выполнит та же авто-система)
+			autoBonus = math.min(autoBonus + 1, 2)
+			trickStartedThisPress = true
+		elseif airborne and not trick and now - lastTapAt < Config.TRICK_DOUBLE_TAP then
 			startTrick("spin")
 			trickStartedThisPress = true
 			lastTapAt = 0
@@ -1017,6 +1093,8 @@ RunService.Heartbeat:Connect(function(dt)
 			if t then
 				if math.floor((t.angle + math.pi / 2) / (2 * math.pi)) >= 1 then
 					completeTrick(t.id)
+				elseif t.auto then
+					fell = false -- недокрученный авто-трюк просто не засчитывается: приземление чистое
 				else
 					local upright
 					if t.def.kind == "yaw" then
@@ -1037,9 +1115,18 @@ RunService.Heartbeat:Connect(function(dt)
 				local list = {}
 				local names = {}
 				local coins, boost = 0, 1
+				-- оборотов не больше, чем сервер признает за этот полёт (иначе он отклонит весь список)
+				local rotLeft = Config.maxRotations(airTime)
 				for _, id in airTrickOrder do
 					local def = Config.TRICKS[id]
 					local count = math.min(airTricks[id], Config.TRICK_MAX_COUNT)
+					if def.kind ~= "grab" then
+						count = math.min(count, rotLeft)
+						rotLeft -= count
+					end
+					if count <= 0 then
+						continue
+					end
 					table.insert(list, { id = id, count = count })
 					table.insert(names, def.name .. (if count > 1 then " x" .. count else ""))
 					coins += def.coins * count
@@ -1081,14 +1168,58 @@ RunService.Heartbeat:Connect(function(dt)
 			elseif math.abs(steer) > 0.5 then
 				startTrick("roll", if steer > 0 then 1 else -1)
 			else
-				startTrick("flip")
+				-- без руля — сальто, а если оно уже было в полёте — другой трюк (множитель комбо)
+				startTrick(if airTricks.flip then nextDistinctTrick() else "flip")
 			end
 			trickStartedThisPress = true
 		end
+		-- Авто-трюки: план на полёт, затем очередь; скорость вращения — под остаток полёта
+		local autoOn = Config.AUTO_TRICKS >= 1
+		local needPredict = autoOn and (not autoPlanned or #autoQueue > 0 or autoBonus > 0 or (trick and trick.auto))
+		local airLeft = 0
+		if needPredict then
+			local h
+			airLeft, h = predictAirLeft(s, vel)
+			-- план — только когда сани заметно в воздухе: тогда полёт видит и сервер (AntiCheat.trickAir)
+			if not autoPlanned and h >= Config.AC_AIR_HEIGHT then
+				autoPlanned = true
+				planAutoTricks(airTime + airLeft)
+			end
+		end
+		-- ждём, только если игрок держит Пробел под ручной трюк или тап ещё может стать разворотом
+		if autoOn and not trick and not (flipHeld and not trickStartedThisPress) and not pendingGrab then
+			if autoBonus > 0 then
+				autoBonus -= 1
+				table.insert(autoQueue, 1, nextDistinctTrick())
+			end
+			local budget = airLeft - Config.AUTO_TRICK_MARGIN
+			while #autoQueue > 0 do
+				local id = table.remove(autoQueue, 1)
+				local def = Config.TRICKS[id]
+				if def.kind == "grab" then
+					if budget > 0 and airTime + airLeft >= def.minAir then
+						grabUntil = now + Config.GRAB_TIME
+						completeTrick(id)
+					end
+				elseif budget * Config.AUTO_TRICK_MAX_SPEED >= 2 * math.pi then
+					-- целый оборот успевает даже на пределе скорости — начинаем
+					startTrick(id, if def.kind == "roll" then (if math.random() < 0.5 then 1 else -1) else nil)
+					local nt = trick :: Trick
+					nt.auto = true
+					break
+				end
+				-- не успевает — пропускаем, смотрим следующий
+			end
+		end
 		local t = trick
+		if t and t.auto then
+			-- докручиваем к сроку: (остаток угла) / (остаток полёта − запас)
+			local budget = math.max(0.01, airLeft - Config.AUTO_TRICK_MARGIN)
+			t.speed = math.clamp((2 * math.pi - t.angle) / budget, Config.AUTO_TRICK_MIN_SPEED, Config.AUTO_TRICK_MAX_SPEED)
+		end
 		if t then
 			local kind = t.def.kind
-			if not flipHeld and kind ~= "yaw" and not t.released then
+			if not flipHeld and kind ~= "yaw" and not t.released and not t.auto then
 				local rest = t.angle % (2 * math.pi)
 				if rest < math.pi / 6 or rest > 11 * math.pi / 6 then
 					trick = nil -- отпустил почти ровно (оборот уже засчитан) — сани выравниваются
@@ -1105,11 +1236,12 @@ RunService.Heartbeat:Connect(function(dt)
 				s.AssemblyAngularVelocity = Vector3.zero
 			else
 				local axis = if kind == "pitch" then rightH elseif kind == "roll" then fwd else Vector3.yAxis
-				s.AssemblyAngularVelocity = axis * (Config.FLIP_SPEED * t.dir)
-				t.angle += Config.FLIP_SPEED * dt
+				local w = t.speed or Config.FLIP_SPEED
+				s.AssemblyAngularVelocity = axis * (w * t.dir)
+				t.angle += w * dt
 				if t.angle >= 2 * math.pi then
 					completeTrick(t.id)
-					if kind == "yaw" then
+					if kind == "yaw" or t.auto then -- авто-трюк — один оборот, дальше очередь
 						trick = nil -- разворот одиночный: дальше сани выравниваются
 					else
 						t.angle -= 2 * math.pi -- удержание крутит дальше (Сальто x2…)
