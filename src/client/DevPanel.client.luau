@@ -242,7 +242,7 @@ end
 
 tabs["Рогатка"] = function()
 	heading("Рогатка — " .. tierCount("Launch") .. " тиров, новый вид каждые " .. Config.TIER_SIZE .. " уровней")
-	note("Сила выстрела = " .. Config.F.launchBase .. " + " .. Config.F.launchStep .. " × уровень. Цена уровня: " .. Config.UPGRADES.Launch.BaseCost .. " × " .. Config.UPGRADES.Launch.Growth .. "^уровень монет; переход на новый тир — гемы. На каждом тире свои столбы и резинка (Shared/SledModels.slingshot, ROPE_COLORS).")
+	note("Сила выстрела = " .. Config.F.launchBase .. " + " .. Config.F.launchStep .. " × уровень. Цена уровня: " .. Config.UPGRADES.Launch.BaseCost .. " × (1+ур)^" .. Config.UPGRADE_PRICE_POW .. " × " .. Config.UPGRADES.Launch.Growth .. "^ур монет; переход на новый тир — гемы. На каждом тире свои столбы и резинка (Shared/SledModels.slingshot, ROPE_COLORS).")
 	local g = cardGrid()
 	local cur = Config.tierOf(player:GetAttribute("LaunchLevel") or 0)
 	for t = 0, tierCount("Launch") - 1 do
@@ -337,7 +337,7 @@ end
 
 tabs["Доход"] = function()
 	heading("Доход — множитель монет за заезд")
-	note("Множитель = 1 + " .. Config.F.incomeStep .. " × уровень. Цена уровня: " .. Config.UPGRADES.Income.BaseCost .. " × " .. Config.UPGRADES.Income.Growth .. "^уровень монет; переход на новый тир — гемы.")
+	note("Множитель = 1 + " .. Config.F.incomeStep .. " × уровень. Цена уровня: " .. Config.UPGRADES.Income.BaseCost .. " × (1+ур)^" .. Config.UPGRADE_PRICE_POW .. " × " .. Config.UPGRADES.Income.Growth .. "^ур монет; переход на новый тир — гемы.")
 	local g = cardGrid()
 	local cur = Config.tierOf(player:GetAttribute("IncomeLevel") or 0)
 	for t = 0, tierCount("Income") - 1 do

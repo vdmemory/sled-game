@@ -1,5 +1,6 @@
 -- Все настройки игры в одном месте. Меняй числа здесь — код трогать не нужно.
--- Баланс подобран симуляцией: уровень 1 без апгрейдов ≈ 40%, с ~6–8 покупками каждого ≈ финиш.
+-- Баланс подобран симуляцией: уровень 1 без апгрейдов ≈ 35–40%, с ~6–8 покупками каждого ≈ финиш.
+-- Экономика апгрейдов (#31): модель scratchpad econ_sim.py + phys.py, таблица в docs/GAME_DESIGN.md → «Экономика».
 
 local Config = {}
 
@@ -247,13 +248,13 @@ Config.TASK_CHEST_COINS = 500 -- сундук за все задания (× rew
 Config.TASK_CHEST_GEMS = 15
 -- Подарки за время в игре (минуты с захода), как сетка «Подарки» в референсе
 Config.PLAYTIME_GIFTS = {
-	{ min = 1, coins = 60 },
-	{ min = 3, gems = 2 },
-	{ min = 5, coins = 125 },
+	{ min = 1, gems = 2 }, -- 1-я минута — гемы: монеты тут дали бы лишнюю покупку до 2-го заезда (#31)
+	{ min = 3, coins = 60 },
+	{ min = 5, coins = 80 },
 	{ min = 8, gems = 3 },
-	{ min = 12, coins = 200 },
-	{ min = 16, coins = 250, gems = 2 },
-	{ min = 20, coins = 300 },
+	{ min = 12, coins = 120 },
+	{ min = 16, coins = 150, gems = 2 },
+	{ min = 20, coins = 200 },
 	{ min = 25, gems = 5 },
 	{ min = 30, coins = 450 },
 	{ min = 40, gems = 6 },
@@ -262,7 +263,7 @@ Config.PLAYTIME_GIFTS = {
 }
 -- Сундук в лобби раз в 4 часа
 Config.CHEST_INTERVAL = 4 * 3600
-Config.CHEST_COINS = 250
+Config.CHEST_COINS = 75 -- доступен сразу: 75 + 1-й заезд ≈ одна покупка, не пять (#31)
 Config.CHEST_GEMS = 3
 
 ------------------------------------------------------------------ ФИЗИКА САНОК
@@ -325,9 +326,9 @@ end
 -- Каждые TIER_SIZE уровней — новый «тир»: меняется вид рогатки/санок, а переход на него стоит гемы.
 Config.TIER_SIZE = 5
 Config.UPGRADES = {
-	Launch = { title = "Рогатка", icon = "🎯", color = Color3.fromRGB(225, 80, 70), BaseCost = 25, Growth = 1.18, MaxLevel = 50 },
-	Sled = { title = "Сани", icon = "🛷", color = Color3.fromRGB(60, 130, 230), BaseCost = 35, Growth = 1.18, MaxLevel = 50 },
-	Income = { title = "Доход", icon = "💰", color = Color3.fromRGB(235, 165, 35), BaseCost = 60, Growth = 1.2, MaxLevel = 50 },
+	Launch = { title = "Рогатка", icon = "🎯", color = Color3.fromRGB(225, 80, 70), BaseCost = 100, Growth = 1.01, MaxLevel = 50 },
+	Sled = { title = "Сани", icon = "🛷", color = Color3.fromRGB(60, 130, 230), BaseCost = 130, Growth = 1.01, MaxLevel = 50 },
+	Income = { title = "Доход", icon = "💰", color = Color3.fromRGB(235, 165, 35), BaseCost = 180, Growth = 1.02, MaxLevel = 50 },
 	Rocket = { title = "Ракета", icon = "🚀", color = Color3.fromRGB(240, 115, 45), MaxLevel = 30, gems = true },
 }
 Config.UPGRADE_ORDER = { "Launch", "Sled", "Income", "Rocket" }
@@ -397,7 +398,11 @@ function Config.incomeMult(level: number): number
 	return 1 + Config.F.incomeStep * level
 end
 
--- Цена следующего уровня: (сколько, валюта "Coins" | "Gems")
+-- Цена следующего уровня: (сколько, валюта "Coins" | "Gems").
+-- Монеты: BaseCost × (1 + уровень)^UPGRADE_PRICE_POW × Growth^уровень. Степенная часть дорожает
+-- быстро в начале (×4, ×2.3, ×1.8 …) и полого к концу — как растёт доход за заезд; Growth — хвост.
+-- Модель (#31): 1-я покупка после 1-го заезда, далее раз в 2–4 заезда, лестница 3×50 ≈ 60 ч игры.
+Config.UPGRADE_PRICE_POW = 2
 function Config.upgradePrice(name: string, level: number): (number, string)
 	local u = Config.UPGRADES[name]
 	if u.gems then
@@ -406,7 +411,7 @@ function Config.upgradePrice(name: string, level: number): (number, string)
 	if level > 0 and level % Config.TIER_SIZE == 0 then
 		return 1 + level // (Config.TIER_SIZE * 2), "Gems" -- переход на новый тир
 	end
-	return math.floor(u.BaseCost * u.Growth ^ level), "Coins"
+	return math.floor(u.BaseCost * (1 + level) ^ Config.UPGRADE_PRICE_POW * u.Growth ^ level), "Coins"
 end
 -- совместимость со старым кодом
 function Config.upgradeCost(name: string, level: number): number
@@ -517,6 +522,7 @@ Config.TUNABLES = {
 	{ "F.incomeStep", "Доход: + множителя за ур.", "Прокачка", 0.01, 1, 0.01 },
 	{ "UPGRADES.Income.BaseCost", "Доход: цена 1-го ур.", "Прокачка", 5, 2000, 5 },
 	{ "UPGRADES.Income.Growth", "Доход: рост цены ×", "Прокачка", 1.01, 1.5, 0.01 },
+	{ "UPGRADE_PRICE_POW", "Апгрейды: степень цены (1+ур)^x", "Прокачка", 0, 4, 0.1 },
 	{ "F.fuelBase", "Ракета: топливо на 0 ур., с", "Прокачка", 0.1, 5, 0.1 },
 	{ "F.fuelStep", "Ракета: + топлива за ур., с", "Прокачка", 0.05, 2, 0.05 },
 	{ "ROCKET_THRUST", "Ракета: тяга", "Прокачка", 5, 150, 1 },
