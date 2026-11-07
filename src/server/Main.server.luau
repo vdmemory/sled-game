@@ -1166,6 +1166,8 @@ DevAction.OnServerInvoke = function(player, action, a, b, c)
 		d.ChestAt = 0
 		d.GiftsClaimed = {}
 		Rewards.sync(player)
+	elseif action == "sessionShift" then
+		Rewards.devShiftSession(player, Config.DEV_SESSION_SHIFT)
 	else
 		return false, "Неизвестное действие"
 	end
