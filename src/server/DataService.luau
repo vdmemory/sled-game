@@ -35,6 +35,7 @@ local DEFAULT = {
 	OwnedSleds = { ["tube:1"] = true },
 	Trail = "white",
 	OwnedTrails = { white = true },
+	Tutorial = 0, -- биты пройденных шагов обучения (Config.TUTORIAL.STEPS), все биты = пройдено/пропущено
 }
 
 local function deepCopy(t: any): any

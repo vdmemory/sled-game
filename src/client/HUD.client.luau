@@ -93,6 +93,7 @@ local worldLine = UI.text({
 
 -- «НАЖМИ, ЧТОБЫ ИГРАТЬ» — пульсирует над карточками
 local tapText = UI.new("TextButton", {
+	Name = "PlayButton", -- client/Tutorial указывает на неё
 	Text = "",
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -262),
@@ -154,7 +155,7 @@ cl.Parent = cardsRow
 
 local function makeCard(name: string, parent: Instance, size: UDim2, order: number, compact: boolean): Card
 	local st = CARD_STYLE[name]
-	local card = UI.new("TextButton", { Text = "", AutoButtonColor = false, LayoutOrder = order, Size = size, BackgroundTransparency = 0, Parent = parent })
+	local card = UI.new("TextButton", { Name = "Card_" .. name, Text = "", AutoButtonColor = false, LayoutOrder = order, Size = size, BackgroundTransparency = 0, Parent = parent })
 	if compact then
 		UI.grad(card, Color3.fromRGB(120, 190, 255), Color3.fromRGB(60, 130, 230))
 	else

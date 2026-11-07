@@ -142,6 +142,7 @@ local awaitingLaunch = value("AwaitingLaunch", "BoolValue")
 local magnetLeft = value("MagnetLeft") -- сек до конца магнита (HUD показывает иконку)
 local shieldOn = value("ShieldOn", "BoolValue") -- щит: одно столкновение без аварии
 local x2Left = value("X2Left") -- сек до конца «x2 монеты»
+local airborneValue = value("Airborne", "BoolValue") -- в полёте (client/Tutorial)
 state.Parent = script
 
 -- Звуковые события для Sounds-скрипта: sfx:Fire("launch" | "land" | "hit" | "boost" | "coin" | "flip" | "jump")
@@ -690,6 +691,7 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	started = false
 	crashed = false
 	airborne, flipHeld, rocketHeld = false, false, false
+	airborneValue.Value = false
 	jumpQueued, jumping, lastJump = false, false, 0
 	clearAirTricks()
 	lastTapAt, grabUntil = 0, 0
@@ -995,6 +997,7 @@ RunService.Heartbeat:Connect(function(dt)
 		-- Приземление
 		if airborne then
 			airborne = false
+			airborneValue.Value = false
 			jumping = false
 			if airTime > 0.35 then
 				sfx:Fire("land")
@@ -1054,6 +1057,7 @@ RunService.Heartbeat:Connect(function(dt)
 	else
 		-- В воздухе: летим по физике, немного рулим, ракета толкает вперёд
 		airborne = true
+		airborneValue.Value = true
 		airTime += dt
 		local rightH = fwd:Cross(Vector3.yAxis)
 		local along = vel:Dot(fwd)
