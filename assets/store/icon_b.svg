@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="skyB" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7D41DC"/><stop offset=".5" stop-color="#BE78FF"/><stop offset=".85" stop-color="#FFAA46"/></linearGradient>
+    <radialGradient id="glowB" cx="330" cy="190" r="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE68C" stop-opacity=".9"/><stop offset="1" stop-color="#FFE68C" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#skyB)"/>
+  <circle cx="330" cy="190" r="230" fill="url(#glowB)"/>
+  <g fill="#fff" opacity="0.13"><polygon points="330,190 1130,190 1114.6282243225844,346.0722576129026"/><polygon points="330,190 1069.1036260090295,496.1467458920718 995.1756898420361,634.4561864156817"/><polygon points="330,190 895.685424949238,755.6854249492379 774.4561864156818,855.1756898420361"/><polygon points="330,190 636.1467458920719,929.1036260090294 486.07225761290266,974.6282243225844"/><polygon points="330,190 330.00000000000006,990 173.92774238709745,974.6282243225844"/><polygon points="330,190 23.853254107928194,929.1036260090294 -114.45618641568154,855.1756898420363"/><polygon points="330,190 -235.68542494923793,755.685424949238 -335.17568984203626,634.4561864156817"/><polygon points="330,190 -409.1036260090294,496.1467458920719 -454.6282243225844,346.0722576129029"/><polygon points="330,190 -470,190.00000000000009 -454.6282243225844,33.92774238709731"/><polygon points="330,190 -409.1036260090294,-116.14674589207175 -335.1756898420364,-254.45618641568154"/><polygon points="330,190 -235.68542494923815,-375.6854249492379 -114.45618641568171,-475.17568984203615"/><polygon points="330,190 23.85325410792774,-549.1036260090292 173.92774238709706,-594.6282243225843"/><polygon points="330,190 329.99999999999983,-610 486.0722576129026,-594.6282243225844"/><polygon points="330,190 636.146745892072,-549.1036260090293 774.4561864156822,-475.17568984203604"/><polygon points="330,190 895.6854249492379,-375.68542494923815 995.1756898420361,-254.4561864156817"/><polygon points="330,190 1069.103626009029,-116.14674589207232 1114.6282243225842,33.92774238709703"/></g>
+  <!-- склон -->
+  <polygon points="-10,380 260,330 520,370 520,520 -10,520" fill="#fff" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="6"/>
+  <polygon points="260,330 520,370 520,430 380,400" fill="#BEDEFA" opacity=".8"/>
+  <g transform="translate(470,384) scale(0.8)">
+    <rect x="-7" y="-10" width="14" height="22" fill="#8A5A2B" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="4"/>
+    <polygon points="0,-120 -42,-50 42,-50" fill="#5CC23E" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+    <polygon points="0,-120 0,-50 42,-50" fill="#41AA2D"/>
+    <polygon points="0,-90 -54,-6 54,-6" fill="#5CC23E" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+    <polygon points="0,-90 0,-6 54,-6" fill="#41AA2D"/>
+    <polygon points="0,-120 -42,-50 42,-50" fill="none" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+    <polygon points="-14,-104 0,-120 14,-104 4,-100 -6,-98" fill="#fff"/>
+  </g><g transform="translate(420,360) scale(0.55)">
+    <rect x="-7" y="-10" width="14" height="22" fill="#8A5A2B" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="4"/>
+    <polygon points="0,-120 -42,-50 42,-50" fill="#41AA2D" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+    <polygon points="0,-120 0,-50 42,-50" fill="#2E8A3A"/>
+    <polygon points="0,-90 -54,-6 54,-6" fill="#41AA2D" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+    <polygon points="0,-90 0,-6 54,-6" fill="#2E8A3A"/>
+    <polygon points="0,-120 -42,-50 42,-50" fill="none" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+    <polygon points="-14,-104 0,-120 14,-104 4,-100 -6,-98" fill="#fff"/>
+  </g>
+  <!-- линии скорости вдоль диагонали -->
+  <g stroke="#fff" stroke-linecap="round" opacity=".9">
+    <line x1="40" y1="250" x2="150" y2="200" stroke-width="9"/>
+    <line x1="70" y1="300" x2="210" y2="236" stroke-width="12"/>
+    <line x1="30" y1="190" x2="110" y2="152" stroke-width="7"/>
+    <line x1="150" y1="330" x2="230" y2="294" stroke-width="7"/>
+    <line x1="250" y1="120" x2="330" y2="84" stroke-width="6"/>
+  </g>
+  <!-- снежный шлейф за санями -->
+  <path d="M110,380 Q170,300 250,262 L262,300 Q190,330 150,400 Z" fill="#fff" opacity=".75"/>
+  <polygon points="197.6,356.4 205.9,372.1 188.2,370.3 182.1,383.4 171.6,373.6 153.7,385.2 157.7,364.2 140.7,358.9 154.4,347.6 149.5,334.1 163.8,333.7 168.3,312.7 180.4,330.4 196.1,322.1 194.3,339.8 207.4,345.9" fill="#fff" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+  <!-- рогатка: крупная развилка слева-снизу, тяжи ещё натянуты к корме саней -->
+  <g transform="translate(-34,6)">
+    <path d="M110,520 L110,400 L58,300 M110,400 L170,304" fill="none" stroke="#162240" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M110,520 L110,400 L58,300 M110,400 L170,304" fill="none" stroke="#A8692E" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M102,500 L102,404 L62,326" fill="none" stroke="#D08A48" stroke-width="9" stroke-linecap="round"/>
+    <rect x="44" y="286" width="30" height="26" rx="6" fill="#D72D2D" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5" transform="rotate(-28 59 299)"/>
+    <rect x="156" y="290" width="30" height="26" rx="6" fill="#D72D2D" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5" transform="rotate(28 171 303)"/>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path d="M24,306 Q110,300 190,280" stroke="#162240" stroke-width="18"/><path d="M24,306 Q110,300 190,280" stroke="#FF6E64" stroke-width="9"/>
+    <path d="M136,310 Q166,290 190,280" stroke="#162240" stroke-width="18"/><path d="M136,310 Q166,290 190,280" stroke="#FF6E64" stroke-width="9"/>
+    <rect x="176" y="266" width="26" height="30" rx="7" fill="#8A5A2B" stroke="#162240" stroke-width="5" transform="rotate(-24 189 281)"/>
+  </g>
+  <!-- сани + персонаж, крупный план, нос вверх-вправо -->
+  <g transform="translate(316,198) rotate(-24) scale(1.15)">
+    <!-- полозья с большим завитком -->
+    <path d="M-120,40 L92,40 Q146,40 146,-6 Q146,-38 116,-38 Q98,-38 100,-20" fill="none" stroke="#162240" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M-120,40 L92,40 Q146,40 146,-6 Q146,-38 116,-38 Q98,-38 100,-20" fill="none" stroke="#FFCD3C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M-120,40 L92,40" fill="none" stroke="#FFF0A8" stroke-width="3" transform="translate(0,-3)"/>
+    <path d="M-80,40 v-26 M-10,40 v-26 M60,40 v-26" stroke="#162240" stroke-width="14" stroke-linecap="round"/>
+    <path d="M-80,40 v-26 M-10,40 v-26 M60,40 v-26" stroke="#F5AA1E" stroke-width="6" stroke-linecap="round"/>
+    <!-- деревянная дека из реек -->
+    <polygon points="-130,16 114,16 128,-6 -122,-6" fill="#D72D2D" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="7"/>
+    <polygon points="-122,-6 128,-6 120,-18 -116,-18" fill="#FF6E64" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="6"/>
+    <path d="M-70,-18 l-4,34 M-10,-18 l-2,34 M50,-18 l0,34" stroke="#162240" stroke-width="4" opacity=".55"/>
+    <!-- верёвка к завитку -->
+    <path d="M100,-22 Q70,-40 44,-54" fill="none" stroke="#162240" stroke-width="9" stroke-linecap="round"/>
+    <path d="M100,-22 Q70,-40 44,-54" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+    <g transform="translate(-44,-14)">
+  <path d="M4,-8 L54,-10 L72,18" fill="none" stroke="#162240" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M4,-8 L54,-10 L72,18" fill="none" stroke="#3478DC" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <rect x="-24" y="-86" width="44" height="80" rx="8" fill="#FFAA46" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+  <path d="M-24,-46 h44 v30 a10 10 0 0 1 -10 10 h-24 a10 10 0 0 1 -10 -10z" fill="#F06923" opacity=".55"/>
+  <rect x="-30" y="-142" width="58" height="54" rx="12" fill="#FFCD3C" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+  <rect x="-30" y="-142" width="58" height="16" rx="8" fill="#FFE68C" opacity=".8"/>
+  <ellipse cx="8" cy="-117" rx="4.5" ry="7" fill="#162240"/>
+  <ellipse cx="22" cy="-117" rx="4.5" ry="7" fill="#162240"/>
+  <path d="M2,-103 Q15,-92 27,-104" fill="#fff" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="4"/>
+  <path d="M-2,-72 L36,-62 L74,-48" fill="none" stroke="#162240" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M-2,-72 L36,-62 L74,-48" fill="none" stroke="#FFCD3C" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><path d="M14,-74 L52,-70 L86,-58" fill="none" stroke="#162240" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14,-74 L52,-70 L86,-58" fill="none" stroke="#FFCD3C" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/></g>
+  </g>
+  <!-- искры-звёзды -->
+  <polygon points="448.0,96.0 456.0,110.0 442.0,102.0 429.6,108.4 436.0,96.0 426.4,80.4 442.0,90.0 456.0,82.0" fill="#fff" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="4"/><polygon points="474.0,168.0 478.9,176.9 470.0,172.0 462.1,175.9 466.0,168.0 460.1,158.1 470.0,164.0 478.9,159.1" fill="#FFF0A8" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="3"/><polygon points="392.0,60.0 395.6,67.6 388.0,64.0 381.2,66.8 384.0,60.0 379.5,51.5 388.0,56.0 395.6,52.4" fill="#fff" stroke="#162240" stroke-linejoin="round" stroke-linecap="round" stroke-width="3"/>
+  
+  <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset=".1" stop-color="#FFFFFF"/><stop offset=".9" stop-color="#46D2FF"/></linearGradient></defs>
+  <g font-family="Inter Display" font-weight="900" font-size="82" text-anchor="middle" letter-spacing="-1">
+    <text x="258" y="493" fill="#162240" stroke="#162240" stroke-width="22" stroke-linejoin="round">SLED RUSH</text>
+    <text x="256" y="486" fill="url(#tg)" stroke="#162240" stroke-width="16" stroke-linejoin="round" paint-order="stroke">SLED RUSH</text>
+    <text x="256" y="486" fill="url(#tg)">SLED RUSH</text>
+  </g>
+</svg>
