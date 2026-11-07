@@ -1,5 +1,5 @@
 -- Меню лобби в стиле мобильного оригинала:
---  • слева колонка «ледяных» плиток-иконок (Миры, Задания, Сани, Следы, Подарки);
+--  • слева колонка «ледяных» плиток-иконок (Миры, Задания, Сани, Следы, Подарки + стрик дней);
 --  • справа шестерёнка (настройки);
 --  • под заголовком — жёлтая плашка сундука с таймером;
 --  • окна — голубые, с лентой-заголовком и круглым красным крестиком (Shared/UIKit).
@@ -532,8 +532,86 @@ tasksBtn.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Подарки за время в игре
-local giftsWin, giftsBody = panel("ПОДАРКИ", 640, 470)
-local giftsArea = scroller(giftsBody, false, 6)
+-- Сверху — стрик дней входа (#25, y 0–180 тела окна), ниже — сетка подарков за время.
+-- Вкладка в «Подарках», а не 6-я плитка: слева уже 5 плиток, обе награды — «за возвращение».
+local giftsWin, giftsBody = panel("ПОДАРКИ", 640, 600)
+local giftsArea = scroller(giftsBody, false, 188)
+local _, setStreakHead = UI.iconText({ Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 26), Color = C.ink, ZIndex = 33, Parent = giftsBody })
+type StreakCard = { frame: Frame, stroke: UIStroke, icon: Frame, done: Frame, setCoins: (string, string?) -> (), setGems: (string, string?) -> (), gemsRow: Frame, coinsRow: Frame }
+local streakCards: { StreakCard } = {}
+local streakRow = UI.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 32), Size = UDim2.new(1, 0, 0, 104), ZIndex = 33, Parent = giftsBody })
+local srl = Instance.new("UIListLayout")
+srl.FillDirection = Enum.FillDirection.Horizontal
+srl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+srl.Padding = UDim.new(0, 4)
+srl.SortOrder = Enum.SortOrder.LayoutOrder
+srl.Parent = streakRow
+for i, r in Config.STREAK_REWARDS do
+	local card = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, Size = UDim2.fromOffset(80, 104), ZIndex = 33, Parent = streakRow })
+	UI.corner(card, 12)
+	local stroke = UI.stroke(card, 2, Color3.fromRGB(120, 170, 225))
+	UI.ink({ Text = "ДЕНЬ " .. i, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 16), ZIndex = 34, Parent = card })
+	local main = if r.big then "gift" elseif r.coins then "coin" else "gem"
+	local icon = UI.icon(main, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 22), Size = UDim2.fromOffset(36, 36), ZIndex = 34, Parent = card })
+	local coinsRow, setCoins = UI.iconText({ Position = UDim2.fromOffset(2, if r.gems then 62 else 72), Size = UDim2.new(1, -4, 0, 18), Color = C.ink, ZIndex = 34, Parent = card })
+	local gemsRow, setGems = UI.iconText({ Position = UDim2.fromOffset(2, if r.coins then 82 else 72), Size = UDim2.new(1, -4, 0, 18), Color = C.ink, ZIndex = 34, Parent = card })
+	local done = UI.icon("check", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 6), Size = UDim2.fromOffset(28, 28), ZIndex = 36, Visible = false, Parent = card })
+	streakCards[i] = { frame = card, stroke = stroke, icon = icon, done = done, setCoins = setCoins, setGems = setGems, coinsRow = coinsRow, gemsRow = gemsRow }
+end
+local streakBtn = UI.button("green", "ЗАБРАТЬ", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 142), Size = UDim2.fromOffset(240, 40), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = giftsBody })
+-- Предложение спасти серию: поверх стрика, один раз в день пропуска (до награды или отказа)
+local saveBox = UI.new("Frame", { BackgroundColor3 = C.row, BackgroundTransparency = 0, Position = UDim2.fromOffset(0, 28), Size = UDim2.new(1, 0, 0, 156), ZIndex = 40, Visible = false, Parent = giftsBody })
+UI.corner(saveBox, 14)
+UI.stroke(saveBox, 3, C.gold)
+local saveText = UI.ink({ Text = "", TextWrapped = true, Position = UDim2.fromOffset(16, 10), Size = UDim2.new(1, -32, 0, 70), ZIndex = 41, Parent = saveBox })
+local saveYes = UI.button("green", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0.5, -6, 0, 94), Size = UDim2.fromOffset(220, 48), Radius = 10, StrokeThickness = 2, ZIndex = 41, Parent = saveBox })
+local saveNo = UI.button("grey", "НЕТ, С 1-ГО ДНЯ", { Position = UDim2.new(0.5, 6, 0, 94), Size = UDim2.fromOffset(220, 48), Radius = 10, StrokeThickness = 2, ZIndex = 41, Parent = saveBox })
+saveYes.Activated:Connect(function()
+	local ok = act("streakSave")
+	if not ok then
+		UIFx.shakeNo(saveYes)
+	end
+end)
+saveNo.Activated:Connect(function()
+	act("streakDecline")
+end)
+streakBtn.Activated:Connect(function()
+	if not rewardAct("streak", nil, streakBtn) then
+		UIFx.shakeNo(streakBtn)
+	end
+end)
+local function streakReady(): boolean
+	return rewards ~= nil and rewards.streak ~= nil and not rewards.streak.claimed
+end
+local function drawStreak()
+	local st = rewards and rewards.streak
+	if not st then
+		return
+	end
+	local count = math.max(st.count, 1)
+	local cur = Config.streakDay(count)
+	local level = player:GetAttribute("Level") or 1
+	setStreakHead("ДНЕЙ ПОДРЯД: " .. count .. "  · пропуск — с 1-го дня", "fire")
+	for i, card in streakCards do
+		local coins, gems = Config.streakReward(count - cur + i)
+		card.coinsRow.Visible = coins ~= nil
+		card.gemsRow.Visible = gems ~= nil
+		if coins then
+			card.setCoins(UI.money(Config.rewardCoins(coins, level)), "coin")
+		end
+		if gems then
+			card.setGems(tostring(gems), "gem")
+		end
+		local today = i == cur
+		card.done.Visible = i < cur or (today and st.claimed)
+		card.stroke.Color = if today then C.gold elseif Config.STREAK_REWARDS[i].big then Color3.fromRGB(255, 170, 60) else Color3.fromRGB(120, 170, 225)
+		card.stroke.Thickness = if today then 4 else 2
+		card.frame.BackgroundTransparency = if i < cur then 0.35 else 0
+	end
+	saveBox.Visible = st.save > 0 and not st.claimed
+	saveText.Text = string.format("Ты пропустил день! Серия %d дн. сгорела.\nВерни её за гемы — сегодня будет день %d.", st.save, st.save + 1)
+	UI.setText(saveYes, "СПАСТИ  " .. st.savePrice, "gem")
+end
 grid(giftsArea, 128, 112)
 type GiftCell = { status: TextButton, setCoins: (string, string?) -> (), setGems: (string, string?) -> (), rows: { Frame } }
 local giftCells: { GiftCell } = {}
@@ -802,9 +880,22 @@ local function refreshRewards()
 		end
 	end
 	drawTasks()
+	drawStreak()
 end
 player:GetAttributeChangedSignal("Rewards"):Connect(refreshRewards)
 refreshRewards()
+-- Вернувшийся игрок (серия ≥ 2 или есть что спасти) с неполученной наградой — окно открывается само,
+-- один раз за сессию; новичка не отвлекаем от обучения — ему бейдж на 🎁
+task.spawn(function()
+	while not rewards do
+		task.wait(0.5)
+	end
+	task.wait(2)
+	local st = rewards.streak
+	if st and not st.claimed and (st.count >= 2 or st.save > 0) and not player:GetAttribute("InRun") and not giftsWin.Visible then
+		open(giftsWin)
+	end
+end)
 
 local acc = 0
 RunService.Heartbeat:Connect(function(dt)
@@ -834,6 +925,14 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 	updateSessionBar(elapsed)
+	if streakReady() then
+		ready += 1
+		UI.setKind(streakBtn, "green")
+		UI.setText(streakBtn, "ЗАБРАТЬ")
+	else
+		UI.setKind(streakBtn, "grey")
+		UI.setText(streakBtn, "ЗАВТРА · " .. clock(rewards.resetAt - now))
+	end
 	giftBadge.Text = tostring(ready)
 	giftBadge.Visible = ready > 0
 	giftTimer.Text = if ready > 0 then "" elseif nextIn then clock(nextIn) else ""

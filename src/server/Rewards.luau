@@ -41,6 +41,21 @@ local function tasksFor(day: number)
 	return out
 end
 
+-- Стрик дней входа (#25): пересчёт при входе и при смене дня в сессии (вызывается из ensure).
+-- Новый день подряд → count + 1; пропущен ровно 1 день → серия с 1, но сегодня её можно спасти за
+-- гемы (save = старая серия); пропуск ≥ 2 → с 1. Предложение спасения живёт только этот день.
+local function ensureStreak(d)
+	local s = d.Streak
+	local day = today()
+	if s.day == day then
+		return
+	end
+	local gap = day - s.day
+	s.save = if gap == 2 and s.count > 0 then s.count else 0
+	s.count = if gap == 1 then s.count + 1 else 1
+	s.day = day
+end
+
 local function ensure(d)
 	d.Daily = d.Daily or {}
 	local day = today()
@@ -48,6 +63,7 @@ local function ensure(d)
 		d.Daily = { day = day, progress = {}, claimed = {}, chest = false }
 	end
 	d.ChestAt = d.ChestAt or 0
+	ensureStreak(d)
 end
 
 function Rewards.sync(player: Player)
@@ -86,6 +102,12 @@ function Rewards.sync(player: Player)
 		sessionStart = sessionStart[player] or os.time(),
 		gifts = gifts,
 		big = bi, -- клиенту: какой подарок большой (полоска «сессия»)
+		streak = {
+			count = d.Streak.count,
+			claimed = d.Streak.claimedDay == d.Streak.day,
+			save = d.Streak.save,
+			savePrice = if d.Streak.save > 0 then Config.streakSavePrice(d.Streak.save) else 0,
+		},
 		now = os.time(),
 	}))
 end
@@ -225,6 +247,78 @@ function Rewards.claimGift(player: Player, index: number): (boolean, any)
 		table.insert(parts, "+" .. g.gems .. " 💎")
 	end
 	return true, table.concat(parts, "  ")
+end
+
+-- Награда дня стрика: раз в UTC-день (claimedDay). Забрать = отказаться от спасения серии.
+function Rewards.claimStreak(player: Player): (boolean, any)
+	local d = Data.get(player)
+	if not d then
+		return false, "Недоступно"
+	end
+	ensure(d)
+	local s = d.Streak
+	if s.claimedDay == s.day then
+		return false, "Уже получено — заходи завтра"
+	end
+	s.claimedDay = s.day
+	s.save = 0
+	local coins, gems = Config.streakReward(s.count)
+	grant(player, d, coins, gems, "Streak")
+	Analytics.custom(player, "StreakDay", s.count)
+	Rewards.sync(player)
+	local parts = {}
+	if coins then
+		table.insert(parts, "+" .. Config.rewardCoins(coins, d.Level) .. " 💰")
+	end
+	if gems then
+		table.insert(parts, "+" .. gems .. " 💎")
+	end
+	return true, table.concat(parts, "  ")
+end
+
+-- Спасение серии после пропуска 1 дня: только гемы, до получения награды дня; цена растёт с днём
+function Rewards.saveStreak(player: Player): (boolean, any)
+	local d = Data.get(player)
+	if not d then
+		return false, "Недоступно"
+	end
+	ensure(d)
+	local s = d.Streak
+	if s.save <= 0 or s.claimedDay == s.day then
+		return false, "Нечего спасать"
+	end
+	local price = Config.streakSavePrice(s.save)
+	if d.Gems < price then
+		return false, "Нужно " .. price .. " 💎"
+	end
+	d.Gems -= price
+	Analytics.economy(player, "Sink", "Gems", price, d.Gems, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, "StreakSave")
+	s.count = s.save + 1
+	s.save = 0
+	Rewards.sync(player)
+	return true, "Стрик спасён: день " .. s.count
+end
+
+-- Отказ от спасения: окно больше не предлагает (серия уже 1)
+function Rewards.declineStreakSave(player: Player): (boolean, any)
+	local d = Data.get(player)
+	if not d then
+		return false, "Недоступно"
+	end
+	d.Streak.save = 0
+	Rewards.sync(player)
+	return true, nil
+end
+
+-- DEV: сдвинуть все дни стрика на n назад (1 = «наступил следующий день», 2 = «пропуск дня»)
+function Rewards.devStreakShift(player: Player, n: number)
+	local d = Data.get(player)
+	if d then
+		d.Streak.day -= n
+		d.Streak.claimedDay -= n
+		d.Daily = nil -- задания/большой подарок тоже «нового дня»
+		Rewards.sync(player)
+	end
 end
 
 function Rewards.openChest(player: Player): (boolean, any)
