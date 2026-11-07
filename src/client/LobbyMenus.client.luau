@@ -145,8 +145,9 @@ local giftBadge = UI.badge(giftBtn, "!")
 giftBadge.Visible = false
 
 -- справа: шестерёнка (кружок) — настройки
-local gear = UI.new("TextButton", { Text = "", LayoutOrder = 0, Size = UDim2.fromOffset(84, 60), BackgroundTransparency = 1, Parent = right })
-local gearBg = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.navy, BackgroundTransparency = 0.35, Parent = gear })
+-- зона нажатия 84×80 (≥ 44 px на телефоне при масштабе 0.57), кружок 68
+local gear = UI.new("TextButton", { Text = "", LayoutOrder = 0, Size = UDim2.fromOffset(84, 80), BackgroundTransparency = 1, Parent = right })
+local gearBg = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(68, 68), BackgroundColor3 = C.navy, BackgroundTransparency = 0.35, Parent = gear })
 UI.corner(gearBg, 1000)
 UI.stroke(gearBg, 2.5, C.white, 0.3)
 UI.icon("gear", { Position = UDim2.fromScale(0.14, 0.14), Size = UDim2.fromScale(0.72, 0.72), Parent = gearBg })
@@ -556,11 +557,11 @@ local function drawSleds()
 		local kind, text
 		local icon: string? = nil
 		if c.model.id == cur and c.rarity == curR then
-			kind, text = "green", "✔ НАДЕТО"
+			kind, text = "green", "✔ ВЫБРАНО" -- как во вспышке выбора (UIFx.pulseSelect); «надеть» — у следов
 		elseif owned[key] then
-			kind, text = "blue", "НАДЕТЬ"
+			kind, text = "blue", "ВЫБРАТЬ"
 		elseif world < c.model.world then
-			kind, text, icon = "grey", "мир " .. c.model.world, "lock"
+			kind, text, icon = "grey", "МИР " .. c.model.world, "lock"
 		elseif c.rarity > 1 and not owned[c.model.id .. ":" .. (c.rarity - 1)] then
 			kind, text, icon = "grey", UI.money(c.model.prices[c.rarity]), "lock"
 		else
