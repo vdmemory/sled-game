@@ -100,9 +100,9 @@ if need rojo && need luau-lsp && need_defs; then
   OUT="$(luau-lsp analyze --platform=roblox --definitions="$DEFS" --sourcemap="$SOURCEMAP" \
     --formatter=gnu src 2>&1)"
   RC=$?
-  ISSUES="$(printf '%s\n' "$OUT" | grep -vE '^\[(INFO|WARN)\]')"
+  ISSUES="$(printf '%s\n' "$OUT" | grep -vE '^\[(INFO|WARN)\]' | sed "s#$PWD/##g")"
   if [ "$RC" -ne 0 ] || [ -n "$ISSUES" ]; then
-    printf '%s\n' "$ISSUES" | sed "s#^$PWD/##"
+    printf '%s\n' "$ISSUES"
     echo "luau-lsp: $(printf '%s\n' "$ISSUES" | grep -cE '^src/.*: [A-Za-z]+: ') замечаний"
     FAIL=1
   else
