@@ -199,8 +199,7 @@ local function onPlayerAdded(player: Player)
 		onCharacter(player.Character)
 	end
 
-	Data.load(player)
-	if not player.Parent then -- вышел, пока грузился профиль
+	if not Data.load(player) or not player.Parent then -- вышел, пока грузился профиль, или кикнут (ошибка загрузки)
 		return
 	end
 	Tuning.loadPlayer(player) -- персональные настройки владельца для этого игрока (атрибут ConfigOverrides)
@@ -1396,7 +1395,7 @@ end)
 
 task.spawn(function()
 	while true do
-		task.wait(120)
+		task.wait(Config.DATA_AUTOSAVE)
 		Data.saveAll()
 	end
 end)
