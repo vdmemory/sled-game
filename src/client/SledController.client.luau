@@ -473,7 +473,7 @@ local function smash(model: Model)
 	speed *= 0.92
 	trickPopup:Fire("💥 Удар!  +" .. Config.SMASH_COINS)
 	sfx:Fire("smash")
-	Remotes.Smash:FireServer()
+	Remotes.Smash:FireServer(model) -- сервер проверит: Breakable своей трассы, рядом, один раз
 end
 
 local magnetUntil = 0
