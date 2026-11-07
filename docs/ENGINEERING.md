@@ -39,21 +39,45 @@
   Smooth Terrain из кода.
 
 ## Инструменты проверки
-- `luau-compile --null <файл>` — синтаксис (путь в `CLAUDE.md`); `luau-analyze` — типы и
-  предупреждения (ложные срабатывания на Roblox-глобалы — игнорировать `Unknown global`,
-  остальное чинить).
-- `selene` и `StyLua` — если установлены (`rokit add`), стиль и линт по `selene.toml`/
-  `stylua.toml`; иначе — ручное соблюдение этого документа.
+- **`scripts/check.sh`** — одна команда перед каждым пушем, код выхода ≠ 0 при ошибках:
+  1. `rojo sourcemap` → `.tools/sourcemap.json` (карта DataModel: `require(script.Parent.X)`,
+     `Shared.Track` → `Track/init.luau` резолвятся);
+  2. `luau-lsp analyze --platform=roblox --definitions=globalTypes(None) --sourcemap` — знает
+     типы Roblox API: ловит необъявленные переменные (пропавший `C = UI.C` после слияния),
+     несуществующие `Enum.X.Y` (`AnalyticsEconomyTransactionType.Reward`), опечатки в свойствах,
+     `Shape` у `BasePart`, deprecated API (`LoadCharacter`), циклы require между модулями;
+  3. `selene src` по `selene.toml` (`std = "roblox"`, карта API — `roblox.yml`, генерирует
+     `selene generate-roblox-std`): неиспользуемые переменные, одинаковые ветки `if` и т. п.;
+  4. `luau-compile --null` по каждому файлу — синтаксис, как сборка Open Cloud.
+- Инструменты: из `PATH`, иначе из `.tools/bin` (в `.gitignore`); недостающие `check.sh` сам
+  скачивает с GitHub releases с фиксированными версиями (rojo 7.4.4, luau-lsp 1.70.1, selene 0.31.0,
+  luau 0.746; `globalTypes.None.d.luau` с тега luau-lsp). `scripts/check.sh --install` — только
+  поставить. Нет сети и инструмента — шаг пропускается с предупреждением
+  (`CHECK_REQUIRE_TOOLS=1` — ошибка).
+- **В CI**: `scripts/publish.sh` запускает `check.sh` до публикации (workflow не менялся) —
+  ошибка останавливает деплой, `SKIP_CHECK=1` — пропустить. Сеть на раннере есть, инструменты
+  скачиваются за секунды.
+- Ложное срабатывание глушится точечно и с комментарием: приведение `(x :: any)` в месте
+  ошибки (пример: `require` PlayerModule, сужение `trick` в `Sled/Tricks`), правило selene —
+  в `selene.toml` с причиной. Массово `--!nolint`/`--!nocheck` не ставить.
+- В облачной сессии за прокси selene не может сам скачать карту API (TLS прокси): положить
+  `roblox.yml`, сгенерированный из скачанного curl-ом `API-Dump.json`, в корень (в CI не нужно).
+- `StyLua` — не подключён (стиль держим вручную по этому документу).
+- Сверка генерации трассы до/после рефакторинга — детерминизм по seed: стенд из шимов Roblox
+  API запускает `shared/*` в luau CLI и снимает отпечаток всех инстансов уровней, витрины и
+  лобби (`docs/CHANGELOG.md`, #17/#18).
 - F9 в клиенте (Client/Server логи), `AnalyticsService` для воронки, `MicroProfiler` (Ctrl+F6)
   для FPS.
 
 ## Паттерны проекта
 - Числа — в `Config` (+ `TUNABLES`), логика — в модулях; shared-код не зависит от серверных
   сервисов.
-- Ремоуты создаются в `Main.server` (`remote(className, name)`), клиент ждёт
+- Ремоуты создаются в `server/Remotes` (`remote(className, name)`), клиент ждёт
   `ReplicatedStorage:WaitForChild("Remotes")`.
-- Новый предмет на трассе: `make*` в `Track` + тег + обработчик в `SledController` + ремоут
-  `PowerUp` + серверный учёт в `Main`.
+- Новый предмет на трассе: `make*` в `Track/Items` + тег + обработчик в `client/Sled/Contacts` +
+  ремоут `PowerUp` + серверный учёт в `server/Pickups`.
+- Новый серверный обработчик — в модуле своей зоны (`Runs`/`RunEvents`/`Pickups`/`Shop`/
+  `Purchases`/`DevTools`) внутри его `start()`; `Main.server` только вызывает `start()`.
 - Новое поле сейва: `DataService.DEFAULT`; удаление — миграция с компенсацией.
 - Новая модель транспорта: builder + `BUILDERS` + `MOUNTS` в `SledModels`, запись в
   `Config.SLEDS`, иконка в `assets/ui`.
