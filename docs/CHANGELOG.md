@@ -1,5 +1,16 @@
 # Журнал изменений
 
+## Стрик дней входа (#25)
+- `Config.STREAK_REWARDS` (7 дней: 100…400 монет, гемы в дни 2/4/6, день 7 — 600 + 25 💎),
+  `STREAK_CYCLE_MULT` 1.25, `STREAK_SAVE_GEMS` 10 + `STREAK_SAVE_STEP` 2; хелперы `streakDay`/
+  `streakReward`/`streakSavePrice`; всё в TUNABLES «Награды».
+- Сейв `Streak = { day, count, claimedDay, save }`; `migrate` дополняет ключи `Settings`/`Streak`.
+- `Rewards`: пересчёт серии по UTC-дню, `claimStreak` (идемпотентно по `claimedDay`, custom
+  `StreakDay`), `saveStreak` (Sink Gems `StreakSave`), `declineStreakSave`, `devStreakShift`;
+  `RewardAction` `streak`/`streakSave`/`streakDecline`; DEV «Стрик: следующий день / пропуск дня».
+- `LobbyMenus`: окно «Подарки» 640×600 — сверху ряд из 7 карточек, «ЗАБРАТЬ» с полётом валюты,
+  предложение спасения; бейдж 🎁 учитывает стрик; вернувшемуся игроку окно открывается само.
+
 ## Большой подарок на 10-й минуте и полоска «сессия» (#24)
 - `Config.PLAYTIME_GIFTS`: 10 мин — 600 монет + 5 💎 (`big`), соседи 8 → 7 и 12 → 14 мин;
   `SESSION_GOAL_MIN` = 13; всё в TUNABLES «Награды». Большой — раз в день (`Daily.big`).

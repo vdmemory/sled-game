@@ -190,6 +190,21 @@ end
 function Config.rewardCoins(base: number, level: number): number
 	return math.floor(base * (1 + (level - 1) * (if Config.F then Config.F.rewardGrowth else 0.25)))
 end
+-- Стрик: день цикла 1..7 по длине серии, награда (монеты с бонусом цикла — до rewardCoins), цена спасения
+function Config.streakDay(count: number): number
+	return (math.max(count, 1) - 1) % #Config.STREAK_REWARDS + 1
+end
+function Config.streakReward(count: number): (number?, number?)
+	local r = Config.STREAK_REWARDS[Config.streakDay(count)]
+	local coins = r.coins
+	if coins and count > #Config.STREAK_REWARDS then
+		coins = math.floor(coins * Config.STREAK_CYCLE_MULT)
+	end
+	return coins, r.gems
+end
+function Config.streakSavePrice(count: number): number
+	return Config.STREAK_SAVE_GEMS + Config.STREAK_SAVE_STEP * (Config.streakDay(count) - 1)
+end
 -- Ежедневные задания: 3 в день из пула (выбор детерминирован по номеру дня)
 -- Задания дня. max = true — считается лучший результат одного заезда, а не сумма.
 -- icon — имя 3D-иконки (UI.icon). Каждый день выбирается TASKS_PER_DAY разных заданий.
@@ -273,6 +288,21 @@ Config.PLAYTIME_GIFTS = {
 Config.CHEST_INTERVAL = 4 * 3600
 Config.CHEST_COINS = 75 -- доступен сразу: 75 + 1-й заезд ≈ одна покупка, не пять (#31)
 Config.CHEST_GEMS = 3
+-- Стрик дней входа (#25): день = os.time() // 86400 (UTC, как у заданий). Награда за день цикла 1..7,
+-- монеты × rewardCoins; дни 1–6 — 100…400 (меньше Большого подарка 600 + 5 💎), 7-й — крупный: 600 + 25 💎.
+-- Неделя: 2000 монет-базы + 35 💎 — повод зайти, а не замена заездов (кривая #31 не сдвигается)
+Config.STREAK_REWARDS = {
+	{ coins = 100 },
+	{ coins = 150, gems = 2 },
+	{ coins = 200 },
+	{ coins = 250, gems = 3 },
+	{ coins = 300 },
+	{ coins = 400, gems = 5 },
+	{ coins = 600, gems = 25, big = true },
+}
+Config.STREAK_CYCLE_MULT = 1.25 -- монеты со 2-го цикла (дни 8+), не накапливается
+Config.STREAK_SAVE_GEMS = 10 -- спасение стрика после пропуска 1 дня: цена, если серия была 1 день
+Config.STREAK_SAVE_STEP = 2 -- +💎 за каждый следующий день цикла серии (6 дней → 20, 7 → 22)
 Config.SESSION_GOAL_MIN = 13 -- цель полоски «сессия» в лобби (минуты с захода, #24)
 Config.SESSION_CHECK_SEC = 5 -- как часто сервер проверяет «сессия ≥ 10 мин» для аналитики
 Config.DEV_SESSION_SHIFT = 5 * 60 -- DEV «+5 мин сессии»
@@ -639,6 +669,17 @@ Config.TUNABLES = {
 	{ "PLAYTIME_GIFTS.5.coins", "Большой подарок: монет", "Награды", 0, 10000, 50 },
 	{ "PLAYTIME_GIFTS.5.gems", "Большой подарок: гемов", "Награды", 0, 100, 1 },
 	{ "SESSION_GOAL_MIN", "Цель сессии, мин", "Награды", 1, 60, 1 },
+	{ "STREAK_REWARDS.1.coins", "Стрик: день 1, монет", "Награды", 0, 10000, 25 },
+	{ "STREAK_REWARDS.2.coins", "Стрик: день 2, монет", "Награды", 0, 10000, 25 },
+	{ "STREAK_REWARDS.3.coins", "Стрик: день 3, монет", "Награды", 0, 10000, 25 },
+	{ "STREAK_REWARDS.4.coins", "Стрик: день 4, монет", "Награды", 0, 10000, 25 },
+	{ "STREAK_REWARDS.5.coins", "Стрик: день 5, монет", "Награды", 0, 10000, 25 },
+	{ "STREAK_REWARDS.6.coins", "Стрик: день 6, монет", "Награды", 0, 10000, 25 },
+	{ "STREAK_REWARDS.7.coins", "Стрик: день 7, монет", "Награды", 0, 10000, 25 },
+	{ "STREAK_REWARDS.7.gems", "Стрик: день 7, гемов", "Награды", 0, 200, 1 },
+	{ "STREAK_CYCLE_MULT", "Стрик: множитель монет со 2-й недели", "Награды", 1, 3, 0.05 },
+	{ "STREAK_SAVE_GEMS", "Спасение стрика: гемов (день 1)", "Награды", 0, 200, 1 },
+	{ "STREAK_SAVE_STEP", "Спасение стрика: +гемов за день", "Награды", 0, 50, 1 },
 
 	{ "TUTORIAL.IDLE", "Обучение: бездействие до подсказки, с", "Обучение", 1, 30, 1 },
 	{ "TUTORIAL.HOLD", "Обучение: подсказка висит, с", "Обучение", 2, 20, 0.5 },

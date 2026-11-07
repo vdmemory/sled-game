@@ -36,6 +36,9 @@ local DEFAULT = {
 	Trail = "white",
 	OwnedTrails = { white = true },
 	Tutorial = 0, -- биты пройденных шагов обучения (Config.TUTORIAL.STEPS), все биты = пройдено/пропущено
+	-- стрик дней входа (#25): day — последний засчитанный UTC-день, count — длина серии, claimedDay — день
+	-- последней награды, save — серия, которую можно спасти сегодня (0 — нет предложения)
+	Streak = { day = 0, count = 0, claimedDay = 0, save = 0 },
 }
 
 local function deepCopy(t: any): any
@@ -129,11 +132,14 @@ local function migrate(data: { [string]: any })
 		data.OwnedSkins = nil
 		data.Skin = nil
 	end
-	-- новые ключи настроек (например, Music) у старых профилей
-	if type(data.Settings) == "table" then
-		for k, v in DEFAULT.Settings do
-			if data.Settings[k] == nil then
-				data.Settings[k] = v
+	-- новые ключи вложенных таблиц (Settings.Music, Streak.save…) у старых профилей
+	for _, f in { "Settings", "Streak" } do
+		if type(data[f]) ~= "table" then
+			data[f] = deepCopy(DEFAULT[f])
+		end
+		for k, v in DEFAULT[f] do
+			if data[f][k] == nil then
+				data[f][k] = v
 			end
 		end
 	end

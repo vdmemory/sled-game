@@ -37,7 +37,7 @@ local Restart: RemoteEvent = remote("RemoteEvent", "Restart") -- ⟳ в заез
 local Back: RemoteEvent = remote("RemoteEvent", "Back") -- BACK у рогатки: вернуться в лобби
 local Smash: RemoteEvent = remote("RemoteEvent", "Smash") -- разбил препятствие ракетой/на ускорителе
 local SetSetting: RemoteEvent = remote("RemoteEvent", "SetSetting") -- настройки: звуки, снег, тени
-local RewardAction: RemoteFunction = remote("RemoteFunction", "RewardAction") -- задания, билет, подарки, сундук
+local RewardAction: RemoteFunction = remote("RemoteFunction", "RewardAction") -- задания, билет, подарки, сундук, стрик
 local TaskDone: RemoteEvent = remote("RemoteEvent", "TaskDone") -- «задание выполнено!»
 local Crystal: RemoteEvent = remote("RemoteEvent", "Crystal") -- разбил ледяной кристалл
 local CoinGrab: RemoteEvent = remote("RemoteEvent", "CoinGrab") -- монету притянул магнит
@@ -801,6 +801,12 @@ RewardAction.OnServerInvoke = function(player, action, arg)
 		ok, res = Rewards.claimGift(player, arg)
 	elseif action == "chest" then
 		ok, res = Rewards.openChest(player)
+	elseif action == "streak" then
+		ok, res = Rewards.claimStreak(player)
+	elseif action == "streakSave" then
+		ok, res = Rewards.saveStreak(player)
+	elseif action == "streakDecline" then
+		ok, res = Rewards.declineStreakSave(player)
 	else
 		return false, "?"
 	end
@@ -1168,6 +1174,10 @@ DevAction.OnServerInvoke = function(player, action, a, b, c)
 		Rewards.sync(player)
 	elseif action == "sessionShift" then
 		Rewards.devShiftSession(player, Config.DEV_SESSION_SHIFT)
+	elseif action == "streakNext" then
+		Rewards.devStreakShift(player, 1)
+	elseif action == "streakSkip" then
+		Rewards.devStreakShift(player, 2)
 	else
 		return false, "Неизвестное действие"
 	end
