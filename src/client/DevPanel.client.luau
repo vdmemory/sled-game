@@ -388,7 +388,18 @@ end
 -- Трюки в воздухе: карточки из Config.TRICKS + формула комбо (числа — вкладка «Настройка»)
 tabs["Трюки"] = function()
 	heading("Трюки в полёте — Config.TRICKS")
-	note("В воздухе Пробел / 🔄: держать — вращение (какое — решает руль в момент нажатия), короткий тап — грэб, два тапа — разворот. Завершённые трюки копятся за полёт и начисляются при чистом приземлении; недокрученный трюк = «Падение» (скорость × " .. Config.OBSTACLE_SLOWDOWN .. ", монеты за полёт сгорают).")
+	do
+		local tiers = {}
+		for _, p in Config.AUTO_TRICK_PLANS do
+			local names = {}
+			for _, id in p.options[1] do
+				table.insert(names, Config.TRICKS[id].name)
+			end
+			table.insert(tiers, "≥ " .. p.air .. " с — " .. table.concat(names, " + "))
+		end
+		note("Режим: " .. (if Config.AUTO_TRICKS >= 1 then "АВТО-трюки (AUTO_TRICKS = 1)" else "только ручные (AUTO_TRICKS = 0)") .. ". Авто: когда сани выше " .. Config.AC_AIR_HEIGHT .. " studs над снегом, по предсказанному полёту выбирается ярус: " .. table.concat(tiers, "; ") .. ". С вероятностью " .. Config.AUTO_TRICK_RANDOM * 100 .. "% — другой вариант яруса. Вращение " .. Config.AUTO_TRICK_MIN_SPEED .. "–" .. Config.AUTO_TRICK_MAX_SPEED .. " рад/с подгоняется, чтобы закончить за " .. Config.AUTO_TRICK_MARGIN .. " с до касания; не успел — трюк не засчитан, без «Падения». Нажатие во время авто-трюка — ещё один (не повторяющийся) трюк в комбо.")
+	end
+	note("Ручной режим (бонус к авто): в воздухе Пробел / 🔄: держать — вращение (какое — решает руль в момент нажатия), короткий тап — грэб, два тапа — разворот. Завершённые трюки копятся за полёт и начисляются при чистом приземлении; недокрученный ручной трюк = «Падение» (скорость × " .. Config.OBSTACLE_SLOWDOWN .. ", монеты за полёт сгорают).")
 	local g = cardGrid()
 	for i, id in Config.TRICK_ORDER do
 		local t = Config.TRICKS[id]

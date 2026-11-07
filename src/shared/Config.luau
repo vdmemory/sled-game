@@ -357,6 +357,30 @@ function Config.trickComboMult(distinct: number): number
 	local m = Config.TRICK_COMBO_MULT
 	return m[math.clamp(distinct, 1, #m)]
 end
+-- Авто-трюки (#39, как в Sled Surfers): в полёте трюк запускается сам. Клиент, как только сани
+-- поднялись выше AC_AIR_HEIGHT над снегом (значит, полёт видит и сервер), предсказывает время
+-- полёта по вертикальной скорости и высоте над трассой (луч вниз под санями и на AUTO_TRICK_LOOKAHEAD
+-- с вперёд) и берёт последний ярус AUTO_TRICK_PLANS, чей air ≤ предсказанного: options[1] — по
+-- умолчанию, с вероятностью AUTO_TRICK_RANDOM — случайный другой вариант. Скорость вращения
+-- авто-трюка каждый кадр подбирается так, чтобы оборот закончился за AUTO_TRICK_MARGIN до касания
+-- (в пределах AUTO_TRICK_MIN_SPEED…MAX_SPEED); не успел — трюк молча не засчитывается, «Падения» нет.
+-- Нажатие Пробела/🔄 во время авто-трюка добавляет в комбо ещё один, ещё не сделанный трюк.
+Config.AUTO_TRICKS = 1 -- 1 — авто-трюки включены, 0 — только ручные (как до #39)
+Config.AUTO_TRICK_PLANS = {
+	{ air = 0.5, options = { { "grab" }, { "spin" } } }, -- короткий полёт: грэб / разворот
+	{ air = 0.9, options = { { "flip" }, { "frontflip" }, { "roll" } } }, -- сальто
+	{ air = 1.5, options = { { "flip", "grab" }, { "roll", "grab" }, { "frontflip", "spin" } } },
+	{ air = 2.2, options = { { "flip", "roll", "grab" }, { "frontflip", "spin", "grab" }, { "roll", "flip", "grab" } } },
+}
+Config.AUTO_TRICK_RANDOM = 0.3 -- доля полётов, где вместо варианта по умолчанию — случайный другой
+Config.AUTO_TRICK_MARGIN = 0.12 -- с: оборот заканчивается не позже чем за столько до касания
+Config.AUTO_TRICK_MIN_SPEED = 6 -- рад/с: медленнее не крутим (длинный полёт — плавный трюк)
+Config.AUTO_TRICK_MAX_SPEED = 22 -- рад/с: быстрее не докручиваем (оборот за 0.29 с)
+Config.AUTO_TRICK_SAFE_AIR = 0.7 -- оборотов в плане ≤ maxRotations(предсказанный полёт × это): запас к серверному полёту
+Config.AUTO_TRICK_RAY = 120 -- studs: луч вниз для высоты над трассой
+Config.AUTO_TRICK_LOOKAHEAD = 0.4 -- с: где по горизонтали мерить второй луч (наклон трассы впереди)
+Config.AUTO_TRICK_UNKNOWN_AIR = 0.6 -- с: оценка остатка полёта, если луч не нашёл снег (обрыв глубже луча)
+
 -- Сколько полных оборотов физически влезает в полёт (для серверной проверки)
 function Config.maxRotations(airTime: number): number
 	return 1 + math.floor(math.max(0, airTime) * Config.FLIP_SPEED / (2 * math.pi))
@@ -627,7 +651,7 @@ Config.TUTORIAL = {
 		{ id = "launch", where = "run", icon = "bullseye", pc = "Зажми мышь, тяни, отпусти!", touch = "Тяни вниз и отпусти!" },
 		{ id = "steer", where = "run", icon = "sled", pc = "A / D — объезжай камни!", touch = "Веди пальцем — объезжай!" },
 		{ id = "jump", where = "run", icon = "bolt", pc = "Ctrl — прыжок!", touch = "Жми ⤴ — прыжок!" },
-		{ id = "flip", where = "run", icon = "flip", pc = "Держи Пробел — САЛЬТО!", touch = "Держи 🔄 — САЛЬТО!" },
+		{ id = "flip", where = "run", icon = "flip", pc = "Трюки сами! Жми Пробел — ещё один", touch = "Трюки сами! Жми 🔄 — ещё один" },
 		{ id = "rocket", where = "run", icon = "fire", pc = "Shift — ракета ломает ящики!", touch = "Жми 🔥 — ракета ломает ящики!" },
 		{ id = "upgrade", where = "lobby", icon = "star", pc = "Улучши — полетишь дальше!", touch = "Улучши — полетишь дальше!" },
 		{ id = "again", where = "lobby", icon = "flag", pc = "Поехали ещё! Жми ▼", touch = "Поехали ещё! Жми ▼" },
@@ -730,6 +754,16 @@ Config.TUNABLES = {
 	{ "TRICKS.roll.boost", "Бочка: буст ×", "Трасса", 1, 1.5, 0.01 },
 	{ "TRICKS.spin.boost", "Разворот: буст ×", "Трасса", 1, 1.5, 0.01 },
 	{ "TRICKS.grab.minAir", "Грэб: мин. время в воздухе, с", "Трасса", 0, 2, 0.1 },
+	{ "AUTO_TRICKS", "Авто-трюки: 1 вкл / 0 выкл", "Трасса", 0, 1, 1 },
+	{ "AUTO_TRICK_PLANS.1.air", "Авто-трюк: грэб/разворот от полёта, с", "Трасса", 0.2, 3, 0.05 },
+	{ "AUTO_TRICK_PLANS.2.air", "Авто-трюк: сальто от полёта, с", "Трасса", 0.3, 4, 0.05 },
+	{ "AUTO_TRICK_PLANS.3.air", "Авто-трюк: комбо из 2 от полёта, с", "Трасса", 0.5, 5, 0.05 },
+	{ "AUTO_TRICK_PLANS.4.air", "Авто-трюк: комбо из 3 от полёта, с", "Трасса", 0.8, 6, 0.05 },
+	{ "AUTO_TRICK_RANDOM", "Авто-трюк: доля случайного варианта", "Трасса", 0, 1, 0.05 },
+	{ "AUTO_TRICK_MARGIN", "Авто-трюк: запас до касания, с", "Трасса", 0, 0.5, 0.01 },
+	{ "AUTO_TRICK_MIN_SPEED", "Авто-трюк: мин. вращение, рад/с", "Трасса", 2, 20, 0.5 },
+	{ "AUTO_TRICK_MAX_SPEED", "Авто-трюк: макс. вращение, рад/с", "Трасса", 6, 40, 0.5 },
+	{ "AUTO_TRICK_SAFE_AIR", "Авто-трюк: доля полёта для лимита оборотов", "Античит", 0.3, 1, 0.05 },
 	{ "WALL_HEIGHT", "Невидимый борт: высота", "Трасса", 0, 40, 1 },
 	{ "WALL_TILT", "Невидимый борт: наклон наружу, °", "Трасса", 0, 45, 1 },
 	{ "WALL_OFFSET", "Невидимый борт: отступ от края дна", "Трасса", 0, 20, 0.5 },
