@@ -193,7 +193,7 @@ end
 local function makeCrystal(at: CFrame, rng: Random, parent: Instance)
 	local m = Instance.new("Model")
 	m.Name = "Crystal"
-	for k = 1, 5 do
+	for _ = 1, 5 do
 		local h = rng:NextNumber(5, 10)
 		local p = part("Part", {
 			Size = Vector3.new(2.2, h, 2.2),

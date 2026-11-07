@@ -1,0 +1,15 @@
+# selene — линтер Luau с картой Roblox API (std = roblox.yml, генерирует scripts/check.sh).
+# Запуск: scripts/check.sh (или `selene src` из корня, если roblox.yml уже есть).
+std = "roblox"
+
+[lints]
+# Стиль, а не ошибки: UDim2.new(0, x, 0, y) читается не хуже fromOffset, менять 20+ мест незачем
+roblox_manual_fromscale_or_fromoffset = "allow"
+# Однострочники `if … then … end` и лямбды в одну строку — принятый в проекте стиль
+multiple_statements = "allow"
+# Затенение имён (pe, msg, left во вложенных функциях) у нас намеренное; LocalShadow ловит luau-lsp
+shadowing = "allow"
+
+[config]
+# Пустая ветка с комментарием («островки вместо обычного куска») — намеренная
+empty_if = { comments_count = true }

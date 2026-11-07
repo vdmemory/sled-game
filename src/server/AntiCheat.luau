@@ -25,7 +25,7 @@ local function rocketAcc(): number
 	return Config.ROCKET_THRUST + Config.GRAVITY_ALONG * SIN_STEEP
 end
 
-function AntiCheat.start(run: any, player: Player, d: any, power: number)
+function AntiCheat.start(run: any, _player: Player, d: any, power: number)
 	local sled: VehicleSeat = run.sled
 	local bonus = sled:GetAttribute("SledBonus") or 0
 	local launch = Config.launchSpeed(d.LaunchLevel or 0) * math.clamp(power, 0, 1)

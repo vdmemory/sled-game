@@ -149,7 +149,7 @@ end
 -- (значения по умолчанию подставляет Config.applyOverrides для путей, которых нет в словаре)
 function Tuning.merged(player: Player): Overrides
 	local out = table.clone(global)
-	for path, v in perPlayer[player.UserId] or {} do
+	for path, v in (perPlayer[player.UserId] or {}) :: Overrides do
 		out[path] = v
 	end
 	return out

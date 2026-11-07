@@ -370,10 +370,9 @@ while true do
 	if i then
 		local s = STEPS[i]
 		local rule = RULES[s.id]
-		if rule.finish() then
+		-- выполнено, либо в заезде показали достаточно — второй раз не навязываем
+		if rule.finish() or (s.where == "run" and os.clock() - shownAt >= T.HOLD) then
 			hide(true)
-		elseif s.where == "run" and os.clock() - shownAt >= T.HOLD then
-			hide(true) -- показали достаточно — второй раз не навязываем
 		elseif not rule.keep() then
 			hide(false)
 		elseif s.id == "upgrade" and os.clock() - lastPulse >= T.PULSE then

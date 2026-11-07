@@ -43,7 +43,7 @@ function Builder:part(shape: Enum.PartType, size: Vector3, cf: CFrame, color: Co
 	if self.main and color == self.main then
 		p.Reflectance = self.shine -- глянец корпуса (Gold, Diamond)
 	end
-	for k, v in props or {} do
+	for k, v in (props or {}) :: { [string]: any } do
 		(p :: any)[k] = v
 	end
 	if self.weldTo then

@@ -31,7 +31,7 @@ local function add(model: Instance)
 		path = path,
 		laneZ = model:GetAttribute("LaneZ") or 0,
 		dir = model:GetAttribute("Dir") or 1,
-		yawCF = CFrame.Angles(0, model:GetAttribute("Yaw") or 0, 0),
+		yawCF = CFrame.Angles(0, (model:GetAttribute("Yaw") or 0) :: number, 0),
 		speed = model:GetAttribute("Speed") or 40,
 		loop = model:GetAttribute("Loop") or 360,
 		phase = model:GetAttribute("Phase") or 0,

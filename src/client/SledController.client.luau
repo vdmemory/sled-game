@@ -37,7 +37,8 @@ end
 local controls = nil
 task.spawn(function()
 	local ok, module = pcall(function()
-		return require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule", 10))
+		-- PlayerModule появляется только в рантайме (нет в sourcemap) — require без проверки типов
+		return (require :: any)(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule", 10))
 	end)
 	if ok and module then
 		controls = module:GetControls()
@@ -1225,7 +1226,7 @@ RunService.Heartbeat:Connect(function(dt)
 				elseif budget * Config.AUTO_TRICK_MAX_SPEED >= 2 * math.pi then
 					-- целый оборот успевает даже на пределе скорости — начинаем
 					startTrick(id, if def.kind == "roll" then (if math.random() < 0.5 then 1 else -1) else nil)
-					local nt = trick :: Trick
+					local nt = (trick :: any) :: Trick -- startTrick присвоил trick; анализатор видит nil из сужения выше
 					nt.auto = true
 					break
 				end

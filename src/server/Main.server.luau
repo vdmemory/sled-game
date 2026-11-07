@@ -421,7 +421,7 @@ local function endRun(player: Player, reason: string)
 		end
 		ending[player] = nil
 		if player.Parent then
-			player:LoadCharacter()
+			player:LoadCharacterAsync()
 			if reason == "restart" then
 				task.wait(0.3)
 				startRun(player)
@@ -1354,7 +1354,7 @@ end)
 -- Ледяной кристалл: клиент разбивает его касанием, сервер начисляет (один раз за заезд)
 Crystal.OnServerEvent:Connect(function(player, part)
 	local run = runs[player]
-	if not run or run.ended or run.crystal or typeof(part) ~= "Instance" or not CollectionService:HasTag(part, "Crystal") then
+	if not run or run.ended or run.crystal or typeof(part) ~= "Instance" or not part:IsA("BasePart") or not CollectionService:HasTag(part, "Crystal") then
 		return
 	end
 	if (part.Position - run.sled.Position).Magnitude > 30 then
