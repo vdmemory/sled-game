@@ -247,6 +247,7 @@ end
 CollectionService:GetInstanceAddedSignal("Coin"):Connect(trackCoin)
 CollectionService:GetInstanceRemovedSignal("Coin"):Connect(function(coin)
 	coins[coin :: BasePart] = nil
+	coinPhase[coin :: BasePart] = nil -- иначе таблица держит уничтоженные монеты каждого заезда
 end)
 for _, c in CollectionService:GetTagged("Coin") do
 	trackCoin(c)

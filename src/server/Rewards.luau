@@ -17,7 +17,7 @@ local function today(): number
 	return os.time() // 86400
 end
 
--- 3 задания дня: выбор детерминирован по номеру дня (у всех игроков одни и те же)
+-- Config.TASKS_PER_DAY заданий дня: выбор детерминирован по номеру дня (у всех игроков одни и те же)
 local function tasksFor(day: number)
 	local rng = Random.new(day * 7349 + 11)
 	local pool = table.clone(Config.TASK_POOL)

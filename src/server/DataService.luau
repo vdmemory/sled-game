@@ -61,6 +61,11 @@ function Data.load(player: Player)
 	local ok, saved = retry(function()
 		return store:GetAsync(key(player))
 	end)
+	if not player.Parent then
+		-- вышел, пока ждали DataStore: PlayerRemoving уже прошёл, профиль не регистрируем —
+		-- иначе он висел бы в памяти и автосейв писал бы устаревшие данные поверх другого сервера
+		return nil
+	end
 	local data = deepCopy(DEFAULT)
 	if ok and type(saved) == "table" then
 		for k, v in saved do
@@ -97,14 +102,22 @@ function Data.get(player: Player)
 	return p and p.data
 end
 
-function Data.save(player: Player)
+-- Можно ли сохранять профиль (загрузился без ошибок)
+function Data.canSave(player: Player): boolean
+	local p = profiles[player]
+	return p ~= nil and p.canSave
+end
+
+-- Возвращает true, если запись прошла
+function Data.save(player: Player): boolean
 	local p = profiles[player]
 	if not p or not p.canSave then
-		return
+		return false
 	end
-	retry(function()
+	local ok = retry(function()
 		store:SetAsync(key(player), p.data)
 	end)
+	return ok
 end
 
 function Data.release(player: Player)
@@ -115,6 +128,22 @@ end
 function Data.saveAll()
 	for player in profiles do
 		task.spawn(Data.save, player)
+	end
+end
+
+-- Для BindToClose: все сохранения параллельно, ждём завершения не дольше timeout секунд
+function Data.saveAllAndWait(timeout: number)
+	local pending = 0
+	for player in profiles do
+		pending += 1
+		task.spawn(function()
+			Data.save(player)
+			pending -= 1
+		end)
+	end
+	local deadline = os.clock() + timeout
+	while pending > 0 and os.clock() < deadline do
+		task.wait(0.1)
 	end
 end
 

@@ -32,6 +32,8 @@ def http(method, url, data=None, headers=None):
             return r.status, r.read().decode()
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError) as e:  # сеть/таймаут: не роняем цикл, уже загруженные ID сохранятся
+        return 0, str(e)
 
 
 def creator_id():
