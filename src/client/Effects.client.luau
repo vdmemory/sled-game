@@ -6,6 +6,7 @@ local SledModels = require(game:GetService("ReplicatedStorage"):WaitForChild("Sh
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 local RunService = game:GetService("RunService")
 local CollectionService = game:GetService("CollectionService")
+local WorldLook = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("WorldLook"))
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -13,6 +14,14 @@ local camera = workspace.CurrentCamera
 local BASE_FOV = 70
 local MAX_FOV = 95
 local FOV_SPEED_FULL = 140 -- при такой скорости FOV максимальный
+
+-- Уровень графики (атрибут GfxTier ставит PostFX): множители частиц и линий скорости
+local function quality()
+	return WorldLook.QUALITY[player:GetAttribute("GfxTier") or 3] or WorldLook.QUALITY[3]
+end
+local function particleMult(): number
+	return quality().particles
+end
 
 ------------------------------------------------------------------ Снежная пыль из-под санок
 local function addSnowTrail(sled: Instance)
@@ -324,7 +333,7 @@ RunService.RenderStepped:Connect(function(dt)
 	-- Эмиттер полос впереди камеры, «дует» назад на игрока
 	linesAtt.WorldCFrame = CFrame.lookAt(camCF.Position + camCF.LookVector * 40, camCF.Position)
 		* CFrame.Angles(-math.pi / 2, 0, 0) -- частицы летят по +Y аттачмента → направляем на камеру
-	speedLines.Rate = if speed > 70 then math.clamp((speed - 70) * 2.5, 0, 150) else 0
+	speedLines.Rate = if speed > 70 then math.clamp((speed - 70) * 2.5, 0, 150) * quality().speedLines else 0
 
 	-- Снежная пыль сильнее на скорости и только на земле
 	for _, s in sleds:GetChildren() do
@@ -332,7 +341,7 @@ RunService.RenderStepped:Connect(function(dt)
 		if pe and s:IsA("BasePart") then
 			local v = s.AssemblyLinearVelocity.Magnitude
 			local grounded = workspace:Raycast(s.Position, -s.CFrame.UpVector * 3) ~= nil
-			pe.Rate = if grounded then math.clamp(v * 0.8, 0, 90) * (if player:GetAttribute("LowQuality") then 0.3 else 1) else 0
+			pe.Rate = if grounded then math.clamp(v * 0.8, 0, 90) * particleMult() else 0
 			local trail = s:FindFirstChild("IceTrail")
 			if trail then
 				trail.Enabled = grounded and v > 5 and not s.Anchored
@@ -387,31 +396,9 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 end)
 
------------------------------------------------------------------- Освещение и дымка под мир
--- В заезде небо, дымка и цвет кадра подстраиваются под тему уровня (RunTheme с сервера),
--- в лобби — базовый снежный вид. Меняется только у этого игрока.
-local Lighting = game:GetService("Lighting")
-local TweenService = game:GetService("TweenService")
-
-local LOOKS = {
-	-- 1 Снежный лес: ясный голубой день
-	{ clock = 14.5, atmo = { Color = Color3.fromRGB(190, 220, 255), Decay = Color3.fromRGB(110, 160, 230), Density = 0.25, Haze = 0.5 }, cc = { TintColor = Color3.fromRGB(240, 248, 255), Saturation = 0.25 } },
-	-- 2 Ледяной город: холодный вечерний свет и городская дымка
-	{ clock = 16.2, atmo = { Color = Color3.fromRGB(205, 215, 240), Decay = Color3.fromRGB(120, 130, 185), Density = 0.32, Haze = 1.3 }, cc = { TintColor = Color3.fromRGB(232, 238, 255), Saturation = 0.15 } },
-	-- 3 Каньон: тёплый закатный свет и пыльная оранжевая дымка
-	{ clock = 16.9, atmo = { Color = Color3.fromRGB(255, 222, 185), Decay = Color3.fromRGB(215, 140, 90), Density = 0.3, Haze = 1.1 }, cc = { TintColor = Color3.fromRGB(255, 240, 222), Saturation = 0.32 } },
-	-- 4 Ледяные пещеры: голубая плотная дымка, холодный кадр
-	{ clock = 15, atmo = { Color = Color3.fromRGB(175, 225, 255), Decay = Color3.fromRGB(80, 160, 230), Density = 0.38, Haze = 1.6 }, cc = { TintColor = Color3.fromRGB(225, 242, 255), Saturation = 0.2 } },
-	-- 5 Северное сияние: сумерки, фиолетово-зелёное небо
-	-- 18.0, а не 18.6: после 18:00 солнце под горизонтом, и при ExposureCompensation −0.35 трасса
-	-- темнела — препятствия на сине-фиолетовом дне читались хуже всех миров
-	{ clock = 18.0, atmo = { Color = Color3.fromRGB(150, 140, 220), Decay = Color3.fromRGB(60, 160, 140), Density = 0.3, Haze = 1.4 }, cc = { TintColor = Color3.fromRGB(225, 225, 255), Saturation = 0.3 } },
-	-- 6 Снежный вулкан: багровый вечер и дым
-	{ clock = 17.6, atmo = { Color = Color3.fromRGB(235, 180, 160), Decay = Color3.fromRGB(150, 60, 40), Density = 0.36, Haze = 1.8 }, cc = { TintColor = Color3.fromRGB(255, 232, 220), Saturation = 0.25 } },
-	-- 7 Конфетная гора: розовый солнечный день
-	{ clock = 13, atmo = { Color = Color3.fromRGB(255, 210, 235), Decay = Color3.fromRGB(240, 140, 200), Density = 0.26, Haze = 0.8 }, cc = { TintColor = Color3.fromRGB(255, 240, 248), Saturation = 0.35 } },
-}
-
+------------------------------------------------------------------ Осадки под мир
+-- Свет, дымка, небо и пост-обработка по миру — client/PostFX (пресеты shared/WorldLook).
+-- Здесь только осадки: в заезде по RunTheme, в лобби по LobbyTheme.
 -- Осадки по теме: снег (по умолчанию), пепел с искрами у вулкана, ничего в каньоне и на конфетной
 -- горе, редкие блёстки на сиянии. nil — эмиттер выключен.
 local SNOW_DEFAULT = { color = Color3.new(1, 1, 1), rate = 120, size = 0.35, speed = NumberRange.new(10, 16), light = 0.4 }
@@ -434,26 +421,13 @@ local function applyPrecip(theme: number)
 	snow.Size = NumberSequence.new(p.size, p.size * 0.7)
 	snow.Speed = p.speed
 	snow.LightEmission = p.light
-	snow.Rate = if player:GetAttribute("LowQuality") then math.min(p.rate, 40) else p.rate
+	snow.Rate = math.round(p.rate * particleMult())
 end
 
--- В заезде — тема уровня (RunTheme), в лобби — тема витринной трассы (LobbyTheme от LobbyScene):
--- небо, дымка, время суток и осадки меняются у этого игрока плавно
 local function applyWorldLook()
 	local inRun = player:GetAttribute("InRun")
 	local theme = if inRun then player:GetAttribute("RunTheme") or 1 else player:GetAttribute("LobbyTheme") or 1
-	local look = LOOKS[((theme - 1) % #LOOKS) + 1]
-	local info = TweenInfo.new(if inRun then 1.5 else Config.LOBBY_LOOK_TWEEN, Enum.EasingStyle.Sine)
-	TweenService:Create(Lighting, info, { ClockTime = look.clock }):Play()
-	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
-	if atmo then
-		TweenService:Create(atmo, info, look.atmo):Play()
-	end
-	local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
-	if cc then
-		TweenService:Create(cc, info, look.cc):Play()
-	end
-	applyPrecip(((theme - 1) % #LOOKS) + 1)
+	applyPrecip(((theme - 1) % #WorldLook.PRESETS) + 1)
 end
 player:GetAttributeChangedSignal("InRun"):Connect(applyWorldLook)
 player:GetAttributeChangedSignal("RunTheme"):Connect(applyWorldLook)
@@ -461,9 +435,9 @@ player:GetAttributeChangedSignal("LobbyTheme"):Connect(applyWorldLook)
 task.delay(2, applyWorldLook)
 
 ------------------------------------------------------------------ Авто-качество (FPS на телефонах)
--- Если кадров стабильно меньше ~40, облегчаем картинку: меньше снега и пыли, без bloom,
--- без мелких теней. Вернуть нельзя автоматически — чтобы не «мигало» качество.
-local lowQuality = false
+-- Если кадров стабильно меньше Config.GRAPHICS.FPS_LOW, ставим AutoLowFps — PostFX переводит
+-- графику на «Низкое» (если игрок не выбрал уровень сам в ⚙). Обратно автоматически не
+-- возвращаем — чтобы качество не «мигало».
 local frames, elapsed, slowWindows = 0, 0, 0
 local fpsConn
 fpsConn = RunService.RenderStepped:Connect(function(dt)
@@ -474,19 +448,12 @@ fpsConn = RunService.RenderStepped:Connect(function(dt)
 	end
 	local fps = frames / elapsed
 	frames, elapsed = 0, 0
-	slowWindows = if fps < 40 then slowWindows + 1 else 0
-	if slowWindows >= 2 and not lowQuality then
-		lowQuality = true
-		player:SetAttribute("LowQuality", true)
-		snow.Rate = math.min(snow.Rate, 40)
-		local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
-		if bloom then
-			bloom.Enabled = false
-		end
-		local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
-		if clouds then
-			clouds.Enabled = false
-		end
+	slowWindows = if fps < Config.GRAPHICS.FPS_LOW then slowWindows + 1 else 0
+	if slowWindows >= 2 then
+		player:SetAttribute("AutoLowFps", true)
 		fpsConn:Disconnect()
 	end
 end)
+
+-- Уровень графики сменился (PostFX → GfxTier): пересчитать осадки под новый множитель
+player:GetAttributeChangedSignal("GfxTier"):Connect(applyWorldLook)

@@ -21,9 +21,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 | Папка | Куда в игре | Что там |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props` (low-poly модели ландшафта и препятствий), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `WorldLook` (пресеты света и пост-обработки миров, уровни графики), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props` (low-poly модели ландшафта и препятствий), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
 | `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (свет и осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (физика санок, ввод, подбор предметов), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты; детектор FPS → `AutoLowFps`), `PostFX` (свет и пост-обработка миров по пресетам `shared/WorldLook`: Lighting, Atmosphere, Clouds, Sky, ColorCorrection, Bloom, SunRays, DepthOfField — с твином; уровень графики 1–3 → атрибут `GfxTier`; виньетка скорости), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
 
 ## Как устроен заезд
 
@@ -113,8 +113,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 `Track.new(-1, уровень, 0, previewOrigin, Config.LOBBY_PREVIEW_SEGMENTS)` (папка `TrackPreview`,
 только первые N кусков, без стены в конце) и папку `LobbyDecor` (`Lobby.dress(theme)`: деревья,
 кактусы, кристаллы, горы, шары, сияние), перекрашивает `LobbyGround`/`PlazaRing`, пишет название
-мира на арку и ставит себе атрибут `LobbyTheme` — по нему `Effects.client` плавно
-(`Config.LOBBY_LOOK_TWEEN`) меняет небо, дымку, время суток и осадки (снег / пепел у вулкана /
+мира на арку и ставит себе атрибут `LobbyTheme` — по нему `PostFX.client` плавно
+(`Config.LOBBY_LOOK_TWEEN`) меняет свет, небо, дымку, облака и цветокоррекцию (пресет мира +
+`WorldLook.LOBBY`), а `Effects.client` — осадки (снег / пепел у вулкана /
 сухо в каньоне и на конфетной горе). Локальная витрина монет не даёт: `SledController` собирает
 монеты только рядом со своими санями в заезде (за 2000 studs от лобби).
 
@@ -154,7 +155,18 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 `Rewards` (JSON: задания, подарки, сундук; `sessionStart`, `big` — индекс большого подарка), в заезде — `InRun`, `Launched`, `RunDistance`,
 `RunCoins`, `RunGems`, `Combo`, `Finished`; лидерборд недели — `Title`, `TitleUntil`, `WeeklyMe` (JSON), у
 `ReplicatedStorage` — `WeeklyBoard` (JSON). Только у клиента (ставит сам, не реплицируется):
-`LobbyTheme` (тема витрины лобби, `LobbyScene` → `Effects`), `LowQuality`.
+`LobbyTheme` (тема витрины лобби, `LobbyScene` → `PostFX`/`Effects`), `GfxChoice` (выбор графики в ⚙:
+0 авто, 1–3; на сессию), `AutoLowFps` (`Effects`: FPS < `GRAPHICS.FPS_LOW`), `GfxTier` (итоговый уровень
+1–3, `PostFX` → `Effects`, `LobbyMenus`).
+
+## Графика
+`default.project.json` → `Lighting.Technology = Future` (из скриптов не ставится). Сервер (`Main`)
+создаёт Atmosphere, ColorCorrection, Bloom, `Terrain.Clouds`; клиент (`PostFX`) локально создаёт
+`PostFX_SunRays`, `PostFX_DOF`, `PostFX_Sky` и твинит все свойства под пресет мира
+(`shared/WorldLook.PRESETS`, × `Config.GRAPHICS`). Уровни `WorldLook.QUALITY`: 1 — Soft-свет
+(`LightingStyle`), без теней, Bloom, лучей, облаков и DOF, частицы × 0.3; 2 — Realistic, без DOF,
+частицы × 0.7; 3 — всё. Авто: `SavedQualityLevel` (0 → телефон 2 / ПК 3; 1–3 → 1; 4–7 → 2; 8–10 → 3),
+`AutoLowFps` → 1. Ручной выбор в ⚙ важнее авто. DOF на телефонах движок не рисует.
 
 ## Теги CollectionService
 

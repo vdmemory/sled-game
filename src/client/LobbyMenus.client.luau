@@ -9,9 +9,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
-local Lighting = game:GetService("Lighting")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local WorldLook = require(ReplicatedStorage.Shared:WaitForChild("WorldLook"))
 local UI = require(ReplicatedStorage.Shared:WaitForChild("UIKit"))
 local UIFx = require(ReplicatedStorage.Shared:WaitForChild("UIFx"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -844,11 +844,20 @@ toggle("Shadows", "moon", "Тени", 159)
 gear.Activated:Connect(function()
 	open(setWin)
 end)
-local function applyShadows()
-	Lighting.GlobalShadows = player:GetAttribute("SetShadows") ~= false
+-- Тени (SetShadows) применяет PostFX вместе с уровнем графики. Уровень — на эту сессию:
+-- АВТО (по «Графике» Roblox и FPS) → НИЗКОЕ → СРЕДНЕЕ → ВЫСОКОЕ
+local gfxBtn = UI.button("blue", "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 204), Size = UDim2.fromOffset(260, 42), ZIndex = 31, Parent = setWin })
+local function paintGfx()
+	local c = player:GetAttribute("GfxChoice") or 0
+	local q = WorldLook.QUALITY[if c > 0 then c else player:GetAttribute("GfxTier") or 3]
+	UI.setText(gfxBtn, "ГРАФИКА: " .. (if c > 0 then q.name else "АВТО · " .. q.name))
 end
-player:GetAttributeChangedSignal("SetShadows"):Connect(applyShadows)
-applyShadows()
+gfxBtn.Activated:Connect(function()
+	player:SetAttribute("GfxChoice", ((player:GetAttribute("GfxChoice") or 0) + 1) % (#WorldLook.QUALITY + 1))
+end)
+player:GetAttributeChangedSignal("GfxChoice"):Connect(paintGfx)
+player:GetAttributeChangedSignal("GfxTier"):Connect(paintGfx)
+paintGfx()
 
 ------------------------------------------------------------------ обновление
 for _, attr in { "Coins", "Level", "OwnedSleds", "Sled", "SledRarity", "OwnedTrails", "Trail" } do

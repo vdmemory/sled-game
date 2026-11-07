@@ -1,5 +1,22 @@
 # Журнал изменений
 
+## Графика: Future-свет, атмосфера и пост-обработка миров (art)
+- `default.project.json`: `Lighting.Technology = Future`. `PostFX.client` (новый) ставит
+  `LightingStyle` Realistic (на «Низком» — Soft) и `PrioritizeLightingQuality`.
+- `shared/WorldLook` (новый): пресет на каждый из 7 миров — Lighting (яркость, экспозиция, Ambient,
+  ColorShift_Top, EnvironmentDiffuse/SpecularScale, ShadowSoftness), Atmosphere (Density, Offset,
+  Haze, Glare, Color/Decay), Clouds, Sky (размер солнца, звёзды у сияния), ColorCorrection, Bloom,
+  SunRays, DepthOfField; лобби = мир витрины + поправки. Переход — TweenService (1.5 с в заезд,
+  `LOBBY_LOOK_TWEEN` в лобби). Таблица — `GAME_DESIGN.md` → «Визуальный стиль».
+- Уровни графики Низкое/Среднее/Высокое (`WorldLook.QUALITY`): авто по `SavedQualityLevel` и FPS,
+  кнопка «ГРАФИКА» в ⚙ (АВТО → НИЗКОЕ → СРЕДНЕЕ → ВЫСОКОЕ, на сессию). Тени (`SetShadows`) теперь
+  применяет `PostFX`.
+- Виньетка скорости (UI-оверлей под HUD) с 80 studs/с; линии скорости и частицы × уровня графики.
+- `Effects`: `LOOKS` и твины света перенесены в `PostFX`, осталось только осадки; авто-качество
+  ставит `AutoLowFps` вместо прямого отключения Bloom/облаков; атрибут `LowQuality` → `GfxTier`.
+- `Config.GRAPHICS` (+ TUNABLES «Графика»): × Bloom, × DOF, × насыщенности, × лучей, мин. контраст,
+  виньетка, порог FPS.
+
 ## Островки над пропастью, гладкость трассы, оформление (#40)
 - **Островки** (`shared/Islands`, новый модуль): с 2-го уровня обязательная цепочка на 52% уровня
   (+ доп. цепочки 3→7% за кусок), 3→6 островков. Разгон с ускорителем «ПРЫГАЙ!» → [пропасть →
