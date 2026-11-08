@@ -1,36 +1,88 @@
--- Лобби: стартовый хаб. Сервер строит общую «архитектуру» (Lobby.build), клиент одевает её под
--- свой текущий мир (Lobby.dress) — см. client/LobbyScene. Чистая геометрия: Part, Config,
--- Props, SledModels; серверных сервисов нет, модуль общий.
+-- Лобби: стартовый хаб. Сервер строит общую «архитектуру» (Lobby.build + Lobby.furnish), клиент
+-- одевает её под свой текущий мир (Lobby.dress) и ставит витрину саней на подиумы
+-- (Lobby.showcase) — см. client/LobbyScene. Чистая геометрия: Part/меши, Config, Props,
+-- SledModels; серверных сервисов нет, модуль общий.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Props = require(ReplicatedStorage.Shared.Props)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
+local Meshes = require(ReplicatedStorage.Shared.Meshes)
 
 local part, deco = Props.part, Props.deco
 local SNOW = Color3.fromRGB(250, 252, 255)
 
 local Lobby = {}
 
+-- Чертёж лобби (studs от Config.LOBBY_POS; x вправо, −Z — к обрыву и трассе). Его же читает
+-- макет-рендер scripts/ui_layout_preview.py: проецирует путь, ворота, подиумы, табло камерой спавна
+-- (Config.LOBBY_CAM_PITCH) поверх раскладки UI и проверяет, что их не закрывают плашки.
+--
+--             задник: Terrain-скалы (Rock) z +56…+96 + утёсы-меши цвета мира (клиент)
+--   z=+44  ·  ·  ·  ·  задний ряд декора мира (клиент)  ·  ·  ·  ·
+--   z=+26        [флаг] x=−14                 x=+14 [флаг]
+--   z=+16   КОСТЁР x=−20 (брёвна, зона)       x=+20 акцент мира (клиент)
+--   z=+12        фонарь x=−12                 x=+12 фонарь
+--   z=+2              ◎ ПЛИТА-ХАБ ⌀30, спавн z=0 лицом к −Z, неоновая стрелка к дорожке
+--   z=−4    [флаг] x=−26                                       x=+26 [флаг]
+--   z=−12…−38          ║ дорожка-плитка 10 wide, неоновые шевроны ║  фонари x ±7.5 z −8/−28
+--   z=−16   ПОДИУМ x=−16 (витрина: что купить дальше)   ПОДИУМ x=+16 (витрина: «мечта»)
+--   z=−38   ТАБЛО x=−27 «обновление»                    ТАБЛО x=+27 «неделя → чистые → всё время»
+--   z=−38.5   ╔══ ВОРОТА СТАРТА (меш) · вывеска «МИР ▼ СТАРТ» ══╗
+--   z=−40   ─────── край площадки: Terrain-обрыв вниз ───────
+--   z=−39…−61       ║ мостик 14 wide, перила, гирлянды, фонари x ±8.2 z −51 ║
+--   z=−63            ◯ кольцо посадки (server/Runs: LaunchPad) + МАЯК — столб света 26 studs,
+--                      «▼ САДИСЬ В САНИ ▼»: виден над головой игрока и между плашками UI
+--   z=−70…          витринная трасса мира (клиент)
+--
+-- Камера спавна (client/LobbyScene): сзади-сверху, наклон LOBBY_CAM_PITCH и зум LOBBY_CAM_ZOOM
+-- подобраны макетом: мостик, кольцо и маяк видны НАД головой игрока (камера сзади — аватар
+-- закрывает центр кадра) и под полосой наград; подиумы и табло — по бокам, не под колонкой
+-- плиток (x ≤ 134 логических) и не под карточками апгрейдов.
+-- Записи: пары/тройки чисел; lamps/flags — плоские списки x, z.
+Lobby.PLAN = {
+	plaza = { 0, 2, 15 }, -- центр x, z, радиус плиты-хаба
+	path = { 0, -12, -38, 5 }, -- дорожка: x, z от, z до, полуширина
+	gate = { 0, -38.5, 7.6 }, -- ворота: x, z, высота центра вывески
+	pier = { 0, -39, -61, 7 }, -- мостик: x, z от, z до, полуширина
+	ring = { 0, -63, 6 }, -- кольцо посадки (как LaunchRing в server/Runs)
+	beacon = { 0, -63, 26 }, -- маяк старта: столб света над кольцом, x, z, высота
+	podiumL = { -16, -16, 6.5 }, -- x, z, радиус
+	podiumR = { 16, -16, 6.5 },
+	boardL = { -27, -38 },
+	boardR = { 27, -38 },
+	fire = { -20, 16 },
+	accent = { 20, 16 },
+	flags = { -26, -4, 26, -4, -14, 26, 14, 26 },
+	lamps = { -7.5, -8, 7.5, -8, -7.5, -28, 7.5, -28, -8.2, -51, 8.2, -51, -12, 12, 12, 12 },
+}
+local PLAN = Lobby.PLAN
+-- Меши архитектуры: сервер ждёт их загрузки (MeshAssets) перед Lobby.furnish, но не дольше
+Lobby.MESHES = { "lamp_post", "podium", "board_frame", "start_gate" }
+Lobby.MESH_WAIT = 15
+
+local function at(base: CFrame, xz: { number }, i: number?): CFrame
+	local k = i or 1
+	return base * CFrame.new(xz[k], 0, xz[k + 1])
+end
+
+-- Табло: рама (меш) + доска с SurfaceGui в проёме 18 × 10 на высоте 6–16.
 -- footer — строка «ты: место · очки · сброс» внизу (табло недели, заполняет client/WeeklyBoard)
-local function board(name: string, at: CFrame, title: string, parent: Instance, footer: boolean?): TextLabel
+local function board(name: string, at0: CFrame, title: string, parent: Instance, footer: boolean?): TextLabel
 	local m = Instance.new("Model")
 	m.Name = name
-	for _, sx in { -1, 1 } do
-		part("Part", { Size = Vector3.new(1, 16, 1), CFrame = at * CFrame.new(sx * 9, 8, 0.6), Material = Enum.Material.Wood, Color = Color3.fromRGB(120, 80, 45) }, m)
-	end
-	local panel = part("Part", { Size = Vector3.new(18, 12, 0.6), CFrame = at * CFrame.new(0, 10, 0), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, m)
-	deco({ Size = Vector3.new(18.6, 0.8, 1.4), CFrame = at * CFrame.new(0, 16.3, 0), Material = Enum.Material.Snow, Color = SNOW }, m)
+	Props.boardFrame(at0, m)
+	local panel = part("Part", { Size = Vector3.new(18, 10, 0.6), CFrame = at0 * CFrame.new(0, 11, 0), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, m)
 	local sg = Instance.new("SurfaceGui")
 	sg.Face = Enum.NormalId.Front
-	sg.CanvasSize = Vector2.new(600, 400)
+	sg.CanvasSize = Vector2.new(600, 333)
 	sg.LightInfluence = 0.3
 	sg.Parent = panel
 	local head = Instance.new("TextLabel")
 	head.Name = "Head"
 	head.BackgroundTransparency = 1
-	head.Size = UDim2.new(1, 0, 0, 80)
+	head.Size = UDim2.new(1, 0, 0, 64)
 	head.Font = Enum.Font.FredokaOne
 	head.TextScaled = true
 	head.TextColor3 = Color3.fromRGB(255, 220, 90)
@@ -39,8 +91,8 @@ local function board(name: string, at: CFrame, title: string, parent: Instance, 
 	local body = Instance.new("TextLabel")
 	body.Name = "List"
 	body.BackgroundTransparency = 1
-	body.Position = UDim2.new(0, 30, 0, 90)
-	body.Size = UDim2.new(1, -60, 1, if footer then -160 else -110)
+	body.Position = UDim2.new(0, 30, 0, 70)
+	body.Size = UDim2.new(1, -60, 1, if footer then -128 else -84)
 	body.Font = Enum.Font.FredokaOne
 	body.TextScaled = true
 	body.TextColor3 = Color3.new(1, 1, 1)
@@ -53,8 +105,8 @@ local function board(name: string, at: CFrame, title: string, parent: Instance, 
 		me.Name = "Me"
 		me.BackgroundColor3 = Color3.fromRGB(60, 38, 20)
 		me.BackgroundTransparency = 0.3
-		me.Position = UDim2.new(0, 20, 1, -64)
-		me.Size = UDim2.new(1, -40, 0, 50)
+		me.Position = UDim2.new(0, 20, 1, -54)
+		me.Size = UDim2.new(1, -40, 0, 46)
 		me.Font = Enum.Font.FredokaOne
 		me.TextScaled = true
 		me.TextColor3 = Color3.fromRGB(255, 220, 90)
@@ -71,55 +123,14 @@ local function board(name: string, at: CFrame, title: string, parent: Instance, 
 	return body
 end
 
--- Витрина: подиум с подсветкой и настоящей моделью саней (как подиумы в Roblox-референсе)
-local function showcaseSled(at: CFrame, sledId: string, rarityIdx: number, caption: string, parent: Instance)
-	local rarity = Config.RARITIES[rarityIdx]
-	local col = rarity.color or Color3.fromRGB(240, 70, 120)
-	part("Part", { Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 13, 13), CFrame = at * CFrame.new(0, 1, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(235, 240, 250) }, parent)
-	local ring = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 13.6, 13.6), CFrame = at * CFrame.new(0, 1.9, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = col }, parent)
-	local holder = Instance.new("Model")
-	holder.Name = "Showcase"
-	local showCF = at * CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-10), math.rad(30), 0)
-	SledModels.build(holder, showCF, sledId, {
-		main = col,
-		accent = Color3.new(1, 1, 1):Lerp(col, 0.35),
-		material = rarity.material,
-		glow = rarityIdx == 5,
-		shine = rarity.shine,
-	}, nil, true)
-	-- прокачанная витрина: топовые ракеты и обвес
-	SledModels.extras(holder, showCF, sledId, 4, if rarityIdx == 5 then 5 else 3, Color3.new(1, 1, 1):Lerp(col, 0.35), nil)
-	holder.Parent = parent
-	local glow = Instance.new("PointLight")
-	glow.Color = col
-	glow.Range = 16
-	glow.Brightness = 1.5
-	glow.Parent = ring
-	local anchor = deco({ Size = Vector3.new(1, 1, 1), CFrame = at * CFrame.new(0, 10, 0), Transparency = 1 }, parent)
-	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(220, 50)
-	bb.MaxDistance = 90
-	bb.Parent = anchor
-	local t = Instance.new("TextLabel")
-	t.Size = UDim2.fromScale(1, 1)
-	t.BackgroundTransparency = 1
-	t.Font = Enum.Font.FredokaOne
-	t.TextScaled = true
-	t.TextColor3 = Color3.new(1, 1, 1)
-	t.TextStrokeTransparency = 0.3
-	t.Text = caption
-	t.Parent = bb
-end
-
-
--- Вывеска на перекладине арки: текст меняет клиент (название мира игрока)
-local function archSign(beam: BasePart, text: string): TextLabel
+-- Вывеска на воротах старта: текст меняет клиент (название мира игрока)
+local function gateSign(plate: BasePart, text: string): TextLabel
 	local sg = Instance.new("SurfaceGui")
 	sg.Name = "Sign"
 	sg.Face = Enum.NormalId.Back -- смотрит на спавн (+Z лобби)
-	sg.CanvasSize = Vector2.new(900, 160)
+	sg.CanvasSize = Vector2.new(650, 120)
 	sg.LightInfluence = 0.2
-	sg.Parent = beam
+	sg.Parent = plate
 	local t = Instance.new("TextLabel")
 	t.Name = "Text"
 	t.BackgroundTransparency = 1
@@ -133,37 +144,71 @@ local function archSign(beam: BasePart, text: string): TextLabel
 	return t
 end
 
--- Цветной «кружок-зона» на земле под объектом (как в Roblox-референсе): читается с точки спавна
-local function zoneDisc(at: CFrame, r: number, color: Color3, parent: Instance)
-	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.25, r * 2, r * 2), CFrame = at * CFrame.new(0, 0.12, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = color, Transparency = 0.25 }, parent)
-	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, r * 2 + 1.2, r * 2 + 1.2), CFrame = at * CFrame.new(0, 0.1, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = color:Lerp(Color3.new(1, 1, 1), 0.3), Transparency = 0.55 }, parent)
+-- Подпись над объектом (BillboardGui): видна издалека, не дальше maxDist
+local function billboard(anchorCF: CFrame, text: string, size: Vector2, maxDist: number, color: Color3, parent: Instance): TextLabel
+	local anchor = deco({ Size = Vector3.one, CFrame = anchorCF, Transparency = 1 }, parent)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(size.X, size.Y)
+	bb.MaxDistance = maxDist
+	bb.Parent = anchor
+	local t = Instance.new("TextLabel")
+	t.Name = "Text"
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.Font = Enum.Font.FredokaOne
+	t.TextScaled = true
+	t.TextColor3 = color
+	t.TextStrokeTransparency = 0.2
+	t.Text = text
+	t.Parent = bb
+	return t
 end
 
--- Лобби (сервер): только «архитектура», общая для всех — площадка, пирс к обрыву, арка-вывеска,
--- подиумы, табло, костёр, флаги, фонари. Декор по миру (деревья, снеговик, кактусы…), витринная
--- трасса за пирсом и цвет земли — у каждого игрока свои (client/LobbyScene → Lobby.dress).
---
--- Схема сверху (x вправо, −Z = к обрыву и трассе; размеры в studs):
---
---   z=+46   ·  ·  ·  задний ряд декора мира (клиент)  ·  ·  ·
---   z=+24        [флаг]                        [флаг]
---   z=+14   (костёр, брёвна) x=−18        x=+18 (акцент мира, клиент)
---   z=0            ◎ СПАВН (круглая плита, лицом к −Z)
---   z=−4         ╔══ АРКА «мир · ▼ СТАРТ» ══╗  (x ±8.6)
---   z=−10   [ТАБЛО обновл.] x=−34     x=+34 [ТАБЛО лидеров]
---   z=−6…−60     ║ пирс 14 wide, перила,     ║  фонари ×4, гирлянды флажков по перилам
---   z=−24   (подиум саней) x=−24   x=+24 (подиум саней)   — вдоль пирса, видны со спавна
---   z=−30        [флаг] x=−40                 x=+40 [флаг]
---   z=−40   ─────────── край площадки (обрыв) ───────────
---   z=−60        кольцо посадки, конец пирса
---   z=−70        старт витринной трассы: рогатка, LaunchPad (сервер), далее трасса мира (клиент)
+-- Цветной «кружок-зона» на земле под объектом: читается с точки спавна
+local function zoneDisc(at0: CFrame, r: number, color: Color3, parent: Instance)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.25, r * 2, r * 2), CFrame = at0 * CFrame.new(0, 0.12, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = color, Transparency = 0.25 }, parent)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, r * 2 + 1.2, r * 2 + 1.2), CFrame = at0 * CFrame.new(0, 0.1, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = color:Lerp(Color3.new(1, 1, 1), 0.3), Transparency = 0.55 }, parent)
+end
+
+-- Terrain: скальный массив под площадкой (площадка — вершина горы, а не плита в небе: обрыв виден
+-- с мостика) и гряда за спиной спавна (задник; клиент ставит на неё утёсы-меши цвета мира).
+-- Только z ≥ −38 выше y −8: под мостиком и витринной трассой (z ≤ −40) пусто. Только сервер.
+local function terrain(base: CFrame)
+	local t = workspace.Terrain
+	if not t then
+		return
+	end
+	local rock = Enum.Material.Rock
+	t:FillBlock(base * CFrame.new(0, -26, 6), Vector3.new(144, 44, 84), rock)
+	local rng = Random.new(11)
+	-- рваные края массива: валы по периметру ниже кромки
+	for x = -66, 66, 22 do
+		t:FillBall((base * CFrame.new(x + rng:NextNumber(-4, 4), -24 + rng:NextNumber(-6, 4), 46)).Position, rng:NextNumber(12, 16), rock)
+		if math.abs(x) > 14 then -- перед мостиком массив не выступает
+			t:FillBall((base * CFrame.new(x + rng:NextNumber(-4, 4), -22 + rng:NextNumber(-6, 2), -33)).Position, rng:NextNumber(10, 13), rock)
+		end
+	end
+	for z = -24, 36, 20 do
+		for _, sx in { -1, 1 } do
+			t:FillBall((base * CFrame.new(sx * 70, -22 + rng:NextNumber(-6, 4), z + rng:NextNumber(-4, 4))).Position, rng:NextNumber(12, 16), rock)
+		end
+	end
+	-- гряда за спиной: верх до y ≈ +22 — закрывает пустое небо сзади
+	for x = -96, 96, 24 do
+		local c = base * CFrame.new(x + rng:NextNumber(-5, 5), rng:NextNumber(-10, -2), 74 + rng:NextNumber(-6, 10))
+		t:FillBall(c.Position, rng:NextNumber(20, 28), rock)
+	end
+end
+
+-- Лобби (сервер), шаг 1 — то, без чего нельзя войти: земля, плита-хаб, дорожка, мостик, точка
+-- появления, Terrain. Шаг 2 (Lobby.furnish) — мебель из мешей: ворота, фонари, подиумы, табло,
+-- флаги, костёр; запускается, когда меши загружены (или через MESH_WAIT с фолбэком из Part).
 function Lobby.build()
 	local p = Config.LOBBY_POS
 	local base = CFrame.new(p)
 	local lobby = Instance.new("Model")
 	lobby.Name = "Lobby"
-	local rng = Random.new(7)
-	-- Площадка лобби заканчивается обрывом: дальше вниз уходит трасса (её видно с мостика)
+	-- Площадка лобби заканчивается обрывом (z −40): дальше вниз уходит трасса (её видно с мостика)
 	part("Part", {
 		Name = "LobbyGround",
 		Size = Vector3.new(150, 4, 90),
@@ -171,93 +216,48 @@ function Lobby.build()
 		Material = Enum.Material.Snow,
 		Color = SNOW,
 	}, lobby)
-	-- Круглая каменная плита спавна и дорожка-плитка к пирсу: путь «спавн → мостик» читается сразу
-	part("Part", { Name = "Plaza", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.5, 30, 30), CFrame = base * CFrame.new(0, 0.2, 2) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Slate, Color = Color3.fromRGB(150, 160, 180) }, lobby)
-	deco({ Name = "PlazaRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 31, 31), CFrame = base * CFrame.new(0, 0.2, 2) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = Color3.fromRGB(120, 220, 255), Transparency = 0.5 }, lobby) -- цвет ставит клиент по миру
-
-	-- Деревянный пирс к старту трассы (как в Roblox-референсе): дойди до края — сядешь в сани
-	for z = -6, -60, -3 do
-		part("Part", { Size = Vector3.new(14, 0.6, 2.6), CFrame = base * CFrame.new(0, 0.3, z), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(150, 105, 65) }, lobby)
+	-- Плита-хаб спавна: каменный круг, тонкое неоновое кольцо цвета мира (ставит клиент) и
+	-- стрелка-шеврон к дорожке — путь «спавн → ворота → мостик» читается с первого кадра
+	local px, pz, pr = PLAN.plaza[1], PLAN.plaza[2], PLAN.plaza[3]
+	part("Part", { Name = "Plaza", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.5, pr * 2, pr * 2), CFrame = base * CFrame.new(px, 0.2, pz) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Slate, Color = Color3.fromRGB(150, 160, 180) }, lobby)
+	deco({ Name = "PlazaRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, pr * 2 + 1, pr * 2 + 1), CFrame = base * CFrame.new(px, 0.2, pz) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = Color3.fromRGB(120, 220, 255), Transparency = 0.5 }, lobby)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.52, pr * 1.2, pr * 1.2), CFrame = base * CFrame.new(px, 0.22, pz) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Slate, Color = Color3.fromRGB(120, 130, 152) }, lobby)
+	-- Дорожка-плитка от хаба до ворот (одна плита + бордюры) и шевроны к старту
+	local pathX, z0, z1, hw = PLAN.path[1], PLAN.path[2], PLAN.path[3], PLAN.path[4]
+	local len = z0 - z1
+	part("Part", { Name = "Path", Size = Vector3.new(hw * 2, 0.5, len + 4), CFrame = base * CFrame.new(pathX, 0.2, (z0 + z1) / 2 + 2), Material = Enum.Material.Slate, Color = Color3.fromRGB(140, 150, 172) }, lobby)
+	for _, sx in { -1, 1 } do
+		deco({ Size = Vector3.new(0.8, 0.7, len + 4), CFrame = base * CFrame.new(pathX + sx * (hw + 0.2), 0.3, (z0 + z1) / 2 + 2), Material = Enum.Material.Slate, Color = Color3.fromRGB(105, 112, 130) }, lobby)
 	end
-	-- Светящиеся стрелки по центру пирса — путь к старту
-	for z = -12, -56, -8 do
-		deco({ Size = Vector3.new(3.4, 0.08, 1.6), CFrame = base * CFrame.new(0, 0.65, z), Material = Enum.Material.Neon, Color = Color3.fromRGB(90, 220, 255), Transparency = 0.2 }, lobby, "WedgePart")
+	for z = pz - pr + 6, z1 + 3, -7 do
+		deco({ Size = Vector3.new(3.6, 0.08, 1.8), CFrame = base * CFrame.new(pathX, 0.5, z), Material = Enum.Material.Neon, Color = Color3.fromRGB(90, 220, 255), Transparency = 0.15 }, lobby, "WedgePart")
+	end
+
+	-- Деревянный мостик над обрывом к кольцу посадки (как в Roblox-референсе): дошёл — сел в сани
+	local qx, q0, q1, qw = PLAN.pier[1], PLAN.pier[2], PLAN.pier[3], PLAN.pier[4]
+	for z = q0, q1, -3 do
+		part("Part", { Size = Vector3.new(qw * 2, 0.6, 2.6), CFrame = base * CFrame.new(qx, 0.3, z), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(150, 105, 65) }, lobby)
+	end
+	for z = q0 - 6, q1 + 3, -8 do
+		deco({ Size = Vector3.new(3.4, 0.08, 1.6), CFrame = base * CFrame.new(qx, 0.65, z), Material = Enum.Material.Neon, Color = Color3.fromRGB(90, 220, 255), Transparency = 0.2 }, lobby, "WedgePart")
 	end
 	for _, sx in { -1, 1 } do
-		deco({ Size = Vector3.new(0.8, 1, 56), CFrame = base * CFrame.new(sx * 7.4, 1.2, -33), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
-		for z = -6, -60, -8 do
-			deco({ Size = Vector3.new(0.6, 2, 0.6), CFrame = base * CFrame.new(sx * 7.4, 1, z), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
+		local rx = qx + sx * (qw + 0.4)
+		deco({ Size = Vector3.new(0.8, 1, q0 - q1), CFrame = base * CFrame.new(rx, 1.2, (q0 + q1) / 2), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
+		for z = q0, q1, -8 do
+			deco({ Size = Vector3.new(0.6, 2, 0.6), CFrame = base * CFrame.new(rx, 1, z), Material = Enum.Material.Wood, Color = Color3.fromRGB(110, 75, 40) }, lobby)
 		end
-		-- Фонари на пирсе (тёплый свет, виден и днём как ориентир)
-		for _, z in { -22, -48 } do
-			Props.lantern(base * CFrame.new(sx * 8.2, 1.4, z), lobby)
-		end
-		-- Гирлянды флажков вдоль перил
-		Props.garland((base * CFrame.new(sx * 7.4, 8, -6)).Position, (base * CFrame.new(sx * 7.4, 8, -34)).Position, lobby, rng)
-		Props.garland((base * CFrame.new(sx * 7.4, 8, -34)).Position, (base * CFrame.new(sx * 7.4, 8, -62)).Position, lobby, rng)
-	end
-	-- Опоры пирса над обрывом
-	for _, z in { -44, -58 } do
-		for _, sx in { -1, 1 } do
-			deco({ Size = Vector3.new(1.2, 30, 1.2), CFrame = base * CFrame.new(sx * 6, -15, z), Material = Enum.Material.Wood, Color = Color3.fromRGB(100, 68, 38), CastShadow = true }, lobby)
+		-- опоры над обрывом
+		for _, z in { -46, -58 } do
+			deco({ Size = Vector3.new(1.2, 30, 1.2), CFrame = base * CFrame.new(qx + sx * (qw - 1), -15, z), Material = Enum.Material.Wood, Color = Color3.fromRGB(100, 68, 38), CastShadow = true }, lobby)
 		end
 	end
-
-	-- Арка-вывеска над входом на пирс: название мира (ставит клиент) и стрелка к старту
-	for _, sx in { -1, 1 } do
-		part("Part", { Size = Vector3.new(1.6, 15, 1.6), CFrame = base * CFrame.new(sx * 8.6, 7.5, -4), Material = Enum.Material.Wood, Color = Color3.fromRGB(120, 80, 45) }, lobby)
-		deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 2.2, CFrame = base * CFrame.new(sx * 8.6, 15.6, -4), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 215, 80) }, lobby)
-	end
-	local beam = part("Part", { Name = "ArchBeam", Size = Vector3.new(21, 4.2, 1.2), CFrame = base * CFrame.new(0, 15.5, -4), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, lobby)
-	deco({ Size = Vector3.new(21.6, 0.8, 2), CFrame = base * CFrame.new(0, 17.9, -4), Material = Enum.Material.Snow, Color = SNOW }, lobby)
-	archSign(beam, "▼ СТАРТ ▼")
-	Props.garland((base * CFrame.new(-8.6, 13, -4)).Position, (base * CFrame.new(8.6, 13, -4)).Position, lobby, rng)
-
-	-- Светящаяся стрелка-указатель у края пирса
-	local sign = deco({ Size = Vector3.new(1, 1, 1), CFrame = base * CFrame.new(0, 6, -62), Transparency = 1 }, lobby)
-	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(240, 60)
-	bb.MaxDistance = 120
-	bb.Parent = sign
-	local t = Instance.new("TextLabel")
-	t.Size = UDim2.fromScale(1, 1)
-	t.BackgroundTransparency = 1
-	t.Font = Enum.Font.FredokaOne
-	t.TextScaled = true
-	t.TextColor3 = Color3.fromRGB(255, 225, 80)
-	t.TextStrokeTransparency = 0.2
-	t.Text = "▼ САДИСЬ В САНИ ▼"
-	t.Parent = bb
-
-	-- Подиумы с витринными санками (цветные зоны под ними — читаются со спавна)
-	zoneDisc(base * CFrame.new(-24, 0, -24), 9, Color3.fromRGB(255, 200, 60), lobby)
-	zoneDisc(base * CFrame.new(24, 0, -24), 9, Color3.fromRGB(170, 110, 255), lobby)
-	showcaseSled(base * CFrame.new(-24, 0, -24), "board", 2, "Доска · Gold", lobby)
-	showcaseSled(base * CFrame.new(24, 0, -24), "plane", 5, "Сани-самолёт · Galaxy", lobby)
-
-	-- Доска лидеров и табло обновления (лицом к точке появления)
-	local lbAt = CFrame.lookAt((base * CFrame.new(34, 0, -10)).Position, p)
-	board("Leaderboard", lbAt, "🏆 Неделя", lobby, true)
-	local upAt = CFrame.lookAt((base * CFrame.new(-34, 0, -10)).Position, p)
-	local upText = board("NextUpdate", upAt, "⏳ Следующее обновление", lobby)
-	task.spawn(function()
-		while lobby.Parent do
-			local left = math.max(0, Config.NEXT_UPDATE - os.time())
-			upText.TextXAlignment = Enum.TextXAlignment.Center
-			upText.Text = if left > 0
-				then string.format("%dд %dч %dм\n\nНовый мир и\nновые санки!", left // 86400, (left % 86400) // 3600, (left % 3600) // 60)
-				else "Уже скоро!"
-			task.wait(30)
-		end
-	end)
-
-	-- «Живые» детали: костёр с брёвнами, флаги на ветру (качает клиент)
-	zoneDisc(base * CFrame.new(-18, 0, 14), 8, Color3.fromRGB(255, 140, 70), lobby)
-	Props.campfire(base * CFrame.new(-18, 0, 14), lobby)
-	Props.flagpole(base * CFrame.new(-14, 0, 24), Color3.fromRGB(240, 80, 90), lobby, 18)
-	Props.flagpole(base * CFrame.new(14, 0, 24), Color3.fromRGB(80, 180, 240), lobby, 18)
-	Props.flagpole(base * CFrame.new(-40, 0, -30), Color3.fromRGB(255, 205, 60), lobby, 14)
-	Props.flagpole(base * CFrame.new(40, 0, -30), Color3.fromRGB(110, 210, 120), lobby, 14)
+	-- Маяк старта: полупрозрачный столб света над кольцом посадки — ориентир «куда идти», виден
+	-- над головой аватара с камеры спавна (макет scripts/ui_layout_preview.py); надпись под ним
+	local bx, bz, bh = PLAN.beacon[1], PLAN.beacon[2], PLAN.beacon[3]
+	deco({ Name = "StartBeacon", Shape = Enum.PartType.Cylinder, Size = Vector3.new(bh, 2.8, 2.8), CFrame = base * CFrame.new(bx, 0.6 + bh / 2, bz) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = Color3.fromRGB(120, 235, 255), Transparency = 0.6 }, lobby)
+	local rx, rz = PLAN.ring[1], PLAN.ring[2]
+	billboard(base * CFrame.new(rx, 6, rz + 1), "▼ САДИСЬ В САНИ ▼", Vector2.new(240, 60), 120, Color3.fromRGB(255, 225, 80), lobby)
 
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Anchored = true
@@ -269,6 +269,128 @@ function Lobby.build()
 	spawn.CanCollide = false
 	spawn.Parent = lobby
 	lobby.Parent = workspace
+	terrain(base)
+	-- мебель — когда меши загружены (MeshAssets.server кладёт шаблоны асинхронно)
+	task.spawn(function()
+		Meshes.waitFor(Lobby.MESHES, Lobby.MESH_WAIT)
+		Lobby.furnish(lobby)
+	end)
+	return lobby
+end
+
+-- Лобби (сервер), шаг 2: мебель. Повторный вызов ничего не делает.
+function Lobby.furnish(lobby: Instance)
+	if lobby:GetAttribute("Furnished") then
+		return
+	end
+	lobby:SetAttribute("Furnished", true)
+	local p = Config.LOBBY_POS
+	local base = CFrame.new(p)
+	local rng = Random.new(7)
+	local furniture = Instance.new("Model")
+	furniture.Name = "Furniture"
+
+	-- Ворота старта у входа на мостик: вывеска «МИР ▼ СТАРТ» (текст ставит клиент), гирлянда
+	local gate = base * CFrame.new(PLAN.gate[1], 0, PLAN.gate[2])
+	local plate = Props.startGate(gate, lobby)
+	gateSign(plate, "▼ СТАРТ ▼")
+	Props.garland((gate * CFrame.new(-9.5, 12.6, 0.4)).Position, (gate * CFrame.new(9.5, 12.6, 0.4)).Position, furniture, rng)
+	-- Гирлянды вдоль перил мостика
+	local qx, q0, q1, qw = PLAN.pier[1], PLAN.pier[2], PLAN.pier[3], PLAN.pier[4]
+	for _, sx in { -1, 1 } do
+		local rx = qx + sx * (qw + 0.4)
+		Props.garland((base * CFrame.new(rx, 7, q0 - 1)).Position, (base * CFrame.new(rx, 7, q1 - 1)).Position, furniture, rng)
+	end
+	-- Фонари: у хаба, вдоль дорожки и на мостике (ритм «ведущих линий» к воротам)
+	local lamps = PLAN.lamps
+	for i = 1, #lamps, 2 do
+		Props.lampPost(at(base, lamps, i), furniture)
+	end
+
+	-- Подиумы витрин: зона-круг цвета редкости, ступенчатый подиум, прожектор, подпись (клиент
+	-- ставит сани и меняет подпись — Lobby.showcase)
+	for _, side in { { "PodiumL", PLAN.podiumL, Color3.fromRGB(255, 200, 60) }, { "PodiumR", PLAN.podiumR, Color3.fromRGB(170, 110, 255) } } do
+		local m = Instance.new("Model")
+		m.Name = side[1]
+		local spot = at(base, side[2])
+		zoneDisc(spot, side[2][3] + 2, side[3], m)
+		local top = Props.podium(spot, side[2][3], side[3], m)
+		m:SetAttribute("Top", top)
+		billboard(top * CFrame.new(0, 7.5, 0), "", Vector2.new(260, 56), 90, Color3.new(1, 1, 1), m)
+		m.Parent = lobby
+	end
+
+	-- Табло лицом к точке появления: справа — лидеры (неделя → чистые финиши → всё время,
+	-- client/WeeklyBoard), слева — обратный отсчёт до обновления (сезонность: «новый мир скоро»)
+	local function facing(xz: { number }): CFrame
+		return CFrame.lookAt((base * CFrame.new(xz[1], 0, xz[2])).Position, p)
+	end
+	board("Leaderboard", facing(PLAN.boardR), "🏆 Неделя", lobby, true)
+	local upText = board("NextUpdate", facing(PLAN.boardL), "⏳ Следующее обновление", lobby)
+	task.spawn(function()
+		while lobby.Parent do
+			local left = math.max(0, Config.NEXT_UPDATE - os.time())
+			upText.TextXAlignment = Enum.TextXAlignment.Center
+			upText.Text = if left > 0
+				then string.format("%dд %dч %dм\n\nНовый мир и\nновые санки!", left // 86400, (left % 86400) // 3600, (left % 3600) // 60)
+				else "Уже скоро!"
+			task.wait(30)
+		end
+	end)
+
+	-- «Живые» детали: костёр с брёвнами за спиной спавна, флаги на ветру (качает клиент):
+	-- пара у ворот обрамляет мостик, пара у костра
+	local fire = at(base, PLAN.fire)
+	zoneDisc(fire, 8, Color3.fromRGB(255, 140, 70), furniture)
+	Props.campfire(fire, furniture)
+	local flagCols = { Color3.fromRGB(240, 80, 90), Color3.fromRGB(80, 180, 240), Color3.fromRGB(255, 205, 60), Color3.fromRGB(110, 210, 120) }
+	local flags = PLAN.flags
+	for i = 1, #flags, 2 do
+		local k = (i + 1) // 2
+		local f = at(base, flags, i)
+		-- флаг у ворот смотрит наружу (полотнище не лезет в проход)
+		if flags[i + 1] < 0 and flags[i] < 0 then
+			f *= CFrame.Angles(0, math.pi, 0)
+		end
+		Props.flagpole(f, flagCols[k], furniture, if k <= 2 then 15 else 18)
+	end
+	furniture.Parent = lobby
+end
+
+-- Витрина саней на подиуме (клиент, у каждого свой): модель в редкости, прокачанная, медленно
+-- вращается (client/LobbyScene вращает holder целиком через BulkMoveTo). Возвращает holder.
+function Lobby.showcase(podium: Instance, sledId: string, rarityIdx: number, caption: string, parent: Instance): Model?
+	local top = podium:GetAttribute("Top") :: CFrame?
+	if not top then
+		return nil
+	end
+	local rarity = Config.RARITIES[rarityIdx] or Config.RARITIES[1]
+	local model = Config.SLEDS[1]
+	for _, m in Config.SLEDS do
+		if m.id == sledId then
+			model = m
+		end
+	end
+	local col = rarity.color or model.main
+	local accent = if rarity.color then Color3.new(1, 1, 1):Lerp(col, 0.35) else model.accent
+	local holder = Instance.new("Model")
+	holder.Name = "Showcase"
+	local showCF = top * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(-8), 0, 0)
+	SledModels.build(holder, showCF, sledId, {
+		main = col,
+		accent = accent,
+		material = rarity.material,
+		glow = rarityIdx == 5,
+		shine = rarity.shine,
+	}, nil, true)
+	SledModels.extras(holder, showCF, sledId, 4, if rarityIdx == 5 then 5 else 3, accent, nil)
+	holder:SetAttribute("Pivot", top * CFrame.new(0, 1.6, 0)) -- ось вращения — вертикаль подиума
+	holder.Parent = parent
+	local text = podium:FindFirstChildWhichIsA("TextLabel", true)
+	if text then
+		text.Text = caption
+	end
+	return holder
 end
 
 -- Декор лобби по миру (клиент, у каждого свой): деревья/кактусы/кристаллы по периметру,
@@ -290,7 +412,7 @@ function Lobby.dress(theme: number, parent: Instance): (Color3, Enum.Material)
 	end
 	-- Вторая линия — реже и ближе
 	local inner = { base * CFrame.new(-50, 0, 32), base * CFrame.new(50, 0, 32), base * CFrame.new(-54, 0, -36), base * CFrame.new(54, 0, -36), base * CFrame.new(-30, 0, 40), base * CFrame.new(30, 0, 40) }
-	local accent = base * CFrame.new(18, 0, 14) * CFrame.Angles(0, math.rad(-150), 0) -- напротив костра, лицом к спавну
+	local accent = base * CFrame.new(PLAN.accent[1], 0, PLAN.accent[2]) * CFrame.Angles(0, math.rad(-150), 0) -- напротив костра, лицом к спавну
 	local function far(x: number, z: number): CFrame
 		return base * CFrame.new(x, 0, z)
 	end
@@ -354,7 +476,7 @@ function Lobby.dress(theme: number, parent: Instance): (Color3, Enum.Material)
 		-- Северное сияние: редкие ёлки, фонари, иглу, ленты сияния в небе
 		for i, s in spots do
 			if i % 3 == 0 then
-				Props.lantern(s, parent)
+				Props.lampPost(s, parent)
 			elseif rng:NextNumber() < 0.6 then
 				Props.pine(rng, s, parent)
 			end
@@ -419,6 +541,17 @@ function Lobby.dress(theme: number, parent: Instance): (Color3, Enum.Material)
 	local tint = ({ [4] = Color3.fromRGB(150, 200, 235), [5] = Color3.fromRGB(70, 85, 120), [6] = Color3.fromRGB(60, 56, 62), [7] = Color3.fromRGB(235, 160, 210) })[theme]
 	for _, x in { -170, -40, 90, 200 } do
 		Props.mountain(rng, far(x + rng:NextNumber(-20, 20), 210 + rng:NextNumber(0, 60)), theme == 3, parent, tint)
+	end
+	-- Задник за спиной спавна: утёсы-меши на гряде Terrain (Lobby.build) в цвете и материале мира
+	if Meshes.has("crag") then
+		local crag = ({ [3] = Color3.fromRGB(205, 145, 100), [4] = Color3.fromRGB(165, 210, 240), [5] = Color3.fromRGB(85, 95, 130), [6] = Color3.fromRGB(62, 58, 66), [7] = Color3.fromRGB(240, 175, 215) })[theme]
+			or Color3.fromRGB(125, 138, 160)
+		local mat = ({ [3] = Enum.Material.Sandstone, [4] = Enum.Material.Glacier, [6] = Enum.Material.Basalt })[theme] or Enum.Material.Slate
+		for _, x in { -84, -50, -16, 20, 52, 86 } do
+			local sc = rng:NextNumber(7, 10)
+			local c = far(x + rng:NextNumber(-6, 6), 62 + rng:NextNumber(0, 12)) * CFrame.new(0, rng:NextNumber(2, 8), 0) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+			Meshes.place("crag", c, Vector3.new(sc * 1.4, sc, sc * 1.2), { Material = mat, Color = Meshes.vary(crag, c.Position, 0.08), CastShadow = true }, parent)
+		end
 	end
 	return groundColor, groundMat
 end

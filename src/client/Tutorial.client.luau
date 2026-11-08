@@ -36,34 +36,27 @@ gui.DisplayOrder = 90
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = player:WaitForChild("PlayerGui")
 
--- Масштаб как у HUD (телефон боком ≈ 0.57): позиции ниже — в логических пикселях HUD
+-- Масштаб как у HUD (UI.fitScale, телефон боком ≈ 0.55–0.57): позиции — в логических пикселях HUD
 local root = UI.new("Frame", { Name = "Root", BackgroundTransparency = 1, Parent = gui })
-local rootScale = Instance.new("UIScale")
-rootScale.Parent = root
-local function fitRoot()
-	local vp = workspace.CurrentCamera.ViewportSize
-	local s = math.clamp(math.min(vp.Y / 660, vp.X / 1000), 0.55, 1)
-	rootScale.Scale = s
-	root.Size = UDim2.fromScale(1 / s, 1 / s)
-end
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitRoot)
-fitRoot()
+local rootScale = UI.fitScale(root, gui)
 
--- Плашка: [иконка][текст] + справа «Пропустить». В заезде — под комбо (y 132–192, над трассой),
--- в лобби — над «НАЖМИ, ЧТОБЫ ИГРАТЬ» (низ на 1, -316; кнопка 1, -306…-262, карточки ниже).
-local group = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(780, 60), BackgroundTransparency = 1, Visible = false, Parent = root })
+-- Плашка: [иконка][текст] + справа «Пропустить» (обе 80 высотой — ≥ 44 px на телефоне). Места —
+-- Shared/UILayout: в заезде под комбо (tutorialRun 132–212, рогатка — tutorialLaunch 196–276), в
+-- лобби над «НАЖМИ, ЧТОБЫ ИГРАТЬ» (tutorialLobby −378…−298, между полосой наград и «ИГРАТЬ» даже
+-- на корне 565). Ширина 720 — не задевает подписи плиток слева (до x 134) даже на 4:3.
+local group = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(UI.L.tutorialLobby[7], UI.L.tutorialLobby[8]), BackgroundTransparency = 1, Visible = false, Parent = root })
 local groupScale = Instance.new("UIScale")
 groupScale.Parent = group
-local panel = UI.new("TextButton", { Text = "", AutoButtonColor = false, Size = UDim2.fromOffset(600, 60), BackgroundTransparency = 0.05, Parent = group })
+local panel = UI.new("TextButton", { Text = "", AutoButtonColor = false, Size = UDim2.new(1, -(UI.L.TUTORIAL_SKIP_W + 10), 1, 0), BackgroundTransparency = 0.05, Parent = group })
 UI.grad(panel, Color3.fromRGB(52, 70, 112), Color3.fromRGB(32, 46, 80))
 UI.corner(panel, 16)
 UI.stroke(panel, 3, UI.C.gold)
-local icon = UI.icon("star", { Position = UDim2.fromOffset(10, 6), Size = UDim2.fromOffset(48, 48), Parent = panel })
-local label = UI.text({ Text = "", Position = UDim2.fromOffset(66, 8), Size = UDim2.new(1, -76, 1, -16), Outline = 3, Parent = panel })
+local icon = UI.icon("star", { Position = UDim2.fromOffset(10, 12), Size = UDim2.fromOffset(54, 54), Parent = panel })
+local label = UI.text({ Text = "", Position = UDim2.fromOffset(72, 12), Size = UDim2.new(1, -84, 1, -24), Outline = 3, Parent = panel })
 local maxSize = Instance.new("UITextSizeConstraint")
 maxSize.MaxTextSize = 36 -- ≥ 28 логических → ≥ 16 px на телефоне
 maxSize.Parent = label
-local skip = UI.button("grey", "Пропустить", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(170, 48), Parent = group })
+local skip = UI.button("grey", "Пропустить", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, UI.L.TUTORIAL_SKIP_W, 1, 0), Parent = group })
 
 -- Рука-указатель (жест на телефоне / на кнопку или карточку) — вне масштаба, в пикселях экрана
 local hand = UI.new("TextLabel", { Text = "👆", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(60, 60), Visible = false, ZIndex = 5, Parent = gui })
@@ -194,13 +187,8 @@ local function show(i: number)
 	lastPulse = 0
 	UI.setIcon(icon, s.icon)
 	label.Text = if TOUCH then s.touch else s.pc
-	if s.where == "lobby" then
-		group.AnchorPoint = Vector2.new(0.5, 1)
-		group.Position = UDim2.new(0.5, 0, 1, -316)
-	else
-		group.AnchorPoint = Vector2.new(0.5, 0)
-		group.Position = UDim2.new(0.5, 0, 0, if s.id == "launch" then 196 else 132) -- рогатка: под шкалой силы и её подписью
-	end
+	-- рогатка: под шкалой силы и её подписью
+	UI.at(if s.where == "lobby" then UI.L.tutorialLobby elseif s.id == "launch" then UI.L.tutorialLaunch else UI.L.tutorialRun, group :: any)
 	group.Visible = true
 	groupScale.Scale = 0.6
 	TweenService:Create(groupScale, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Scale = 1 }):Play()

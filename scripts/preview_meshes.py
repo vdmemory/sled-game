@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Превью мешей декора (#45): лист PNG с объектами в цветах игры (матплотлиб, ламбертовский свет).
 
-Запуск: python3 scripts/preview_meshes.py [out.png]   (по умолчанию assets/meshes/preview.png)
+Запуск: python3 scripts/preview_meshes.py [out.png] [имя,имя…]   (по умолчанию assets/meshes/preview.png,
+все объекты; второй аргумент — только объекты с этими мешами, напр. lamp_post,podium,board_frame,start_gate)
 Составные объекты (хвоя + снег, скала + шапка) рисуются вместе, как их собирает Props/Meshes.
 """
 import pathlib
@@ -23,7 +24,8 @@ OUT = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "assets" / "mes
 C = {
     "rock": (0.50, 0.53, 0.60), "snow": (0.97, 0.98, 1.0), "pine": (0.16, 0.42, 0.27),
     "ice": (0.62, 0.86, 0.98), "crystal": (0.50, 0.85, 1.0), "sand": (0.86, 0.60, 0.42),
-    "trunk": (0.37, 0.25, 0.16),
+    "trunk": (0.37, 0.25, 0.16), "iron": (0.22, 0.24, 0.30), "stone": (0.86, 0.88, 0.93),
+    "wood": (0.55, 0.37, 0.22),
 }
 # объект → [(меш, цвет)]
 OBJECTS = [
@@ -38,7 +40,14 @@ OBJECTS = [
     ("Арка", [("arch", C["ice"])]),
     ("Гора", [("mountain_rock", C["rock"]), ("mountain_snow", C["snow"])]),
     ("Меза", [("mesa", C["sand"])]),
+    ("Лобби: фонарь", [("lamp_post", C["iron"])]),
+    ("Лобби: подиум", [("podium", C["stone"])]),
+    ("Лобби: рама табло", [("board_frame", C["wood"])]),
+    ("Лобби: ворота старта", [("start_gate", C["wood"])]),
 ]
+if len(sys.argv) > 2:
+    _only = set(sys.argv[2].split(","))
+    OBJECTS = [o for o in OBJECTS if any(n in _only for n, _ in o[1])]
 LIGHT = np.array([-0.45, 0.8, -0.4])
 LIGHT /= np.linalg.norm(LIGHT)
 
@@ -85,8 +94,8 @@ def main():
         ax.view_init(elev=18, azim=-60)
         ax.set_axis_off()
         ax.set_title(f"{title}  ({tris} треуг.)", fontsize=11)
-    plt.subplots_adjust(left=0, right=1, bottom=0, top=0.93, wspace=0, hspace=0.08)
-    fig.suptitle("Меши декора #45 (scripts/gen_meshes.py)", fontsize=14)
+    plt.subplots_adjust(left=0, right=1, bottom=0, top=0.93 if rows_n > 1 else 0.8, wspace=0, hspace=0.08)
+    fig.suptitle("Свои меши (scripts/gen_meshes.py)", fontsize=14)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT)
     print(f"Превью: {OUT}")

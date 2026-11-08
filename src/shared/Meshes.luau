@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(script.Parent.Config)
 local Specs = require(script.Parent.MeshSpecs)
+local Ids = require(script.Parent.MeshIds)
 
 local Meshes = {}
 Meshes.FOLDER = "MeshTemplates"
@@ -40,6 +41,29 @@ function Meshes.has(...: string): boolean
 		end
 	end
 	return true
+end
+
+-- Дождаться шаблонов (MeshAssets.server грузит их асинхронно после старта): ждём только меши, у
+-- которых есть ID в MeshIds (без ID — не загружен деплоем, сразу фолбэк из Part), не дольше
+-- timeout секунд. true — все дождались.
+function Meshes.waitFor(names: { string }, timeout: number): boolean
+	if (Config.MESH_DECOR or 0) < 0.5 then
+		return false
+	end
+	local want = {}
+	for _, n in names do
+		if (Ids :: any)[n] ~= nil then
+			table.insert(want, n)
+		end
+	end
+	local t0 = os.clock()
+	while not Meshes.has(table.unpack(want)) do
+		if os.clock() - t0 > timeout then
+			return false
+		end
+		task.wait(0.25)
+	end
+	return #want == #names
 end
 
 -- Поставить меш объекта: base — основание объекта на земле (кадр объекта из gen_meshes.py),

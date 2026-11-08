@@ -30,7 +30,8 @@ gui.Parent = player:WaitForChild("PlayerGui")
 local root = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = gui })
 
 -- Кнопка открытия: тёмный кружок «DEV» под шестерёнкой справа
-local openBtn = UI.button("dark", "DEV", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 190), Size = UDim2.fromOffset(64, 40), Radius = 12, Parent = root })
+-- ниже шестерёнки HUD (на ПК она 122–202 px от верха экрана) — не перекрывает её
+local openBtn = UI.button("dark", "DEV", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 280), Size = UDim2.fromOffset(64, 40), Radius = 12, Parent = root })
 
 ------------------------------------------------------------------ окно
 local W, H = 1000, 620
@@ -420,7 +421,120 @@ tabs["Трюки"] = function()
 	note("Прыжок с земли (Ctrl / W / ⤴): вверх " .. Config.JUMP_SPEED .. " studs/с ≈ " .. string.format("%.1f", Config.JUMP_SPEED ^ 2 / (2 * workspace.Gravity)) .. " studs высоты, пауза " .. Config.JUMP_COOLDOWN .. " с. Перелетаются конусы, бревно, барьер, бочки; машины и снеговик — нет. Вращение " .. Config.FLIP_SPEED .. " рад/с → оборот за " .. string.format("%.2f", 2 * math.pi / Config.FLIP_SPEED) .. " с.")
 end
 
+------------------------------------------------------------------ Проверка UI под телефон (#34)
+-- Обходит видимый интерфейс (кроме панели DEV): кнопки меньше пальца и текст мельче нормы — в
+-- логических пикселях (размер ÷ произведение UIScale предков), пороги UIKit: в корне HUD/Tutorial
+-- кнопка ≥ MIN_TOUCH 77, текст ≥ MIN_TEXT 25 (≈ 44 / 14 px на телефоне); в окнах (Panel_*) кнопка
+-- ≥ 48, текст ≥ 24. Окна открываются по очереди сами. Запускать в эмуляторе телефона Studio
+-- (844×390, 667×375) или на телефоне; список — в окне и в F9 (Client).
+local function scaleOf(o: Instance): number
+	local s = 1
+	local p: Instance? = o
+	while p and not p:IsA("LayerCollector") do
+		local us = p:FindFirstChildOfClass("UIScale")
+		if us then
+			s *= us.Scale
+		end
+		p = p.Parent
+	end
+	return s
+end
+local function shown(o: GuiObject): boolean
+	local p: Instance? = o
+	while p and not p:IsA("LayerCollector") do
+		if p:IsA("GuiObject") and not p.Visible then
+			return false
+		end
+		p = p.Parent
+	end
+	return p ~= nil and (p :: ScreenGui).Enabled
+end
+local function panelOf(o: Instance): Instance?
+	local p: Instance? = o
+	while p and not p:IsA("LayerCollector") do
+		if string.sub(p.Name, 1, 6) == "Panel_" then
+			return p
+		end
+		p = p.Parent
+	end
+	return nil
+end
+local function auditVisible(found: { [string]: string })
+	for _, sg in player.PlayerGui:GetChildren() do
+		if not sg:IsA("ScreenGui") or sg == gui or not sg.Enabled then
+			continue
+		end
+		for _, d in sg:GetDescendants() do
+			if not d:IsA("GuiObject") or not shown(d) then
+				continue
+			end
+			local k = scaleOf(d)
+			local inPanel = panelOf(d) ~= nil
+			local minTouch = if inPanel then UI.MIN_TOUCH_PANEL else UI.MIN_TOUCH
+			local minText = if inPanel then UI.MIN_TEXT_PANEL else UI.MIN_TEXT
+			local path = d:GetFullName():gsub("^.-PlayerGui%.", "")
+			if d:IsA("GuiButton") and d.Active then
+				local w, h = d.AbsoluteSize.X / k, d.AbsoluteSize.Y / k
+				if math.min(w, h) < minTouch - 0.5 then
+					found[path] = string.format("кнопка %d×%d < %d (%d px)", w, h, minTouch, math.min(d.AbsoluteSize.X, d.AbsoluteSize.Y))
+				end
+			end
+			if (d:IsA("TextLabel") or d:IsA("TextButton")) and d.Text ~= "" and d.TextTransparency < 0.9 then
+				local _, nl = string.gsub(d.Text, "\n", "")
+				local px = d.TextBounds.Y / (nl + 1)
+				if px > 0.5 and px / k < minText - 0.5 then
+					found[path] = string.format("текст %d < %d (%d px): «%s»", px / k, minText, px, string.sub(d.Text, 1, 24))
+				end
+			end
+		end
+	end
+end
+local function auditUI(done: (string) -> ())
+	task.spawn(function()
+		local wasOpen = win.Visible
+		win.Visible = false
+		local found: { [string]: string } = {}
+		task.wait(0.3)
+		auditVisible(found)
+		-- окна по очереди (содержимое — каким его оставили последний раз; размеры не зависят)
+		local hud = player.PlayerGui:FindFirstChild("HUD")
+		for _, w in (if hud then hud:GetChildren() else {}) do
+			if w:IsA("GuiObject") and string.sub(w.Name, 1, 6) == "Panel_" and not w.Visible then
+				w.Visible = true
+				task.wait(0.15)
+				auditVisible(found)
+				w.Visible = false
+			end
+		end
+		local lines = {}
+		for path, what in found do
+			table.insert(lines, path .. " — " .. what)
+		end
+		table.sort(lines)
+		local vp = workspace.CurrentCamera.ViewportSize
+		local head = string.format("Проверка UI %d×%d: %s", vp.X, vp.Y, if #lines == 0 then "всё ок" else #lines .. " замечаний")
+		print("[UI-check] " .. head)
+		for _, l in lines do
+			print("[UI-check] " .. l)
+		end
+		win.Visible = wasOpen
+		done(head .. (if #lines > 0 then "\n" .. table.concat(lines, "\n", 1, math.min(#lines, 40)) else ""))
+	end)
+end
+
 tabs["Инструменты"] = function()
+	heading("Интерфейс")
+	local report = nil :: TextLabel?
+	buttonRow({
+		{ "blue", "Проверить UI (телефон)", function()
+			auditUI(function(text)
+				if report and report.Parent then
+					report.Text = text
+				end
+			end)
+		end },
+	})
+	report = note("Кнопки < 77 логических (44 px на телефоне) и текст < 25 (14 px); в окнах — 48 и 24. Запусти в эмуляторе 844×390 и 667×375: окна откроются по очереди, список — здесь и в F9.")
 	heading("Валюта")
 	buttonRow({
 		{ "yellow", "+10 000 монет", function() dev("add", "Coins", 10000) end },

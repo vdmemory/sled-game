@@ -1,10 +1,15 @@
--- «Живые» детали лобби: костёр, флагшток (качается на ветру), гирлянда флажков.
--- Часть shared/Props (см. Props/init).
+-- «Живые» детали лобби: костёр, флагшток (качается на ветру), гирлянда флажков; фонарь, подиум
+-- витрины, рама табло, ворота старта — своими мешами (gen_meshes.py: lamp_post, podium,
+-- board_frame, start_gate) с фолбэком на Part, пока меш не загружен. Часть shared/Props.
 
 local Base = require(script.Parent.Base)
 
 local Props = Base.Props
 local deco = Base.deco
+local Meshes = Base.Meshes
+local IRON = Color3.fromRGB(48, 52, 66)
+local WOOD = Color3.fromRGB(120, 80, 45)
+local WARM = Color3.fromRGB(255, 190, 90)
 
 ------------------------------------------------------------------ Лобби: «живые» детали
 -- Костёр с кольцом камней, тремя брёвнами-скамейками, искрами, дымом и тёплым светом
@@ -97,6 +102,84 @@ function Props.garland(from: Vector3, to: Vector3, parent: Instance, rng: Random
 		end
 		prev = p
 	end
+end
+
+------------------------------------------------------------------ Лобби: меши архитектуры
+-- Фонарь на столбе (~10 studs): чугунный меш + тёплое «стекло» Neon внутри клетки + свет.
+-- Без меша — прежний деревянный фонарь (Props.lantern). Возвращает деталь-свечение.
+function Props.lampPost(base: CFrame, parent: Instance): BasePart?
+	if not Meshes.has("lamp_post") then
+		Props.lantern(base, parent)
+		return nil
+	end
+	Meshes.place("lamp_post", base, Vector3.one, { Material = Enum.Material.Metal, Color = IRON, CastShadow = true }, parent)
+	local glow = deco({ Size = Vector3.new(0.95, 1.3, 0.95), CFrame = base * CFrame.new(0, 8.25, 0), Material = Enum.Material.Neon, Color = WARM, Transparency = 0.1 }, parent)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 180, 90)
+	light.Range = 18
+	light.Brightness = 1.4
+	light.Parent = glow
+	return glow
+end
+
+-- Подиум витрины: ступенчатый круглый меш (радиус r, высота 2.2) + неоновое кольцо цвета редкости
+-- и прожектор сверху. Возвращает кадр верха подиума (куда ставить сани).
+function Props.podium(base: CFrame, r: number, color: Color3, parent: Instance): CFrame
+	local h = 2.2
+	local stone = Color3.fromRGB(225, 230, 242)
+	if Meshes.has("podium") then
+		Meshes.place("podium", base, Vector3.new(r, h / 0.62, r), { Material = Enum.Material.Marble, Color = stone, CastShadow = true }, parent)
+	else
+		deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, r * 2, r * 2), CFrame = base * CFrame.new(0, h / 2, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = stone, CastShadow = true }, parent)
+	end
+	-- кольцо на кромке среднего яруса (0.42–0.46 высоты меша)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.35, r * 1.76, r * 1.76), CFrame = base * CFrame.new(0, h * 0.7, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = color }, parent)
+	-- прожектор: невидимая точка над подиумом, светит вниз (тени выключены — дёшево)
+	local lamp = deco({ Name = "Spot", Size = Vector3.one, CFrame = base * CFrame.new(0, 16, 0) * CFrame.Angles(math.rad(-90), 0, 0), Transparency = 1 }, parent)
+	local spot = Instance.new("SpotLight")
+	spot.Color = color:Lerp(Color3.new(1, 1, 1), 0.5)
+	spot.Angle = 45
+	spot.Range = 22
+	spot.Brightness = 3
+	spot.Shadows = false
+	spot.Face = Enum.NormalId.Front
+	spot.Parent = lamp
+	return base * CFrame.new(0, h, 0)
+end
+
+-- Рама табло 21.6 × 18.6 (меш) вокруг проёма 18 × 10 на высоте 6–16; без меша — два столба
+-- и снежная полоса. at — основание, лицом (LookVector) к зрителю.
+function Props.boardFrame(at: CFrame, parent: Instance)
+	if Meshes.has("board_frame") then
+		Meshes.place("board_frame", at, Vector3.one, { Material = Enum.Material.Wood, Color = WOOD, CastShadow = true }, parent)
+		-- снег на скатах крыши (две тонкие плиты по скатам 17.0 → 18.4 на полуширине 10.8)
+		for _, sx in { -1, 1 } do
+			deco({ Size = Vector3.new(10.9, 0.35, 2.7), CFrame = at * CFrame.new(sx * 5.4, 17.95, 0) * CFrame.Angles(0, 0, sx * -math.atan2(1.4, 10.8)), Material = Enum.Material.Snow, Color = Color3.fromRGB(250, 252, 255) }, parent)
+		end
+		return
+	end
+	for _, sx in { -1, 1 } do
+		deco({ Size = Vector3.new(1, 17, 1), CFrame = at * CFrame.new(sx * 9.6, 8.5, 0.6), Material = Enum.Material.Wood, Color = WOOD, CastShadow = true }, parent)
+	end
+	deco({ Size = Vector3.new(19.6, 0.8, 1.4), CFrame = at * CFrame.new(0, 16.4, 0), Material = Enum.Material.Snow, Color = Color3.fromRGB(250, 252, 255) }, parent)
+end
+
+-- Ворота старта у входа на мостик: две колонны, перемычка и выгнутая балка (меш), на капителях —
+-- светящиеся шары; под перемычкой висит вывеска мира (возвращается — текст ставит клиент).
+-- Проход 17 studs шириной, низ вывески на 7.4 (персонаж ~5 проходит).
+function Props.startGate(at: CFrame, parent: Instance): BasePart
+	if Meshes.has("start_gate") then
+		Meshes.place("start_gate", at, Vector3.one, { Material = Enum.Material.Wood, Color = WOOD, CastShadow = true }, parent)
+	else
+		for _, sx in { -1, 1 } do
+			deco({ Size = Vector3.new(2, 11, 2), CFrame = at * CFrame.new(sx * 9.5, 5.5, 0), Material = Enum.Material.Wood, Color = WOOD, CastShadow = true }, parent)
+		end
+		deco({ Size = Vector3.new(21, 1.2, 1.4), CFrame = at * CFrame.new(0, 11.4, 0), Material = Enum.Material.WoodPlanks, Color = WOOD }, parent)
+	end
+	for _, sx in { -1, 1 } do
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 1.6, CFrame = at * CFrame.new(sx * 9.5, 12.9, 0), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 215, 80) }, parent)
+	end
+	return deco({ Name = "ArchBeam", Size = Vector3.new(13, 2.4, 0.5), CFrame = at * CFrame.new(0, 8.6, 0.3), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, parent)
 end
 
 
