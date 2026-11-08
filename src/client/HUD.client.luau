@@ -64,15 +64,16 @@ local lobby = UI.new("Frame", { Name = "Lobby", BackgroundTransparency = 1, Size
 -- Старт: дойти по мостику до края (сервер сажает в сани) или нажать «НАЖМИ, ЧТОБЫ ИГРАТЬ».
 -- Тап по всему экрану не используем — иначе на телефоне нельзя ходить по лобби.
 
--- Валюты сверху по центру
+-- Верхняя строка (#46): монеты слева, «УРОВЕНЬ N» по центру, гемы справа — одной строкой
 local currencyRow = UI.new("Frame", UI.at(L.currencies, {
 	Name = "Currencies",
 	BackgroundTransparency = 1,
 	Parent = root,
 }))
 -- якорь по центру: бамп при прилёте монет растёт из середины пилюли
-local coinsLabel = UI.currency(currencyRow, "coin", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(90, 19), Size = UDim2.fromOffset(140, 38) })
-local gemsLabel = UI.currency(currencyRow, "gem", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(260, 19), Size = UDim2.fromOffset(140, 38) })
+local CUR_W, CUR_H = L.CURRENCY_W, L.currencies[8]
+local coinsLabel = UI.currency(currencyRow, "coin", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(CUR_W / 2, CUR_H / 2), Size = UDim2.fromOffset(CUR_W, CUR_H) })
+local gemsLabel = UI.currency(currencyRow, "gem", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -CUR_W / 2, 0, CUR_H / 2), Size = UDim2.fromOffset(CUR_W, CUR_H) })
 local pills = { Coins = coinsLabel.Parent :: GuiObject, Gems = gemsLabel.Parent :: GuiObject }
 local currencyLabels = { Coins = coinsLabel, Gems = gemsLabel }
 -- «Замороженное» значение счётчика на время полёта монет (nil — показываем атрибут как есть)
@@ -87,7 +88,7 @@ local levelTitle = UI.text(UI.at(L.levelTitle, {
 	Outline = 3,
 	Parent = lobby,
 }))
--- строка мира 84–110 (текст 26 логических); плашка сундука с 116, нарисованный сундук с 110
+-- строка мира 40–66 (текст 26 логических) под строкой валют; полоса наград с 70 (UILayout)
 local worldLine = UI.text(UI.at(L.worldLine, {
 	Name = "WorldLine",
 	Text = "",
@@ -95,7 +96,7 @@ local worldLine = UI.text(UI.at(L.worldLine, {
 }))
 
 -- «НАЖМИ, ЧТОБЫ ИГРАТЬ» — пульсирует над карточками
--- зона нажатия 520×60 (≥ 34 px высоты на телефоне при ширине ~290 px), текст 44 логических
+-- зона нажатия 520×58 (≥ 32 px высоты на телефоне при ширине ~290 px — порог пилюли MIN_PILL)
 local tapText = UI.new("TextButton", UI.at(L.play, {
 	Name = "PlayButton", -- client/Tutorial указывает на неё
 	Text = "",
@@ -129,7 +130,7 @@ local function effectValue(name: string, lvl: number): number
 end
 local function effectText(name: string, v: number): string
 	if name == "Launch" then
-		return "сила " .. math.floor(v + 0.5)
+		return tostring(math.floor(v + 0.5)) -- коротко: карточка 164, цифра рядом с иконкой (#46)
 	elseif name == "Rocket" then
 		return string.format("%.1fс", v)
 	elseif name == "Income" then
@@ -162,54 +163,50 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	UI.corner(card, 14)
 	UI.stroke(card, 3)
 	UI.bounce(card)
-	if not compact then
-		UI.text({ Text = st.title, Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -50, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card })
-	end
+	-- карточка 164×128 (#46, UILayout.CARD_*): заголовок · иконка + цифра в строку · деления · цена
+	UI.text({ Name = "Title", Text = st.title, Position = UDim2.fromOffset(10, 2), Size = UDim2.new(1, -50, 0, L.CARD_TITLE_H), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card })
 	-- бейдж уровня (тёмный кружок в углу)
 	local badgeBg = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -8, 0, 8), Size = UDim2.fromOffset(38, 38), BackgroundColor3 = C.navy, BackgroundTransparency = 0, ZIndex = 5, Parent = card })
 	UI.corner(badgeBg, 1000)
 	UI.stroke(badgeBg, 2.5, C.white)
 	local badge = UI.text({ Text = "0", Position = UDim2.fromOffset(5, 6), Size = UDim2.new(1, -10, 1, -12), ZIndex = 6, Parent = badgeBg })
-	-- картинка
-	-- карточка 164×220: заголовок 4–30, картинка 32–122, деления 128–146, кнопка 152–212
-	local artTop = if compact then 8 else 32
-	local artH = if compact then 76 else 90
-	local art = UI.new("Frame", { Position = UDim2.fromOffset(8, artTop), Size = UDim2.new(1, -16, 0, artH), BackgroundTransparency = 0, ZIndex = 2, Parent = card })
+	-- картинка: иконка слева, цифра эффекта справа — одной строкой
+	local artH = L.CARD_ART_H
+	local art = UI.new("Frame", { Name = "Art", Position = UDim2.fromOffset(8, L.CARD_ART_Y), Size = UDim2.new(1, -16, 0, artH), BackgroundTransparency = 0, ZIndex = 2, Parent = card })
 	UI.grad(art, Color3.fromRGB(250, 252, 255), Color3.fromRGB(205, 225, 245))
 	UI.corner(art, 10)
-	UI.icon(st.art, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.44), Size = UDim2.fromScale(0.62, 0.74), ZIndex = 3, Parent = art })
-	local effect = UI.text({ Text = "", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, -2), Size = UDim2.new(0.8, 0, 0, if compact then 25 else 28), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = art })
+	UI.icon(st.art, { Name = "Icon", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 2, 0.5, 0), Size = UDim2.fromOffset(artH - 4, artH - 4), ZIndex = 3, Parent = art })
+	local effect = UI.text({ Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(1, -(artH + 8), 0, 26), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = art })
 	-- деления тира
 	local pips = {}
 	if not compact then
 		for i = 1, Config.TIER_SIZE do
 			-- деление тира: скруглённый квадратик с тёмной окантовкой и бликом (как в оригинале)
 			local pip = UI.new("Frame", {
-				Position = UDim2.new((i - 1) / Config.TIER_SIZE, 9 - (i - 1) * 18 / Config.TIER_SIZE, 0, artTop + artH + 6),
-				Size = UDim2.new(1 / Config.TIER_SIZE, -5, 0, 18),
+				Position = UDim2.new((i - 1) / Config.TIER_SIZE, 9 - (i - 1) * 18 / Config.TIER_SIZE, 0, L.CARD_PIP_Y),
+				Size = UDim2.new(1 / Config.TIER_SIZE, -5, 0, L.CARD_PIP_H),
 				BackgroundColor3 = st.pip,
 				BackgroundTransparency = 0,
 				ZIndex = 2,
 				Parent = card,
 			})
-			UI.corner(pip, 5)
+			UI.corner(pip, 4)
 			UI.stroke(pip, 1.5, Color3.fromRGB(15, 22, 45), 0.2)
-			local hl = UI.new("Frame", { Position = UDim2.new(0, 3, 0, 2), Size = UDim2.new(1, -6, 0, 5), BackgroundColor3 = C.white, BackgroundTransparency = 0.6, ZIndex = 3, Parent = pip })
-			UI.corner(hl, 3)
+			local hl = UI.new("Frame", { Position = UDim2.new(0, 3, 0, 2), Size = UDim2.new(1, -6, 0, 3), BackgroundColor3 = C.white, BackgroundTransparency = 0.6, ZIndex = 3, Parent = pip })
+			UI.corner(hl, 2)
 			pips[i] = pip
 		end
 	end
-	-- кнопка «УЛУЧШИТЬ / цена»
-	local btnH = if compact then 60 else 60 -- «УЛУЧШИТЬ» и цена — по 25 логических
-	local priceBtn = UI.new("Frame", { Position = UDim2.new(0, 8, 1, -(btnH + 8)), Size = UDim2.new(1, -16, 0, btnH), BackgroundTransparency = 0, ZIndex = 2, Parent = card })
+	-- цена одной строкой (вся карточка — кнопка «улучшить», ≥ 70 px на телефоне)
+	local btnH = L.CARD_BTN_H
+	local priceBtn = UI.new("Frame", { Position = UDim2.new(0, 8, 1, -(btnH + 6)), Size = UDim2.new(1, -16, 0, btnH), BackgroundTransparency = 0, ZIndex = 2, Parent = card })
 	local g = UI.grad(priceBtn, st.btn[1], st.btn[2])
 	g.Name = "Fill"
 	UI.corner(priceBtn, 10)
 	UI.stroke(priceBtn, 2)
-	local btnShine = UI.new("Frame", { Position = UDim2.new(0, 6, 0, 3), Size = UDim2.new(1, -12, 0, 4), BackgroundColor3 = C.white, BackgroundTransparency = 0.6, ZIndex = 3, Parent = priceBtn })
+	local btnShine = UI.new("Frame", { Position = UDim2.new(0, 6, 0, 3), Size = UDim2.new(1, -12, 0, 3), BackgroundColor3 = C.white, BackgroundTransparency = 0.6, ZIndex = 3, Parent = priceBtn })
 	UI.corner(btnShine, 1000)
-	UI.text({ Text = "УЛУЧШИТЬ", Position = UDim2.new(0, 6, 0, 4), Size = UDim2.new(1, -12, 0.45, -2), ZIndex = 3, Parent = priceBtn })
-	local _, setPrice = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.5, -1), Size = UDim2.new(1, -12, 0, math.floor(btnH * 0.42)), ZIndex = 3, Parent = priceBtn })
+	local _, setPrice = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -12, 0, btnH - 4), ZIndex = 3, Parent = priceBtn })
 	local c = { root = card, badge = badge, pips = pips, setPrice = setPrice, priceBtn = priceBtn, effect = effect, style = st }
 	cards[name] = c
 	local buying = false
@@ -292,7 +289,7 @@ end)
 for i, name in { "Launch", "Sled", "Income" } do
 	makeCard(name, cardsRow, UDim2.fromOffset(L.card[7], L.card[8]), i, false)
 end
--- Ракета — отдельная голубая карточка справа (как UPGRADE 💎1 в оригинале)
+-- Ракета — отдельная голубая карточка справа (как UPGRADE 💎1 в оригинале), той же высоты, что и ряд
 local rocketCard = makeCard("Rocket", lobby, UDim2.fromOffset(L.rocket[7], L.rocket[8]), 0, true)
 UI.at(L.rocket, rocketCard.root :: any)
 
