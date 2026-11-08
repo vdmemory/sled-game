@@ -292,7 +292,6 @@ sessionBar.Activated:Connect(function()
 	end
 	-- открытие: подарок трясётся → вспышка → монеты и гемы летят в счётчики
 	local ok = rewardAct("gift", bi, bigMark, function(fire)
-		sfx:Fire("record")
 		bigOpening = true
 		UIFx.openChest(bigMark, function()
 			fire()

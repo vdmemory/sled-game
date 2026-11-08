@@ -17,6 +17,7 @@ UI.MIN_TEXT = Layout.MIN_TEXT -- 25 логических ≈ 14 px
 UI.MIN_PILL = Layout.MIN_PILL -- высота широкой кнопки-пилюли (ширина ≥ 2.5 высоты)
 UI.MIN_TOUCH_PANEL = Layout.MIN_TOUCH_PANEL -- кнопки в окнах (окна ужимаются своим UIScale)
 UI.MIN_TEXT_PANEL = Layout.MIN_TEXT_PANEL
+UI.sfx = nil :: ((string) -> ())? -- звук UI-событий (ставит client/Sounds): "open", "deny", "chest", "claim"
 
 -- Поставить элемент по записи раскладки { ax, ay, sx, ox, sy, oy, w, h }: дописывает
 -- AnchorPoint/Position/Size в props (для UI.new) и возвращает их же
@@ -515,6 +516,7 @@ function UI.pop(o: GuiObject)
 		return
 	end
 	local target = s.Scale
+	if UI.sfx then UI.sfx("open") end
 	s.Scale = target * 0.8
 	TweenService:Create(s, TweenInfo.new(0.22, Enum.EasingStyle.Back), { Scale = target }):Play()
 end

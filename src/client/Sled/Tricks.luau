@@ -199,7 +199,7 @@ function Tricks.land(s: BasePart, n: Vector3)
 	if fell then
 		st.speed *= Config.OBSTACLE_SLOWDOWN
 		trickPopup:Fire("😵 Падение!")
-		sfx:Fire("smash")
+		sfx:Fire("wipe")
 	elseif #airTrickOrder > 0 then
 		-- Итог полёта: список серверу, буст и подпись («Сальто + Бочка! ×1.5 +52»)
 		local list = {}
@@ -225,7 +225,7 @@ function Tricks.land(s: BasePart, n: Vector3)
 		local mult = Config.trickComboMult(#airTrickOrder)
 		st.speed *= boost
 		Remotes.Trick:FireServer(list, st.airTime)
-		sfx:Fire("flip")
+		sfx:Fire("flip", #list) -- тон растёт с числом трюков в комбо
 		trickPopup:Fire(table.concat(names, " + ") .. "! " .. (if mult > 1 then "×" .. mult .. " " else "") .. "+" .. math.floor(coins * mult) .. " 💰")
 	end
 end

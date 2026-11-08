@@ -109,6 +109,7 @@ end
 -- (1–12); onArrive(last) вызывается на каждое прибытие, last = true для последней.
 function UIFx.flyCurrency(kind: string, from: GuiObject | Vector2, to: GuiObject, count: number, onArrive: ((boolean) -> ())?)
 	local n = math.clamp(math.floor(count), 1, 12)
+	if UI.sfx then UI.sfx("claim") end
 	if not onScreen(to) then
 		-- цели не видно (например, идёт заезд) — считаем, что всё прилетело сразу
 		if onArrive then
@@ -281,6 +282,7 @@ function UIFx.openChest(chest: GuiObject, onBurst: () -> ())
 		return
 	end
 	busyChests[chest] = true
+	if UI.sfx then UI.sfx("chest") end
 	local baseRot = chest.Rotation
 	local s = scaleOf(chest)
 	task.spawn(function()
@@ -317,6 +319,7 @@ function UIFx.shakeNo(g: GuiObject)
 		return
 	end
 	busyChests[g] = true
+	if UI.sfx then UI.sfx("deny") end
 	local baseRot = g.Rotation
 	task.spawn(function()
 		for _, r in { -5, 5, -3, 3, 0 } do

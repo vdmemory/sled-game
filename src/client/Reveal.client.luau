@@ -208,7 +208,7 @@ local function reveal(kind: string, tierName: string)
 	-- белая вспышка (вход и момент смены модели)
 	local flash = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.25, Parent = gui })
 
-	controller.Sfx:Fire("record")
+	controller.Sfx:Fire("reveal")
 	tween(flash, 0.5, { BackgroundTransparency = 1 })
 	tween(bg, 0.3, { BackgroundTransparency = 0.3 })
 	tween(rays, 0.6, { Size = UDim2.fromOffset(980, 980) }, Enum.EasingStyle.Back)
@@ -236,7 +236,7 @@ local function reveal(kind: string, tierName: string)
 		end
 		tween(top, 0.3, { TextTransparency = 0 })
 		tween(tScale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
-		controller.Sfx:Fire("reward")
+		controller.Sfx:Fire("tierup")
 	end)
 	task.delay(SWAP_AT + 0.7, function()
 		if btn.Parent then

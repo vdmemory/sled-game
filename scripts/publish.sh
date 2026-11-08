@@ -45,6 +45,18 @@ if [ -f scripts/upload_meshes.py ] && [ -z "${SKIP_MESHES:-}" ]; then
   fi
 fi
 
+# Звуки: assets/audio/sfx_atlas.ogg (атлас, scripts/gen_audio.py) → ассет Audio (права те же: asset:read+write).
+# Новый ID → src/shared/AudioIds.luau → пересборка; в лог AUDIO_IDS_JSON_BEGIN/END — их коммитят в
+# assets/audio/audio.json и AudioIds.luau. Без прав/лимит — warning, играют встроенные звуки.
+if [ -f scripts/upload_audio.py ] && [ -z "${SKIP_AUDIO:-}" ]; then
+  BEFORE=$(cat src/shared/AudioIds.luau 2>/dev/null || true)
+  python3 scripts/upload_audio.py || echo "::warning::загрузка аудио не удалась"
+  if [ "$BEFORE" != "$(cat src/shared/AudioIds.luau 2>/dev/null || true)" ]; then
+    REBUILD=1
+    echo "AUDIO_IDS_JSON_BEGIN"; cat assets/audio/audio.json 2>/dev/null; echo "AUDIO_IDS_JSON_END"
+  fi
+fi
+
 if [ -n "$REBUILD" ]; then
   ROJO="$(find "${RUNNER_TEMP:-/tmp}" -type f -name rojo 2>/dev/null | head -n 1)"
   if [ -n "$ROJO" ]; then
