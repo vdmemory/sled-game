@@ -582,7 +582,7 @@ function Runs.startLoop()
 				continue
 			end
 			player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
-			run.maxSpeed = math.max(run.maxSpeed or 0, sled.AssemblyLinearVelocity.Magnitude * 1.1) -- км/ч, как на спидометре
+			run.maxSpeed = math.max(run.maxSpeed or 0, sled.AssemblyLinearVelocity.Magnitude * Config.KMH_PER_STUD) -- км/ч, как на спидометре
 
 			if not run.launched or run.crashed then
 				continue

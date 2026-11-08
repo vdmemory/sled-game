@@ -6,6 +6,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local DailyTasks = require(ReplicatedStorage.Shared.DailyTasks)
 local Data = require(script.Parent.DataService)
 local Analytics = require(script.Parent.Analytics)
 
@@ -28,15 +29,12 @@ local function today(): number
 	return os.time() // 86400
 end
 
--- Config.TASKS_PER_DAY заданий дня: выбор детерминирован по номеру дня (у всех игроков одни и те же)
-local function tasksFor(day: number)
-	local rng = Random.new(day * 7349 + 11)
-	local pool = table.clone(Config.TASK_POOL)
+-- Задания дня игрока (#32): набор фиксируется в сейве (Daily.set = { {id, target} }) в начале дня —
+-- базовый набор дня + замена невыполнимых для него (shared/DailyTasks). Номер слота = ключ claimed.
+local function tasksOf(d): { any }
 	local out = {}
-	for _ = 1, Config.TASKS_PER_DAY do
-		local t = table.remove(pool, rng:NextInteger(1, #pool))
-		local target = t.targets[1] + rng:NextInteger(0, 2) * math.floor((t.targets[2] - t.targets[1]) / 2)
-		table.insert(out, { id = t.id, text = Config.taskText(t, target), target = target, gems = t.gems, max = t.max, icon = t.icon })
+	for i, e in d.Daily.set do
+		out[i] = DailyTasks.describe(e) or { id = e.id, text = "—", target = 999999, gems = 0, icon = "tasks" }
 	end
 	return out
 end
@@ -56,11 +54,36 @@ local function ensureStreak(d)
 	s.day = day
 end
 
+-- Перепроверка набора дня (вход в игру): невыполнимые и ещё не полученные слоты заменяются,
+-- у нового задания прогресс с нуля; у того же задания с меньшей целью прогресс сохраняется.
+local function recheck(d)
+	local daily = d.Daily
+	local before = {}
+	for i, e in daily.set do
+		before[i] = e.id
+	end
+	local changed = DailyTasks.revalidate(daily.set, daily.day, d, function(i)
+		return daily.claimed[tostring(i)] == true
+	end)
+	for _, i in changed do
+		if daily.set[i].id ~= before[i] then
+			daily.progress[daily.set[i].id] = nil
+		end
+	end
+end
+
 local function ensure(d)
 	d.Daily = d.Daily or {}
 	local day = today()
 	if d.Daily.day ~= day then
-		d.Daily = { day = day, progress = {}, claimed = {}, chest = false }
+		d.Daily = { day = day, progress = {}, claimed = {}, chest = false, set = DailyTasks.forPlayer(day, d) }
+	end
+	if not d.Daily.set then
+		-- сейв до #32: набор, который игрок уже видел сегодня (общий), — и сразу без невыполнимого
+		d.Daily.progress = d.Daily.progress or {}
+		d.Daily.claimed = d.Daily.claimed or {}
+		d.Daily.set = DailyTasks.baseSet(day)
+		recheck(d)
 	end
 	d.ChestAt = d.ChestAt or 0
 	ensureStreak(d)
@@ -72,7 +95,7 @@ function Rewards.sync(player: Player)
 		return
 	end
 	ensure(d)
-	local tasks = tasksFor(d.Daily.day)
+	local tasks = tasksOf(d)
 	local list = {}
 	for i, t in tasks do
 		table.insert(list, {
@@ -117,6 +140,8 @@ function Rewards.onJoin(player: Player)
 	local d = Data.get(player)
 	if d then
 		d.GiftsClaimed = {} -- подарки за время — заново в каждой сессии
+		ensure(d)
+		recheck(d) -- набор дня без невыполнимого для игрока (#32)
 	end
 	Rewards.sync(player)
 end
@@ -142,7 +167,7 @@ function Rewards.onRun(player: Player, stats: { [string]: number }): { string }
 	end
 	ensure(d)
 	local done = {}
-	for _, t in tasksFor(d.Daily.day) do
+	for _, t in tasksOf(d) do
 		local before = d.Daily.progress[t.id] or 0
 		local add = stats[t.id] or 0
 		if add > 0 then
@@ -183,7 +208,7 @@ function Rewards.claimTask(player: Player, index: number): (boolean, any)
 		return false, "Недоступно"
 	end
 	ensure(d)
-	local t = tasksFor(d.Daily.day)[index]
+	local t = tasksOf(d)[index]
 	if not t then
 		return false, "Нет задания"
 	end
@@ -208,7 +233,7 @@ function Rewards.claimTaskChest(player: Player): (boolean, any)
 	if d.Daily.chest then
 		return false, "Уже открыт"
 	end
-	for i = 1, Config.TASKS_PER_DAY do
+	for i = 1, #d.Daily.set do
 		if not d.Daily.claimed[tostring(i)] then
 			return false, "Сначала забери награды за все задания"
 		end

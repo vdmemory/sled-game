@@ -55,6 +55,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `client/Sled/Tricks` | 345 | ручные и авто-трюки, `Tricks.land` (итог полёта), `Tricks.air` (кадр в воздухе), кнопки прыжка/ракеты |
 | `client/Sled/Contacts` | 386 | касания (авария, разбивание, щит, бонусы, гемы, кристалл, ускорители), `Contacts.scan` (монеты по отрезку пути, магнит) |
 | `shared/Track/init` | 574 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `rescueCFrame`, `destroy` |
+| `shared/DailyTasks` | 150 | задания дня игрока (#32): `baseSet(day)` (общий набор дня), `forPlayer(day, d)`, `revalidate(set, day, d, keep)` — замена невыполнимого (`Config.taskAvailable`), `describe`. Чистые функции; проверка — `scripts/stand/daily_tasks.luau` |
 | `shared/Track/Profile` | 244 | `buildProfile` — цепочка кусков уровня (тип `Segment`) |
 | `shared/Track/Sections` | 167 | профили сечений, цвета снега, `sidePoint`, поперечное сечение куска |
 | `shared/Track/Dress` | 231 | оформление миров вдоль трассы и разметка на ней |
@@ -373,7 +374,7 @@ Open Cloud publish не принимает Union/EditableMesh, а MeshId у Mesh
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LaunchLevel`, `SledLevel`, `IncomeLevel`, `RocketLevel`,
 `Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings` (`Sfx`, `Snow`, `Shadows`,
-`Music`), `Daily` (задания дня; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `Streak` (`day` — последний засчитанный UTC-день, `count` — серия, `claimedDay` — день последней награды, `save` — серия, которую можно спасти сегодня; пересчёт в `Rewards.ensure`, недостающие ключи у старых сейвов дополняет `migrate`), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
+`Music`), `Daily` (задания дня: `day`, `set` — набор игрока `{ {id, target} }`, фиксируется в начале дня и перепроверяется при входе (#32; у сейвов без `set` — общий набор дня + замена невыполнимого), `progress` по id, `claimed` по номеру слота, `chest`; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `Streak` (`day` — последний засчитанный UTC-день, `count` — серия, `claimedDay` — день последней награды, `save` — серия, которую можно спасти сегодня; пересчёт в `Rewards.ensure`, недостающие ключи у старых сейвов дополняет `migrate`), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
 Onboard, Purchases, Playtime — для аналитики), `Tutorial` (биты пройденных шагов `Config.TUTORIAL.STEPS`, порядок не менять; при входе с `Stats.Runs ≥ 3` — все биты). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
 Новые поля — в `DEFAULT`, миграции — `migrate()` в `DataService`.
 
