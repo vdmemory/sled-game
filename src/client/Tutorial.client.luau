@@ -75,6 +75,9 @@ local function bit(i: number): number
 	return 2 ^ (i - 1)
 end
 local function isDone(i: number): boolean
+	if i == idx.jump and Config.JUMP_ENABLED < 1 then
+		return true -- прыжок выключен: шаг считается пройденным, следующие подсказки не ждут его
+	end
 	return bit32.btest(mask, bit(i))
 end
 local function syncMask()
@@ -283,7 +286,7 @@ local RULES: { [string]: { want: () -> boolean, finish: () -> boolean, keep: () 
 	},
 	jump = {
 		want = function()
-			return runHints() and launched() and isDone(idx.steer) and not state.Airborne.Value
+			return Config.JUMP_ENABLED >= 1 and runHints() and launched() and isDone(idx.steer) and not state.Airborne.Value
 		end,
 		finish = function()
 			return state.Airborne.Value

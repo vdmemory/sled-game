@@ -129,9 +129,11 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	ContextActionService:SetTitle("Flip", "🔄")
 	ContextActionService:SetPosition("Flip", UDim2.new(1, -230, 1, -100))
 	-- Прыжок: на телефоне круглая кнопка над 🔄 (тот же столбик под большой палец, руль — левее)
-	ContextActionService:BindActionAtPriority("Jump", onJump, true, Enum.ContextActionPriority.High.Value, Enum.KeyCode.LeftControl, Enum.KeyCode.W, Enum.KeyCode.ButtonX)
-	ContextActionService:SetTitle("Jump", "⤴")
-	ContextActionService:SetPosition("Jump", UDim2.new(1, -230, 1, -190))
+	if Config.JUMP_ENABLED >= 1 then
+		ContextActionService:BindActionAtPriority("Jump", onJump, true, Enum.ContextActionPriority.High.Value, Enum.KeyCode.LeftControl, Enum.KeyCode.W, Enum.KeyCode.ButtonX)
+		ContextActionService:SetTitle("Jump", "⤴")
+		ContextActionService:SetPosition("Jump", UDim2.new(1, -230, 1, -190))
+	end
 	ContextActionService:BindActionAtPriority(
 		"Rocket",
 		onRocket,
@@ -358,7 +360,7 @@ RunService.Heartbeat:Connect(function(dt)
 			end
 		end
 		-- Прыжок: подброс вверх по нормали; дальше тот же путь, что и с трамплина (airborne → трюки)
-		if st.jumpQueued and not onRamp and not st.airborne and now - st.lastJump >= Config.JUMP_COOLDOWN then
+		if st.jumpQueued and Config.JUMP_ENABLED >= 1 and not onRamp and not st.airborne and now - st.lastJump >= Config.JUMP_COOLDOWN then
 			st.lastJump = now
 			st.jumping = true
 			-- на борту жёлоба (Bank) подброс слабее: от стенки не оттолкнёшься как от ровного снега
