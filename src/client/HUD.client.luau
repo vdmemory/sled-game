@@ -844,6 +844,10 @@ end
 continueBtn.Activated:Connect(hideResult)
 
 Remotes.RunEnded.OnClientEvent:Connect(function(r)
+	if r.reason == "idle" then -- простоял у рогатки без выстрела (#20): без карточки итогов
+		notice(string.format("⏱ %d с без выстрела — ты снова в лобби", r.timeout or 0), 3.5)
+		return
+	end
 	resultToken += 1
 	local my = resultToken
 	local finished = r.reason == "finish"

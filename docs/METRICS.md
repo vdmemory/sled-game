@@ -42,6 +42,7 @@
 | Custom (значение) | `RunDistance`, `RunPercent`, `SessionMinutes`, `RobuxPurchase` | средние/суммы по дням |
 | Custom (счётчик) | `RunFinished`, `RunCrashed`, `RunStopped` | исходы заездов → доля финишей |
 | Custom (значение) | `RunLeft` (% трассы; 0 — вышел у рогатки, не выстрелив) | вышел из игры посреди заезда (#21) — ключевой сигнал отвала; монеты/гемы такого заезда — Economy Source `Run` |
+| Custom (счётчик) | `RunIdle` | сел у рогатки и не выстрелил за `IDLE_LAUNCH_TIMEOUT` (#20) — не понял запуск или AFK |
 | Custom (значение) | `AntiCheatFlag` (число флагов) | заезд отменён античитом; рост = чит или ложные срабатывания |
 | Custom (значение) | `CheatSuspect` (флаги), `TitleAwarded` (место 1–3) | заезд не пошёл в лидерборд недели; выдан титул недели (#26) |
 Счётчики на игроке в сейве: `Stats = { Runs, Finishes, Onboard, Purchases, Playtime }`.

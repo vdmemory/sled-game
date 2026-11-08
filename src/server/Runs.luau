@@ -125,7 +125,8 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 	local finished = reason == "finish"
 	local dist = math.min(run.distance, L)
 	local pct = math.floor(dist / L * 100)
-	local quiet = reason == "back" or reason == "restart"
+	-- без итогов и без засчитанного заезда: BACK, ⟳ и «idle» (простоял у рогатки без выстрела, #20)
+	local quiet = reason == "back" or reason == "restart" or reason == "idle"
 	local cheat = reason == "cheat" -- античит: заезд не засчитан, наград нет
 	local clean = not run.crashedOnTrack and reason ~= "fell" -- заезд без аварии
 	local mult, earned = 1, 0
@@ -156,7 +157,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 				d.LevelBest = 0
 				gems += Config.GEMS_FINISH
 				postLevel(player, d.Level)
-			elseif pct > d.LevelBest and reason ~= "restart" and reason ~= "back" then
+			elseif pct > d.LevelBest and not quiet then
 				d.LevelBest = pct
 				newBest = true
 				gems += Config.GEMS_NEW_BEST
@@ -165,7 +166,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 			d.Gems += gems
 			-- аналитика: экономика и воронка (docs/METRICS.md)
 			d.Stats = d.Stats or {}
-			if reason ~= "back" and reason ~= "restart" then
+			if not quiet then
 				d.Stats.Runs = (d.Stats.Runs or 0) + 1
 				local w = Config.worldOf(level)
 				Analytics.economy(player, "Source", "Coins", earned, d.Coins, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
@@ -194,7 +195,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 				end
 			end
 			local done = Rewards.onRun(player, {
-				runs = if reason == "back" or reason == "restart" then 0 else 1,
+				runs = if quiet then 0 else 1,
 				coins = earned,
 				distance = math.floor(dist),
 				air = math.floor(run.airTotal or 0),
@@ -261,7 +262,10 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 		ending[player] = nil
 		return
 	end
-	if not quiet then
+	if reason == "idle" then
+		Analytics.custom(player, "RunIdle") -- сел и не понял, как стрелять? (воронка, #20)
+		RunEnded:FireClient(player, { reason = "idle", timeout = Config.IDLE_LAUNCH_TIMEOUT })
+	elseif not quiet then
 		RunEnded:FireClient(player, {
 			reason = reason,
 			percent = if finished then 100 else pct,
@@ -584,7 +588,15 @@ function Runs.startLoop()
 			player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
 			run.maxSpeed = math.max(run.maxSpeed or 0, sled.AssemblyLinearVelocity.Magnitude * Config.KMH_PER_STUD) -- км/ч, как на спидометре
 
-			if not run.launched or run.crashed then
+			if not run.launched then
+				-- AFK у рогатки (#20): иначе трасса (ensureAround), слот и санки держатся бесконечно
+				local idle = Config.IDLE_LAUNCH_TIMEOUT
+				if not run.crashed and idle > 0 and os.clock() - run.startTime > idle then
+					endRun(player, "idle")
+				end
+				continue
+			end
+			if run.crashed then
 				continue
 			end
 			if run.distance >= track.length and not run.finishedAt then
