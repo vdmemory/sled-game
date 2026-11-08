@@ -452,6 +452,113 @@ def mesa(seed):
     return mesh_of(v, f)
 
 
+# ---------------------------------------------------------------- лобби (#этап 3): фонарь, подиум, табло, ворота
+# Эти меши в настоящих studs (масштаб 1 = размер в лобби), граница — кадр объекта как у остальных.
+def frustum(r0, r1, y0, y1, sec, rot=0.0, ox=0.0, oz=0.0):
+    """Усечённый конус/призма (sec граней) с крышками; rot — поворот сечения (рад)."""
+    def fn(i, j):
+        a = 2 * math.pi * j / sec + rot
+        r = r0 if i == 0 else r1
+        return (ox + r * math.cos(a), y0 if i == 0 else y1, oz + r * math.sin(a))
+
+    v, f = grid_surface(2, sec, fn)
+    v, f = cap(v, f, sec, sec, [ox, y1, oz], up=True)
+    v, f = cap(v, f, 0, sec, [ox, y0, oz], up=False)
+    return mesh_of(v, f)
+
+
+def box(sx, sy, sz, cx, y0, cz):
+    b = trimesh.creation.box(extents=[sx, sy, sz])
+    b.apply_translation([cx, y0 + sy / 2, cz])
+    return b
+
+
+def sweep(points, half_h, half_d):
+    """Брус прямоугольного сечения вдоль ломаной в плоскости XY (points: [(x, y)]), с торцами."""
+    pts = [np.array(p, dtype=float) for p in points]
+    n = len(pts)
+
+    def fn(i, j):
+        p = pts[i]
+        d = pts[min(i + 1, n - 1)] - pts[max(i - 1, 0)]
+        d /= np.linalg.norm(d)
+        nrm = np.array([-d[1], d[0]])  # нормаль в плоскости XY
+        su, sd = [(1, 1), (1, -1), (-1, -1), (-1, 1)][j]
+        q = p + nrm * half_h * su
+        return (q[0], q[1], half_d * sd)
+
+    v, f = grid_surface(n, 4, fn)
+    v, f = cap(v, f, 0, 4, v[:4].mean(axis=0), up=False)
+    last = (n - 1) * 4
+    v, f = cap(v, f, last, 4, v[last:last + 4].mean(axis=0), up=True)
+    return mesh_of(v, f)
+
+
+def lamp_post():
+    """Фонарь лобби ~10 studs: тумба, восьмигранный столб, воротник, клетка плафона, крыша-пирамида,
+    шарик. Стекло/свет — отдельная неоновая деталь внутри клетки (y 7.5–8.9, Props.lampPost)."""
+    parts = [
+        box(1.4, 0.5, 1.4, 0, 0, 0),
+        box(1.0, 0.35, 1.0, 0, 0.5, 0),
+        frustum(0.3, 0.2, 0.85, 7.2, 8, rot=math.pi / 8),
+        frustum(0.42, 0.42, 7.2, 7.45, 8, rot=math.pi / 8),
+        box(1.35, 0.14, 1.35, 0, 7.45, 0),
+    ]
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            parts.append(box(0.14, 1.45, 0.14, sx * 0.6, 7.55, sz * 0.6))
+    parts += [
+        box(1.5, 0.16, 1.5, 0, 9.0, 0),
+        frustum(1.05, 0.1, 9.16, 9.9, 4, rot=math.pi / 4),
+        trimesh.creation.icosphere(subdivisions=1, radius=0.17).apply_translation([0, 10.05, 0]),
+    ]
+    return combine(parts)
+
+
+def podium():
+    """Подиум витрины: три круглых яруса с фасками (радиус 1, высота 0.62), 28 граней."""
+    sec = 28
+    tiers = [(1.0, 0.97, 0.0, 0.18), (0.97, 0.91, 0.18, 0.22), (0.86, 0.86, 0.22, 0.42), (0.86, 0.8, 0.42, 0.46),
+             (0.76, 0.76, 0.46, 0.58), (0.76, 0.71, 0.58, 0.62)]
+    return combine([frustum(r0, r1, y0, y1, sec) for r0, r1, y0, y1 in tiers])
+
+
+def board_frame():
+    """Рама табло 21.6 × 18.6: столбы с пиками, верхняя и нижняя перекладины, двускатная крыша.
+    Само табло (SurfaceGui) — плита Part 18 × 10 в проёме y 6–16 (Lobby.board)."""
+    parts = []
+    for sx in (-1, 1):
+        parts += [
+            box(2.2, 0.6, 2.2, sx * 9.6, 0, 0),
+            box(1.2, 17.0, 1.2, sx * 9.6, 0.6, 0),
+            frustum(1.0, 0.05, 17.6, 18.6, 4, rot=math.pi / 4, ox=sx * 9.6),
+        ]
+    parts += [box(20.4, 1.0, 1.1, 0, 16.0, 0), box(20.4, 0.8, 1.1, 0, 5.2, 0)]
+    # двускатная крыша над табло: треугольная призма
+    w, y0, y1, d = 10.8, 17.0, 18.4, 1.3
+    v = np.array([[-w, y0, -d], [w, y0, -d], [0, y1, -d], [-w, y0, d], [w, y0, d], [0, y1, d]], dtype=float)
+    f = np.array([[0, 2, 1], [3, 4, 5], [0, 1, 4], [0, 4, 3], [1, 2, 5], [1, 5, 4], [2, 0, 3], [2, 3, 5]])
+    parts.append(mesh_of(v, f))
+    return combine(parts)
+
+
+def start_gate():
+    """Ворота старта у входа на мостик: две квадратные колонны с базой и капителью (x ±9.5),
+    прямая перемычка y 9.6–10.4 (под ней висит вывеска мира) и выгнутая балка над ней до y 13.4."""
+    parts = []
+    for sx in (-1, 1):
+        x = sx * 9.5
+        parts += [
+            box(2.8, 1.2, 2.8, x, 0, 0),
+            frustum(1.32, 1.08, 1.2, 10.4, 4, rot=math.pi / 4, ox=x),
+            box(2.6, 0.7, 2.6, x, 10.4, 0),
+            frustum(0.9, 0.12, 11.1, 12.3, 4, rot=math.pi / 4, ox=x),
+        ]
+    parts.append(box(17.0, 0.8, 1.3, 0, 9.6, 0))
+    arc = [(-10.6 + 21.2 * t, 11.2 + 1.9 * math.sin(math.pi * t)) for t in np.linspace(0, 1, 13)]
+    parts.append(sweep(arc, 0.55, 0.8))
+    return combine(parts)
+
 # ---------------------------------------------------------------- список
 # имя → (функция, flat-shading, подпись)
 MESHES = {
@@ -469,6 +576,10 @@ MESHES = {
     "mountain_rock": (lambda: mountain_rock(21), True, "гора: склоны"),
     "mountain_snow": (lambda: mountain_snow(21), False, "гора: снежная шапка"),
     "mesa": (lambda: mesa(31), True, "меза каньона"),
+    "lamp_post": (lamp_post, True, "лобби: фонарь на столбе"),
+    "podium": (podium, True, "лобби: подиум витрины саней"),
+    "board_frame": (board_frame, True, "лобби: рама табло с крышей"),
+    "start_gate": (start_gate, True, "лобби: ворота старта"),
 }
 
 

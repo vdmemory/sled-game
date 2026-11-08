@@ -30,6 +30,8 @@ Config.WALL_OFFSET = 1.5 -- насколько борт стоит дальше 
 
 -- Лобби: витринная трасса своего мира строится у каждого игрока локально (client/LobbyScene)
 Config.LOBBY_PREVIEW_SEGMENTS = 4 -- сколько первых кусков трассы показывать за мостиком (декорация)
+Config.LOBBY_CAM_PITCH = -12 -- град.: наклон камеры спавна (client/LobbyScene): мостик и маяк старта над головой игрока и под плашками UI (макет scripts/ui_layout_preview.py)
+Config.LOBBY_CAM_ZOOM = 16 -- studs: зум камеры спавна (Roblox по умолчанию 12.5): аватар меньше закрывает путь к старту
 Config.LOBBY_LOOK_TWEEN = 1 -- сек: плавная смена освещения лобби при смене мира
 
 -- ГРАФИКА (client/PostFX; пресеты миров — shared/WorldLook). Множители поверх пресетов.

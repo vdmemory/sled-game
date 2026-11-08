@@ -9,6 +9,46 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local UI = {}
 
+-- Раскладка лобби и минимальные размеры под палец (#34) — Shared/UILayout
+local Layout = require(script.Parent.UILayout)
+UI.L = Layout
+UI.MIN_TOUCH = Layout.MIN_TOUCH -- 77 логических ≈ 44 px на телефоне (масштаб корня ~0.57)
+UI.MIN_TEXT = Layout.MIN_TEXT -- 25 логических ≈ 14 px
+UI.MIN_PILL = Layout.MIN_PILL -- высота широкой кнопки-пилюли (ширина ≥ 2.5 высоты)
+UI.MIN_TOUCH_PANEL = Layout.MIN_TOUCH_PANEL -- кнопки в окнах (окна ужимаются своим UIScale)
+UI.MIN_TEXT_PANEL = Layout.MIN_TEXT_PANEL
+
+-- Поставить элемент по записи раскладки { ax, ay, sx, ox, sy, oy, w, h }: дописывает
+-- AnchorPoint/Position/Size в props (для UI.new) и возвращает их же
+function UI.at(spec: { number }, props: { [string]: any }?): { [string]: any }
+	local p = props or {}
+	p.AnchorPoint = Vector2.new(spec[1], spec[2])
+	p.Position = UDim2.new(spec[3], spec[4], spec[5], spec[6])
+	p.Size = UDim2.fromOffset(spec[7], spec[8])
+	return p
+end
+
+-- Масштаб корня экрана (HUD, Tutorial, Toasts — одна формула): считается от области ScreenGui
+-- (AbsoluteSize — уже без топбара Roblox и выреза телефона), а не от ViewportSize. Корень
+-- растягивается на 1/s — его логический размер ≥ DESIGN_W × ~DESIGN_H (см. UILayout).
+function UI.fitScale(frame: GuiObject, gui: ScreenGui): UIScale
+	local scale = frame:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
+	scale.Parent = frame
+	local function fit()
+		local area = gui.AbsoluteSize
+		if area.X < 1 or area.Y < 1 then
+			area = workspace.CurrentCamera.ViewportSize - Vector2.new(0, 58)
+		end
+		local s = math.clamp(math.min(area.Y / Layout.DESIGN_H, area.X / Layout.DESIGN_W), Layout.SCALE_MIN, 1)
+		scale.Scale = s
+		frame.Size = UDim2.fromScale(1 / s, 1 / s)
+	end
+	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+	fit()
+	return scale
+end
+
 UI.FONT = Enum.Font.FredokaOne
 UI.C = {
 	white = Color3.new(1, 1, 1),
@@ -394,8 +434,10 @@ function UI.currency(parent: Instance, icon: string, props: { [string]: any }): 
 	return UI.text({ Text = "0", Position = UDim2.new(0, d / 2 + 12, 0, 5), Size = UDim2.new(1, -(d / 2 + 22), 1, -10), Outline = 2.5, ZIndex = f.ZIndex + 1, Parent = f })
 end
 
--- Плитка меню как в оригинале: голубой квадрат с градиентом, светлой рамкой и бликом
-function UI.tile(parent: Instance, icon: string, props: { [string]: any }): TextButton
+-- Плитка меню как в оригинале: голубой квадрат с градиентом, светлой рамкой и бликом.
+-- caption — подпись-плашка снизу (#35): заходит на плитку на 20, выступает на 10 (UILayout.tileLabel),
+-- шире плитки (128 при плитке 80), чтобы «ЗАДАНИЯ»/«ПОДАРКИ» шли кеглем ≥ 25 логических (≥ 14 px).
+function UI.tile(parent: Instance, icon: string, props: { [string]: any }, caption: string?): TextButton
 	local b = UI.new("TextButton", props)
 	b.Text = ""
 	b.AutoButtonColor = false
@@ -415,20 +457,27 @@ function UI.tile(parent: Instance, icon: string, props: { [string]: any }): Text
 	sg.Rotation = 90
 	sg.Transparency = NumberSequence.new(0.1, 1)
 	sg.Parent = shine
-	UI.icon(icon, { Name = "Icon", Position = UDim2.fromScale(0.1, 0.08), Size = UDim2.fromScale(0.8, 0.8), ZIndex = b.ZIndex + 2, Parent = b })
+	if caption then
+		UI.icon(icon, { Name = "Icon", Position = UDim2.fromScale(0.16, 0.05), Size = UDim2.fromScale(0.68, 0.67), ZIndex = b.ZIndex + 2, Parent = b })
+		local plate = UI.new("Frame", UI.at(Layout.tileLabel, { Name = "Caption", BackgroundColor3 = UI.C.navy, BackgroundTransparency = 0.05, ZIndex = b.ZIndex + 3, Parent = b }))
+		UI.corner(plate, 1000)
+		UI.stroke(plate, 2.5, Color3.fromRGB(235, 248, 255))
+		UI.text({ Name = "Text", Text = caption, Position = UDim2.fromOffset(6, 2), Size = UDim2.new(1, -12, 1, -4), ZIndex = b.ZIndex + 4, Parent = plate })
+	else
+		UI.icon(icon, { Name = "Icon", Position = UDim2.fromScale(0.1, 0.08), Size = UDim2.fromScale(0.8, 0.8), ZIndex = b.ZIndex + 2, Parent = b })
+	end
 	UI.bounce(b)
 	return b
 end
 function UI.badge(parent: GuiObject, text: string, kind: string?): TextLabel
-	local f = UI.new("TextLabel", {
+	-- в правом верхнем углу, не выше плитки (UILayout.tileBadge): иначе задевает подпись плитки сверху
+	local f = UI.new("TextLabel", UI.at(Layout.tileBadge, {
 		Text = text,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -6, 0, 6),
-		Size = UDim2.fromOffset(if #text > 2 then 66 else 32, 30),
 		BackgroundTransparency = 0,
 		ZIndex = parent.ZIndex + 5,
 		Parent = parent,
-	})
+	}))
+	f.Size = UDim2.fromOffset(UI.badgeWidth(text), 34) -- текст 26 логических (≥ 14 px на телефоне)
 	local k = UI.KIND[kind or "red"]
 	UI.grad(f, k[1], k[2])
 	UI.corner(f, 1000)
@@ -438,10 +487,25 @@ function UI.badge(parent: GuiObject, text: string, kind: string?): TextLabel
 	local p = Instance.new("UIPadding")
 	p.PaddingLeft = UDim.new(0, 8)
 	p.PaddingRight = UDim.new(0, 8)
-	p.PaddingTop = UDim.new(0, 5)
-	p.PaddingBottom = UDim.new(0, 5)
+	p.PaddingTop = UDim.new(0, 4)
+	p.PaddingBottom = UDim.new(0, 4)
 	p.Parent = f
 	return f
+end
+-- Ширина бейджа по тексту: «!»/«3» — кружок 34, «NEW»/«2:31» — капсула
+function UI.badgeWidth(text: string): number
+	return math.max(34, 18 + (utf8.len(text) or #text) * 16)
+end
+function UI.setBadge(b: TextLabel, text: string, kind: string?)
+	b.Text = text
+	b.Size = UDim2.fromOffset(UI.badgeWidth(text), 34)
+	if kind then
+		local g = b:FindFirstChildOfClass("UIGradient")
+		local k = UI.KIND[kind] or UI.KIND.red
+		if g then
+			g.Color = ColorSequence.new(k[1], k[2])
+		end
+	end
 end
 
 -- Всплывающее открытие окна

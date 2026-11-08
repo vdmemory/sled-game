@@ -1,7 +1,8 @@
 -- Меню лобби в стиле мобильного оригинала:
---  • слева колонка «ледяных» плиток-иконок (Миры, Задания, Сани, Следы, Подарки + стрик дней);
+--  • слева колонка «ледяных» плиток-иконок с подписями (Миры, Задания, Сани, Следы, Подарки + стрик);
 --  • справа шестерёнка (настройки);
---  • под заголовком — жёлтая плашка сундука с таймером;
+--  • под заголовком — жёлтая плашка сундука с таймером и полоска сессии.
+--  Места — Shared/UILayout (общий с HUD/Tutorial и макет-рендером scripts/ui_layout_preview.py);
 --  • окна — голубые, с лентой-заголовком и круглым красным крестиком (Shared/UIKit).
 
 local Players = game:GetService("Players")
@@ -22,7 +23,10 @@ local root = hud:WaitForChild("Root")
 local lobby = root:WaitForChild("Lobby")
 -- событие HUD: полёт монет/гемов к верхним счётчикам (см. HUD.client, CurrencyGain)
 local currencyGain = script.Parent:WaitForChild("HUD"):WaitForChild("CurrencyGain") :: BindableEvent
+-- сообщения — в слое Toasts HUD (поверх окон, масштаб как у HUD, #38)
+local toast = script.Parent:WaitForChild("HUD"):WaitForChild("Toast") :: BindableEvent
 local C = UI.C
+local L = UI.L
 
 ------------------------------------------------------------------ окна
 local panels: { GuiObject } = {}
@@ -74,32 +78,13 @@ local function open(p: GuiObject)
 	end
 end
 
--- Короткое сообщение под плашкой сундука (0.33 высоты: на 660 это 195–241, плашка кончается на 190)
-local msg = UI.text({
-	Text = "",
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.33),
-	Size = UDim2.fromOffset(520, 46),
-	TextColor3 = Color3.fromRGB(255, 225, 90),
-	Visible = false,
-	ZIndex = 80,
-	Parent = hud,
-})
-UI.outline(msg, 3)
-local msgN = 0
+-- Короткое сообщение («Не хватает монет», «✔ Сани выбраны»): слой Toasts HUD — под полоской
+-- сессии (UILayout.toastLobby, 206–256), поверх окон, масштабируется вместе с HUD (#38)
 local function say(ok: boolean, text: any)
 	if typeof(text) ~= "string" then
 		return
 	end
-	msgN += 1
-	local my = msgN
-	msg.Text = (if ok then "✔ " else "") .. text
-	msg.Visible = true
-	task.delay(1.8, function()
-		if msgN == my then
-			msg.Visible = false
-		end
-	end)
+	toast:Fire((if ok then "✔ " else "") .. text, 1.8)
 end
 
 local function csvSet(attr: string): { [string]: boolean }
@@ -111,73 +96,60 @@ local function csvSet(attr: string): { [string]: boolean }
 end
 
 ------------------------------------------------------------------ колонки плиток
-local function column(anchorX: number, x: number): Frame
-	local col = UI.new("Frame", {
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(anchorX, 0),
-		Position = UDim2.new(anchorX, x, 0, 70),
-		Size = UDim2.fromOffset(88, 520),
-		Parent = lobby,
-	})
-	local l = Instance.new("UIListLayout")
-	l.Padding = UDim.new(0, 12)
-	l.SortOrder = Enum.SortOrder.LayoutOrder
-	l.Parent = col
-	return col
+-- Плитки 80×80 (≥ 44 px на телефоне) с подписью-плашкой 116×30 (текст 26 → ≥ 14 px, #35):
+-- колонка 64–546 по Y, 12–128 по X (UILayout.tiles/TILE_STEP)
+local TILES_X, TILES_Y, TILE = L.tiles[4], L.tiles[6], L.tiles[7]
+local function tile(order: number, icon: string, caption: string): TextButton
+	return UI.tile(lobby, icon, {
+		Name = "Tile_" .. icon,
+		Position = UDim2.fromOffset(TILES_X, TILES_Y + (order - 1) * L.TILE_STEP),
+		Size = UDim2.fromOffset(TILE, TILE),
+	}, caption)
 end
-local left = column(0, 18)
-local right = column(1, -18)
-
-local function tile(col: Frame, order: number, icon: string): TextButton
-	local t = UI.tile(col, icon, { LayoutOrder = order, Size = UDim2.fromOffset(84, 84) })
-	return t
-end
-local worldsBtn = tile(left, 1, "globe")
-local tasksBtn = tile(left, 2, "tasks")
-local sledsBtn = tile(left, 3, "sled")
-local trailsBtn = tile(left, 4, "sparkles")
-local giftBtn = tile(left, 5, "gift")
+local worldsBtn = tile(1, "globe", "МИРЫ")
+local tasksBtn = tile(2, "tasks", "ЗАДАНИЯ")
+local sledsBtn = tile(3, "sled", "САНИ")
+local trailsBtn = tile(4, "sparkles", "СЛЕДЫ")
+local giftBtn = tile(5, "gift", "ПОДАРКИ")
 local tasksBadge = UI.badge(tasksBtn, "!")
 tasksBadge.Visible = false
 local trailsNew = UI.badge(trailsBtn, "NEW", "green")
-local giftTimer = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 4), Size = UDim2.fromOffset(84, 24), ZIndex = 5, Parent = giftBtn })
+-- таймер ближайшего подарка — голубой бейдж в углу плитки (там же красный «N готово»): подпись
+-- плитки не перекрывает и сам ≥ 14 px на телефоне
 local giftBadge = UI.badge(giftBtn, "!")
 giftBadge.Visible = false
 
 -- справа: шестерёнка (кружок) — настройки
 -- зона нажатия 84×80 (≥ 44 px на телефоне при масштабе 0.57), кружок 68
-local gear = UI.new("TextButton", { Text = "", LayoutOrder = 0, Size = UDim2.fromOffset(84, 80), BackgroundTransparency = 1, Parent = right })
+local gear = UI.new("TextButton", UI.at(L.gear, { Name = "Gear", Text = "", BackgroundTransparency = 1, Parent = lobby }))
 local gearBg = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(68, 68), BackgroundColor3 = C.navy, BackgroundTransparency = 0.35, Parent = gear })
 UI.corner(gearBg, 1000)
 UI.stroke(gearBg, 2.5, C.white, 0.3)
 UI.icon("gear", { Position = UDim2.fromScale(0.14, 0.14), Size = UDim2.fromScale(0.72, 0.72), Parent = gearBg })
 UI.bounce(gear)
 
--- Жёлтая плашка сундука под заголовком. Верх лобби (HUD): валюты 10–50, «УРОВЕНЬ N» 56–102,
--- строка мира 100–124 → плашка с 140 (сундук торчит над ней до 132, не задевая строку мира),
--- низ 190; «НАЖМИ, ЧТОБЫ ИГРАТЬ» начинается не выше 354 даже на самом низком экране (660).
-local chestPill = UI.new("TextButton", {
+-- Полоса наград под заголовком (UILayout.chest/session, y 112–170): слева жёлтая плашка сундука с
+-- таймером, справа подарок сессии. Пилюли по 58 (≥ 32 px на телефоне), сундук не выше 112.
+local chestPill = UI.new("TextButton", UI.at(L.chest, {
+	Name = "Chest",
 	Text = "",
 	AutoButtonColor = false,
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 140),
-	Size = UDim2.fromOffset(230, 50),
 	BackgroundTransparency = 0,
 	Parent = lobby,
-})
+}))
 UI.grad(chestPill, Color3.fromRGB(255, 225, 80), Color3.fromRGB(245, 175, 30))
 UI.corner(chestPill, 1000)
 UI.stroke(chestPill, 3)
 UI.bounce(chestPill)
--- нарисованный сундук вылезает за левый край плашки (как в оригинале): центр 161, высота 58 → 132…190
-UI.chest(chestPill, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 14, 0.5, -4), Size = UDim2.fromOffset(64, 58), ZIndex = 4 })
+-- нарисованный сундук вылезает за левый край плашки (как в оригинале), по высоте — в пределах полосы
+UI.chest(chestPill, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 16, 0.5, -1), Size = UDim2.fromOffset(64, 56), ZIndex = 4 })
 local chestShine = UI.new("Frame", { Position = UDim2.new(0, 40, 0, 4), Size = UDim2.new(1, -60, 0, 5), BackgroundColor3 = C.white, BackgroundTransparency = 0.5, ZIndex = 2, Parent = chestPill })
 UI.corner(chestShine, 1000)
 local chestInner = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(1, -66, 1, -14), BackgroundColor3 = C.navy, BackgroundTransparency = 0.05, ZIndex = 2, Parent = chestPill })
 UI.corner(chestInner, 1000)
 -- монетка слева в тёмной капсуле таймера
-UI.coin(chestInner, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(28, 28), ZIndex = 3 })
-local chestText = UI.text({ Text = "", Position = UDim2.fromOffset(34, 3), Size = UDim2.new(1, -40, 1, -6), ZIndex = 3, Parent = chestInner })
+UI.coin(chestInner, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 4, 0.5, 0), Size = UDim2.fromOffset(34, 34), ZIndex = 3 })
+local chestText = UI.text({ Text = "", Position = UDim2.fromOffset(42, 5), Size = UDim2.new(1, -50, 1, -10), ZIndex = 3, Parent = chestInner })
 
 ------------------------------------------------------------------ награды (состояние с сервера)
 local rewards: any = nil
@@ -260,30 +232,27 @@ chestPill.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Полоска «сессия» (#24)
--- Под плашкой сундука: y 198–228 (сундук до 190; подсказки обучения и «НАЖМИ, ЧТОБЫ ИГРАТЬ»
--- не выше 274 даже на экране 660), ширина 230 — как сундук. Шкала 0…SESSION_GOAL_MIN,
--- метка 🎁 на минуте большого подарка. Текст 24 логических px → ≥ 14 px на телефоне (×0.57).
+-- Справа от сундука в полосе наград (UILayout.session 112–170, ширина 280). Шкала 0…SESSION_GOAL_MIN,
+-- метка 🎁 на минуте большого подарка. Текст ≤ 15 знаков — кегль ≥ 26 логических (≥ 14 px).
 local sfx = script.Parent:WaitForChild("SledController"):WaitForChild("Sfx") :: BindableEvent
-local sessionBar = UI.new("TextButton", {
+local sessionBar = UI.new("TextButton", UI.at(L.session, {
+	Name = "Session",
 	Text = "",
 	AutoButtonColor = false,
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 198),
-	Size = UDim2.fromOffset(230, 30),
 	BackgroundColor3 = C.navy,
 	BackgroundTransparency = 0.15,
 	Visible = false,
 	Parent = lobby,
-})
+}))
 UI.corner(sessionBar, 1000)
 UI.stroke(sessionBar, 2.5, C.white, 0.2)
 UI.bounce(sessionBar)
 local sessionFill = UI.new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundTransparency = 0, ZIndex = 2, Parent = sessionBar })
 UI.grad(sessionFill, Color3.fromRGB(255, 225, 80), Color3.fromRGB(245, 160, 30))
 UI.corner(sessionFill, 1000)
-local sessionText = UI.text({ Text = "", Position = UDim2.fromOffset(10, 3), Size = UDim2.new(1, -20, 1, -6), TextScaled = true, ZIndex = 4, Parent = sessionBar })
+local sessionText = UI.text({ Text = "", Position = UDim2.fromOffset(14, 10), Size = UDim2.new(1, -28, 1, -20), ZIndex = 4, Parent = sessionBar })
 -- метка большого подарка (подарок торчит над полоской, как сундук над плашкой)
-local bigMark = UI.icon("gift", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(34, 34), ZIndex = 5, Parent = sessionBar })
+local bigMark = UI.icon("gift", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(44, 44), ZIndex = 5, Parent = sessionBar })
 local sessionReady = false
 local bigOpening = false -- пока идёт анимация открытия, метку не прячем
 local function updateSessionBar(elapsed: number)
@@ -303,9 +272,10 @@ local function updateSessionBar(elapsed: number)
 		bigMark.Position = UDim2.fromScale(math.clamp(g.min * 60 / goal, 0.08, 0.92), 0.5)
 		local left = g.min * 60 - elapsed
 		ready = left <= 0
-		sessionText.Text = if ready then "ЗАБЕРИ БОЛЬШОЙ ПОДАРОК!" else "БОЛЬШОЙ ПОДАРОК " .. clock(left)
+		-- коротко (≤ 15 знаков): полоска 280 при кегле 26 логических
+		sessionText.Text = if ready then "ЗАБЕРИ ПОДАРОК!" else "ПОДАРОК " .. clock(left)
 	else
-		sessionText.Text = "ЦЕЛЬ СЕССИИ " .. Config.SESSION_GOAL_MIN .. " МИН · " .. clock(goal - elapsed)
+		sessionText.Text = "ЦЕЛЬ · " .. clock(goal - elapsed)
 	end
 	if ready and not sessionReady then -- момент готовности: вспышка и звук
 		UIFx.pulseSelect(sessionBar, "ГОТОВО!")
@@ -402,7 +372,7 @@ local function drawWorlds()
 		end
 		if w < current and farm ~= w then
 			-- подсказка: в пройденном мире уровень не растёт, только монеты
-			UI.ink({ Text = "монеты без прогресса", Position = UDim2.new(0, 8, 1, -82), Size = UDim2.new(1, -16, 0, 20), TextTransparency = 0.3, ZIndex = 34, Parent = card })
+			UI.ink({ Text = "монеты без прогресса", Position = UDim2.new(0, 8, 1, -86), Size = UDim2.new(1, -16, 0, 24), TextTransparency = 0.3, ZIndex = 34, Parent = card })
 		end
 		local st = UI.button(kind, text, { Position = UDim2.new(0, 10, 1, -58), Size = UDim2.new(1, -20, 0, 48), ZIndex = 34, Parent = card })
 		if action then
@@ -435,8 +405,8 @@ end)
 
 ------------------------------------------------------------------ Задания дня
 local tasksWin, tasksBody = panel("ЗАДАНИЯ ДНЯ", 580, 560)
-UI.text({ Text = "ВЫПОЛНИ ВСЕ ЗАДАНИЯ,\nЧТОБЫ ПОЛУЧИТЬ СУНДУК!", Position = UDim2.fromOffset(10, 22), Size = UDim2.new(1, -100, 0, 46), ZIndex = 33, Parent = tasksBody })
-local _, setTasksBar = UI.progress(tasksBody, { Position = UDim2.fromOffset(12, 74), Size = UDim2.new(1, -100, 0, 24), ZIndex = 33 })
+UI.text({ Text = "ВЫПОЛНИ ВСЕ ЗАДАНИЯ,\nЧТОБЫ ПОЛУЧИТЬ СУНДУК!", Position = UDim2.fromOffset(10, 18), Size = UDim2.new(1, -100, 0, 54), ZIndex = 33, Parent = tasksBody })
+local _, setTasksBar = UI.progress(tasksBody, { Position = UDim2.fromOffset(12, 76), Size = UDim2.new(1, -100, 0, 26), ZIndex = 33 })
 local chestClaim = UI.new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 34), Size = UDim2.fromOffset(72, 72), BackgroundTransparency = 1, ZIndex = 34, Parent = tasksBody })
 local chestIcon = UI.chest(chestClaim, { Position = UDim2.fromOffset(2, 6), Size = UDim2.fromOffset(68, 60), ZIndex = 35 })
 local chestDone = UI.icon("check", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(32, 32), Visible = false, ZIndex = 45, Parent = chestClaim })
@@ -532,40 +502,44 @@ tasksBtn.Activated:Connect(function()
 end)
 
 ------------------------------------------------------------------ Подарки за время в игре
--- Сверху — стрик дней входа (#25, y 0–180 тела окна), ниже — сетка подарков за время.
+-- Сверху — стрик дней входа (#25, y 0–214 тела окна), ниже — сетка подарков за время.
 -- Вкладка в «Подарках», а не 6-я плитка: слева уже 5 плиток, обе награды — «за возвращение».
-local giftsWin, giftsBody = panel("ПОДАРКИ", 640, 600)
-local giftsArea = scroller(giftsBody, false, 188)
-local _, setStreakHead = UI.iconText({ Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 26), Color = C.ink, ZIndex = 33, Parent = giftsBody })
+-- Окно 760 шириной: 7 карточек дней по 98 с суммами кеглем 24 (на телефоне окно ~0.5 — 12 px;
+-- в 640 при 80 на карточку суммы шли кеглем 15 → 8 px).
+local giftsWin, giftsBody = panel("ПОДАРКИ", 760, 620)
+local giftsArea = scroller(giftsBody, false, 222)
+local _, setStreakHead = UI.iconText({ Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 30), Color = C.ink, ZIndex = 33, Parent = giftsBody })
 type StreakCard = { frame: Frame, stroke: UIStroke, icon: Frame, done: Frame, setCoins: (string, string?) -> (), setGems: (string, string?) -> (), gemsRow: Frame, coinsRow: Frame }
 local streakCards: { StreakCard } = {}
-local streakRow = UI.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 32), Size = UDim2.new(1, 0, 0, 104), ZIndex = 33, Parent = giftsBody })
+local streakRow = UI.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 0, 126), ZIndex = 33, Parent = giftsBody })
 local srl = Instance.new("UIListLayout")
 srl.FillDirection = Enum.FillDirection.Horizontal
 srl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-srl.Padding = UDim.new(0, 4)
+srl.Padding = UDim.new(0, 6)
 srl.SortOrder = Enum.SortOrder.LayoutOrder
 srl.Parent = streakRow
 for i, r in Config.STREAK_REWARDS do
-	local card = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, Size = UDim2.fromOffset(80, 104), ZIndex = 33, Parent = streakRow })
+	-- карточка 98×126: «ДЕНЬ N» 4–28, иконка 30–62, суммы по 28 (кегль 24) 64–92 / 94–122
+	local card = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, Size = UDim2.fromOffset(98, 126), ZIndex = 33, Parent = streakRow })
 	UI.corner(card, 12)
 	local stroke = UI.stroke(card, 2, Color3.fromRGB(120, 170, 225))
-	UI.ink({ Text = "ДЕНЬ " .. i, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 16), ZIndex = 34, Parent = card })
+	UI.ink({ Text = "ДЕНЬ " .. i, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 24), ZIndex = 34, Parent = card })
 	local main = if r.big then "gift" elseif r.coins then "coin" else "gem"
-	local icon = UI.icon(main, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 22), Size = UDim2.fromOffset(36, 36), ZIndex = 34, Parent = card })
-	local coinsRow, setCoins = UI.iconText({ Position = UDim2.fromOffset(2, if r.gems then 62 else 72), Size = UDim2.new(1, -4, 0, 18), Color = C.ink, ZIndex = 34, Parent = card })
-	local gemsRow, setGems = UI.iconText({ Position = UDim2.fromOffset(2, if r.coins then 82 else 72), Size = UDim2.new(1, -4, 0, 18), Color = C.ink, ZIndex = 34, Parent = card })
+	local icon = UI.icon(main, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 30), Size = UDim2.fromOffset(32, 32), ZIndex = 34, Parent = card })
+	local both = r.coins ~= nil and r.gems ~= nil
+	local coinsRow, setCoins = UI.iconText({ Position = UDim2.fromOffset(2, if both then 64 else 78), Size = UDim2.new(1, -4, 0, 28), Color = C.ink, ZIndex = 34, Parent = card })
+	local gemsRow, setGems = UI.iconText({ Position = UDim2.fromOffset(2, if both then 94 else 78), Size = UDim2.new(1, -4, 0, 28), Color = C.ink, ZIndex = 34, Parent = card })
 	local done = UI.icon("check", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 6), Size = UDim2.fromOffset(28, 28), ZIndex = 36, Visible = false, Parent = card })
 	streakCards[i] = { frame = card, stroke = stroke, icon = icon, done = done, setCoins = setCoins, setGems = setGems, coinsRow = coinsRow, gemsRow = gemsRow }
 end
-local streakBtn = UI.button("green", "ЗАБРАТЬ", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 142), Size = UDim2.fromOffset(240, 40), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = giftsBody })
+local streakBtn = UI.button("green", "ЗАБРАТЬ", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 166), Size = UDim2.fromOffset(260, 48), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = giftsBody })
 -- Предложение спасти серию: поверх стрика, один раз в день пропуска (до награды или отказа)
-local saveBox = UI.new("Frame", { BackgroundColor3 = C.row, BackgroundTransparency = 0, Position = UDim2.fromOffset(0, 28), Size = UDim2.new(1, 0, 0, 156), ZIndex = 40, Visible = false, Parent = giftsBody })
+local saveBox = UI.new("Frame", { BackgroundColor3 = C.row, BackgroundTransparency = 0, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 0, 184), ZIndex = 40, Visible = false, Parent = giftsBody })
 UI.corner(saveBox, 14)
 UI.stroke(saveBox, 3, C.gold)
-local saveText = UI.ink({ Text = "", TextWrapped = true, Position = UDim2.fromOffset(16, 10), Size = UDim2.new(1, -32, 0, 70), ZIndex = 41, Parent = saveBox })
-local saveYes = UI.button("green", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0.5, -6, 0, 94), Size = UDim2.fromOffset(220, 48), Radius = 10, StrokeThickness = 2, ZIndex = 41, Parent = saveBox })
-local saveNo = UI.button("grey", "НЕТ, С 1-ГО ДНЯ", { Position = UDim2.new(0.5, 6, 0, 94), Size = UDim2.fromOffset(220, 48), Radius = 10, StrokeThickness = 2, ZIndex = 41, Parent = saveBox })
+local saveText = UI.ink({ Text = "", TextWrapped = true, Position = UDim2.fromOffset(16, 12), Size = UDim2.new(1, -32, 0, 80), ZIndex = 41, Parent = saveBox })
+local saveYes = UI.button("green", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0.5, -6, 0, 116), Size = UDim2.fromOffset(240, 56), Radius = 10, StrokeThickness = 2, ZIndex = 41, Parent = saveBox })
+local saveNo = UI.button("grey", "НЕТ, С 1-ГО ДНЯ", { Position = UDim2.new(0.5, 6, 0, 116), Size = UDim2.fromOffset(240, 56), Radius = 10, StrokeThickness = 2, ZIndex = 41, Parent = saveBox })
 saveYes.Activated:Connect(function()
 	local ok = act("streakSave")
 	if not ok then
@@ -612,7 +586,7 @@ local function drawStreak()
 	saveText.Text = string.format("Ты пропустил день! Серия %d дн. сгорела.\nВерни её за гемы — сегодня будет день %d.", st.save, st.save + 1)
 	UI.setText(saveYes, "СПАСТИ  " .. st.savePrice, "gem")
 end
-grid(giftsArea, 128, 112)
+grid(giftsArea, 128, 124)
 type GiftCell = { status: TextButton, setCoins: (string, string?) -> (), setGems: (string, string?) -> (), rows: { Frame } }
 local giftCells: { GiftCell } = {}
 for i, g in Config.PLAYTIME_GIFTS do
@@ -622,9 +596,10 @@ for i, g in Config.PLAYTIME_GIFTS do
 	UI.stroke(cell, if g.big then 4 else 2.5, if g.big then C.gold else Color3.fromRGB(120, 170, 225))
 	-- награда: крупно одна строка, либо две (монеты + гемы)
 	local both = g.coins ~= nil and g.gems ~= nil
-	local rowCoins, setCoins = UI.iconText({ Position = UDim2.fromOffset(6, if both then 6 else 12), Size = UDim2.new(1, -12, 0, if both then 24 else 40), Color = C.ink, ZIndex = 34, Parent = cell })
-	local rowGems, setGems = UI.iconText({ Position = UDim2.fromOffset(6, if both then 32 else 12), Size = UDim2.new(1, -12, 0, if both then 24 else 40), Color = C.ink, ZIndex = 34, Parent = cell })
-	local st = UI.button("blue", "", { Position = UDim2.new(0, 8, 1, -46), Size = UDim2.new(1, -16, 0, 38), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = cell })
+		-- ячейка 128×124: суммы 6–34 / 36–64 (кегль 24) или одна крупная 12–56, кнопка 70–118 (48)
+	local rowCoins, setCoins = UI.iconText({ Position = UDim2.fromOffset(6, if both then 6 else 12), Size = UDim2.new(1, -12, 0, if both then 28 else 44), Color = C.ink, ZIndex = 34, Parent = cell })
+	local rowGems, setGems = UI.iconText({ Position = UDim2.fromOffset(6, if both then 36 else 12), Size = UDim2.new(1, -12, 0, if both then 28 else 44), Color = C.ink, ZIndex = 34, Parent = cell })
+	local st = UI.button("blue", "", { Position = UDim2.new(0, 8, 1, -54), Size = UDim2.new(1, -16, 0, 48), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = cell })
 	st.Activated:Connect(function()
 		if not rewardAct("gift", i, st) then
 			UIFx.shakeNo(st)
@@ -662,33 +637,34 @@ local function selectSled(chosen: Frame, purchased: boolean, status: TextButton)
 	end
 end
 for mi, model in Config.SLEDS do
-	local row = UI.new("Frame", { LayoutOrder = mi, Size = UDim2.new(1, -8, 0, 156), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = sledList })
+	-- строка 176: ячейка редкости 118×160 — имя 4–30, образец 32–80, бонус 82–106 (24), кнопка 106–154 (48)
+	local row = UI.new("Frame", { LayoutOrder = mi, Size = UDim2.new(1, -8, 0, 176), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = sledList })
 	UI.corner(row, 16)
 	UI.stroke(row, 2.5, Color3.fromRGB(120, 170, 225))
 	local head = UI.new("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.new(0, 150, 1, -16), BackgroundTransparency = 0, ZIndex = 34, Parent = row })
 	UI.grad(head, Color3.fromRGB(250, 252, 255), Color3.fromRGB(205, 225, 245))
 	UI.corner(head, 12)
-	UI.icon(model.img, { Position = UDim2.fromOffset(37, 4), Size = UDim2.fromOffset(76, 66), ZIndex = 35, Parent = head })
-	UI.ink({ Text = model.name, Position = UDim2.fromOffset(6, 72), Size = UDim2.new(1, -12, 0, 28), ZIndex = 35, Parent = head })
+	UI.icon(model.img, { Position = UDim2.fromOffset(37, 6), Size = UDim2.fromOffset(76, 70), ZIndex = 35, Parent = head })
+	UI.ink({ Text = model.name, Position = UDim2.fromOffset(6, 80), Size = UDim2.new(1, -12, 0, 28), ZIndex = 35, Parent = head })
 	if model.bonus > 0 then
-		local tag = UI.button("green", "+" .. model.bonus .. "% скорости", { Position = UDim2.fromOffset(8, 104), Size = UDim2.new(1, -16, 0, 30), Radius = 8, StrokeThickness = 2, ZIndex = 35, Parent = head })
+		local tag = UI.button("green", "+" .. model.bonus .. "% скорости", { Position = UDim2.fromOffset(8, 114), Size = UDim2.new(1, -16, 0, 36), Radius = 8, StrokeThickness = 2, ZIndex = 35, Parent = head })
 		tag.Active = false
 	end
 	for r, rar in Config.RARITIES do
 		local cell = UI.new("Frame", { Position = UDim2.new(0, 170 + (r - 1) * 126, 0, 8), Size = UDim2.new(0, 118, 1, -16), BackgroundColor3 = C.white, BackgroundTransparency = 0, ZIndex = 34, Parent = row })
 		UI.corner(cell, 12)
 		UI.stroke(cell, 2)
-		local nameL = UI.text({ Text = rar.name, Position = UDim2.fromOffset(6, 4), Size = UDim2.new(1, -12, 0, 24), TextColor3 = rar.color or C.ink, ZIndex = 35, Parent = cell })
+		local nameL = UI.text({ Text = rar.name, Position = UDim2.fromOffset(6, 4), Size = UDim2.new(1, -12, 0, 26), TextColor3 = rar.color or C.ink, ZIndex = 35, Parent = cell })
 		if rar.color then
 			UI.outline(nameL, 1.5)
 		end
-		local sw = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 30), Size = UDim2.fromOffset(50, 50), BackgroundColor3 = rar.color or Color3.fromRGB(240, 70, 120), BackgroundTransparency = 0, ZIndex = 35, Parent = cell })
+		local sw = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 32), Size = UDim2.fromOffset(48, 48), BackgroundColor3 = rar.color or Color3.fromRGB(240, 70, 120), BackgroundTransparency = 0, ZIndex = 35, Parent = cell })
 		UI.corner(sw, 1000)
 		UI.stroke(sw, 2)
 		UI.icon(model.img, { Position = UDim2.fromScale(0.12, 0.12), Size = UDim2.fromScale(0.76, 0.76), ZIndex = 36, Parent = sw })
 		local total = model.bonus + rar.bonus
-		UI.ink({ Text = if total > 0 then "+" .. total .. "%" else "базовые", Position = UDim2.fromOffset(6, 82), Size = UDim2.new(1, -12, 0, 18), TextColor3 = Color3.fromRGB(60, 150, 70), ZIndex = 35, Parent = cell })
-		local status = UI.button("blue", "", { Position = UDim2.new(0, 6, 1, -40), Size = UDim2.new(1, -12, 0, 34), Radius = 10, StrokeThickness = 2, ZIndex = 35, Parent = cell })
+		UI.ink({ Text = if total > 0 then "+" .. total .. "%" else "базовые", Position = UDim2.fromOffset(6, 82), Size = UDim2.new(1, -12, 0, 24), TextColor3 = Color3.fromRGB(60, 150, 70), ZIndex = 35, Parent = cell })
+		local status = UI.button("blue", "", { Position = UDim2.new(0, 6, 1, -54), Size = UDim2.new(1, -12, 0, 48), Radius = 10, StrokeThickness = 2, ZIndex = 35, Parent = cell })
 		status.Activated:Connect(function()
 			local key = model.id .. ":" .. r
 			local hadIt = csvSet("OwnedSleds")[key] == true
@@ -759,8 +735,8 @@ for i, t in Config.TRAILS do
 		g.Parent = ribbon
 	end
 	UI.ink({ Text = t.name, Position = UDim2.fromOffset(8, 70), Size = UDim2.new(1, -16, 0, 28), ZIndex = 34, Parent = card })
-	UI.ink({ Text = if t.bonus > 0 then "+" .. t.bonus .. "% монет" else "без бонуса", Position = UDim2.fromOffset(8, 100), Size = UDim2.new(1, -16, 0, 22), TextColor3 = Color3.fromRGB(200, 140, 20), ZIndex = 34, Parent = card })
-	local st = UI.button("blue", "", { Position = UDim2.new(0, 10, 1, -48), Size = UDim2.new(1, -20, 0, 38), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = card })
+	UI.ink({ Text = if t.bonus > 0 then "+" .. t.bonus .. "% монет" else "без бонуса", Position = UDim2.fromOffset(8, 98), Size = UDim2.new(1, -16, 0, 24), TextColor3 = Color3.fromRGB(200, 140, 20), ZIndex = 34, Parent = card })
+	local st = UI.button("blue", "", { Position = UDim2.new(0, 10, 1, -54), Size = UDim2.new(1, -20, 0, 48), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = card })
 	st.Activated:Connect(function()
 		say(Remotes.TrailAction:InvokeServer(t.id))
 	end)
@@ -796,7 +772,7 @@ local setWin = UI.new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Position = UDim2.fromScale(0.5, 0.42), -- выше карточек апгрейдов, чтобы их значки не налезали
 
-	Size = UDim2.fromOffset(470, 260),
+	Size = UDim2.fromOffset(470, 270),
 	BackgroundColor3 = Color3.fromRGB(26, 44, 86),
 	BackgroundTransparency = 0,
 	Visible = false,
@@ -846,7 +822,7 @@ gear.Activated:Connect(function()
 end)
 -- Тени (SetShadows) применяет PostFX вместе с уровнем графики. Уровень — на эту сессию:
 -- АВТО (по «Графике» Roblox и FPS) → НИЗКОЕ → СРЕДНЕЕ → ВЫСОКОЕ
-local gfxBtn = UI.button("blue", "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 204), Size = UDim2.fromOffset(260, 42), ZIndex = 31, Parent = setWin })
+local gfxBtn = UI.button("blue", "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 206), Size = UDim2.fromOffset(300, 50), ZIndex = 31, Parent = setWin })
 local function paintGfx()
 	local c = player:GetAttribute("GfxChoice") or 0
 	local q = WorldLook.QUALITY[if c > 0 then c else player:GetAttribute("GfxTier") or 3]
@@ -942,9 +918,13 @@ RunService.Heartbeat:Connect(function(dt)
 		UI.setKind(streakBtn, "grey")
 		UI.setText(streakBtn, "ЗАВТРА · " .. clock(rewards.resetAt - now))
 	end
-	giftBadge.Text = tostring(ready)
-	giftBadge.Visible = ready > 0
-	giftTimer.Text = if ready > 0 then "" elseif nextIn then clock(nextIn) else ""
+	-- один бейдж в углу «Подарков»: красный «N» — есть что забрать, голубой — таймер ближайшего
+	if ready > 0 then
+		UI.setBadge(giftBadge, tostring(ready), "red")
+	elseif nextIn then
+		UI.setBadge(giftBadge, clock(nextIn), "blue")
+	end
+	giftBadge.Visible = ready > 0 or nextIn ~= nil
 	local chestLeft = rewards.chestAt - now
 	chestText.Text = if chestLeft <= 0 then "ОТКРЫТЬ!" else clock(chestLeft)
 	resetLabel.Text = "Обновятся через " .. clock(rewards.resetAt - now)

@@ -23,9 +23,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | --- | --- | --- |
 | `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `WorldLook` (пресеты света и пост-обработки миров, уровни графики), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props` (low-poly модели ландшафта и препятствий), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
 | `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
-| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track/` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби; см. «Карта модулей»), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props/` (low-poly модели ландшафта и препятствий, фасад `Props.*`), `Lobby` (`build` — архитектура лобби на сервере, `dress` — декор по миру на клиенте), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
+| `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels` (модели саней, рогатка по тирам, ракеты по тирам, обвес `extras`), `Track/` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби; см. «Карта модулей»), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props/` (low-poly модели ландшафта и препятствий, фасад `Props.*`), `Lobby` (`PLAN` — чертёж, `build` + `furnish` — архитектура лобби на сервере, `dress` — декор по миру и `showcase` — витрина саней на клиенте), `UILayout` (раскладка лобби-UI и минимальные размеры; читает и `scripts/ui_layout_preview.py`), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
 | `src/server` | `ServerScriptService.Server` | `Main.server` (только порядок запуска и связывание) + `Remotes`, `Environment`, `Sleds`, `PlayerState`, `Runs`, `RunEvents`, `Pickups`, `Shop`, `Purchases`, `DevTools` (см. «Карта модулей»), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (посадка и кадр физики санок) + `Sled/` (`State`, `Input`, `Launch`, `Tricks`, `Contacts` — см. «Карта модулей»), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты; детектор FPS → `AutoLowFps`), `PostFX` (свет и пост-обработка миров по пресетам `shared/WorldLook`: Lighting, Atmosphere, Clouds, Sky, ColorCorrection, Bloom, SunRays, DepthOfField — с твином; уровень графики 1–3 → атрибут `GfxTier`; виньетка скорости), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (посадка и кадр физики санок) + `Sled/` (`State`, `Input`, `Launch`, `Tricks`, `Contacts` — см. «Карта модулей»), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты; детектор FPS → `AutoLowFps`), `PostFX` (свет и пост-обработка миров по пресетам `shared/WorldLook`: Lighting, Atmosphere, Clouds, Sky, ColorCorrection, Bloom, SunRays, DepthOfField — с твином; уровень графики 1–3 → атрибут `GfxTier`; виньетка скорости), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, витрина саней на подиумах с вращением `BulkMoveTo`, камера спавна, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
 
 ## Карта модулей (после разбиения #17/#18, строки — 2026-11-08)
 
@@ -62,8 +62,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Props/Obstacles` | 337 | препятствия и `Props.obstacle(theme, …)` |
 | `shared/Props/Decor` | 271 | деревья, постройки, горы, трамплин, шар |
 | `shared/Props/Worlds` | 234 | модели миров 4–7 |
-| `shared/Props/LobbyDecor` | 103 | костёр, флагшток, гирлянда |
-| `shared/Meshes` | 85 | меши декора (#45): `has(...)` (все шаблоны есть и `MESH_DECOR` = 1), `place(имя, основание, масштаб, свойства, родитель)`, `vary` (разброс оттенка по позиции) |
+| `shared/Props/LobbyDecor` | 190 | костёр, флагшток, гирлянда; меши лобби: `lampPost`, `podium`, `boardFrame`, `startGate` (фолбэк — Part) |
+| `shared/UILayout` | 70 | места и размеры лобби-UI (`{ ax, ay, sx, ox, sy, oy, w, h }`), `DESIGN_W/H`, `MIN_TOUCH`/`MIN_PILL`/`MIN_TEXT` (+ для окон) |
+| `shared/Meshes` | 110 | меши декора (#45): `has(...)` (все шаблоны есть и `MESH_DECOR` = 1), `waitFor(имена, таймаут)` (ждать шаблоны с ID в `MeshIds`), `place(имя, основание, масштаб, свойства, родитель)`, `vary` (разброс оттенка по позиции) |
 | `shared/MeshSpecs`, `shared/MeshIds` | — | генерируются: габариты мешей (`scripts/gen_meshes.py`), имя → ID ассета Model (деплой) |
 | `server/MeshAssets.server` | 45 | `InsertService:LoadAsset(MeshIds)` → шаблоны MeshPart в `ReplicatedStorage.MeshTemplates` |
 
@@ -151,16 +152,25 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 
 ### Лобби и витрина
 
-Сервер (`Lobby.build` через `Track.buildLobby`) строит общую архитектуру: площадку, плиту спавна,
-пирс к обрыву с фонарями и гирляндами, арку-вывеску (`ArchBeam.Sign`), подиумы саней, табло,
-костёр, флагштоки (тег `LobbyFlag`, атрибут `BaseCF`), спавн; под стартовой площадкой витрины —
-невидимый `PreviewFloor` и зону посадки `LaunchPad` (в `server/Runs`). Всё, что зависит от мира,
+Чертёж — `Lobby.PLAN` (координаты от `Config.LOBBY_POS`, схема сверху — в комментарии над ним).
+Сервер строит в два шага. `Lobby.build` (через `Track.buildLobby`, сразу): земля, плита-хаб,
+дорожка с шевронами, мостик, маяк старта, спавн, Terrain (скальный массив под площадкой и гряда
+задника — `Rock`, только z ≥ −38). `Lobby.furnish` (в `task.spawn`, после
+`Meshes.waitFor(Lobby.MESHES, 15 с)` — шаблоны мешей грузятся асинхронно): ворота старта с вывеской
+(`ArchBeam.Sign`), фонари, подиумы `PodiumL`/`PodiumR` (атрибут `Top` — кадр верха, `BillboardGui`
+подписи), табло `Leaderboard`/`NextUpdate`, костёр, флаги (тег `LobbyFlag`, атрибут `BaseCF`),
+гирлянды; ставит атрибут `Furnished` у модели `Lobby`. Под стартовой площадкой витрины —
+невидимый `PreviewFloor` и зона посадки `LaunchPad` (в `server/Runs`). Всё, что зависит от мира,
 у каждого игрока своё и не реплицируется: `LobbyScene.client` при входе и при изменении
 `Level`/`FarmWorld`/`InRun` (вне заезда) уничтожает старую сцену и строит заново
 `Track.new(-1, уровень, 0, previewOrigin, Config.LOBBY_PREVIEW_SEGMENTS)` (папка `TrackPreview`,
 только первые N кусков, без стены в конце) и папку `LobbyDecor` (`Lobby.dress(theme)`: деревья,
 кактусы, кристаллы, горы, шары, сияние), перекрашивает `LobbyGround`/`PlazaRing`, пишет название
-мира на арку и ставит себе атрибут `LobbyTheme` — по нему `PostFX.client` плавно
+мира на ворота, ставит витрину саней (`Lobby.showcase` на подиумы: слева — следующие сани для
+покупки, справа — «мечта»; вращение — один `workspace:BulkMoveTo` на все детали, 30 Гц), по
+`Furnished` и по загрузке мешей (`Meshes.waitFor`) пересобирается один раз, наводит камеру спавна
+(`LOBBY_CAM_PITCH`/`LOBBY_CAM_ZOOM`; зум — временным `CameraMinZoomDistance`) и ставит себе атрибут
+`LobbyTheme` — по нему `PostFX.client` плавно
 (`Config.LOBBY_LOOK_TWEEN`) меняет свет, небо, дымку, облака и цветокоррекцию (пресет мира +
 `WorldLook.LOBBY`), а `Effects.client` — осадки (снег / пепел у вулкана /
 сухо в каньоне и на конфетной горе). Локальная витрина монет не даёт: `SledController` собирает
@@ -185,11 +195,24 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `TutorialStep` | Event | клиент → шаг обучения `i` показан/пройден (0 — пропустить всё); сервер проверяет целое 0…#`TUTORIAL.STEPS`, ставит бит в `Tutorial` один раз (повтор игнорируется), без наград |
 | `DevAction` | Function | только владелец (`UserId == CreatorId`): уровень, валюта, апгрейды, сани, сброс заданий, `weeklyTitle` (титул себе 1..3, 0 — снять), `weeklyRefresh` (табло сейчас), `sessionShift` (сессия −5 мин, `Rewards.devShiftSession`), `streakNext`/`streakSkip` (дни стрика −1/−2, `Rewards.devStreakShift`), `resetTutorial` (обучение и `Stats.Runs` = 0), `tune` (сохранить переопределения Config для всех) |
 
+### Раскладка лобби-UI и макет-рендер
+
+Все места и размеры лобби-UI — `shared/UILayout` (`UI.L`, `UI.at(spec, props)`). Масштаб корня
+HUD, Tutorial и слоя сообщений — `UI.fitScale(frame, gui)`: от `AbsoluteSize` ScreenGui (уже без
+топбара Roblox и выреза телефона), `clamp(min(H/580, W/1000), 0.55, 1)` — логическая высота корня
+≥ 565 на любом экране. Сообщения (`Toast`) — отдельный ScreenGui `Toasts` (`DisplayOrder` 20, выше
+окон HUD). `scripts/ui_layout_preview.py` читает `UILayout`, `Lobby.PLAN`, `LOBBY_CAM_*`, строит схему
+на 6 экранах с проекцией 3D-лобби камерой спавна и проверяет пересечения, размеры (кнопка ≥ 44 px,
+пилюля ≥ 32 px, текст ≥ 14 px) и что мостик/кольцо/маяк не закрыты UI и аватаром > 50% (код выхода 1
+при замечаниях) → `assets/store/lobby_layout.png`. В игре то же проверяет кнопка DEV → «Инструменты»
+→ «Проверить UI (телефон)» (обход видимого UI и всех окон в логических единицах).
+
 ## События между клиентскими скриптами (BindableEvent в `HUD`)
 
 | Имя | Кто слушает | Смысл |
 | --- | --- | --- |
 | `UpgradeReveal(kind, tierName)` | `Reveal` | HUD получил от `BuyUpgrade` имя нового тира → большая анимация «было → стало» |
+| `Toast(text, seconds?)` | `HUD` | сообщение в слое `Toasts` (в лобби — `UILayout.toastLobby`, в заезде — `toastRun`); шлёт `LobbyMenus.say` и сам `HUD.notice` |
 | `CurrencyGain(kind, amount, from)` | `HUD` | `kind` — `"coin"`/`"gem"`; `amount < 0` — держать счётчик на старом значении (перед запросом к серверу), `0` — отпустить, `> 0` — `UIFx.flyCurrency` из `from` (GuiObject или Vector2) к пилюле, затем `tickNumber` до текущего атрибута. Вызывает `LobbyMenus` после `RewardAction`; без события валюта обновляется мгновенно |
 
 Эффекты (`shared/UIFx`) рисуются в своём ScreenGui `UIFx` с `DisplayOrder` 100 — поверх HUD (0),

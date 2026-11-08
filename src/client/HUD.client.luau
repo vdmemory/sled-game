@@ -18,6 +18,7 @@ local controller = script.Parent:WaitForChild("SledController")
 local state = controller:WaitForChild("State")
 local TOUCH = UserInputService.TouchEnabled
 local C = UI.C
+local L = UI.L -- раскладка лобби (Shared/UILayout)
 
 -- Анимацию нового тира рисует Reveal.client
 local upgradeReveal = Instance.new("BindableEvent")
@@ -36,18 +37,26 @@ gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = player:WaitForChild("PlayerGui")
 
--- Корень с масштабом: на маленьких экранах (телефон боком) всё уменьшается пропорционально
+-- Корень с масштабом: на маленьких экранах (телефон боком) всё уменьшается пропорционально.
+-- Масштаб — от области ScreenGui под топбаром Roblox (UI.fitScale, расчёт в Shared/UILayout)
 local root = UI.new("Frame", { Name = "Root", BackgroundTransparency = 1, Parent = gui })
-local rootScale = Instance.new("UIScale")
-rootScale.Parent = root
-local function fitRoot()
-	local vp = workspace.CurrentCamera.ViewportSize
-	local s = math.clamp(math.min(vp.Y / 660, vp.X / 1000), 0.55, 1)
-	rootScale.Scale = s
-	root.Size = UDim2.fromScale(1 / s, 1 / s)
-end
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitRoot)
-fitRoot()
+UI.fitScale(root, gui)
+
+-- Сообщения («Не хватает монет», «✔ Сани выбраны», «ЗАДАНИЕ ВЫПОЛНЕНО!») — свой ScreenGui выше
+-- HUD и окон (#38): видны поверх открытого окна, масштаб — как у корня HUD, место — под полоской
+-- сессии (UILayout.toastLobby), в заезде — под подсказкой рогатки (toastRun). LobbyMenus шлёт
+-- текст через BindableEvent Toast (text, seconds?).
+local toastGui = Instance.new("ScreenGui")
+toastGui.Name = "Toasts"
+toastGui.ResetOnSpawn = false
+toastGui.DisplayOrder = 20 -- выше HUD (0) и Tutorial; ниже DevPanel (30)
+toastGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+toastGui.Parent = gui.Parent
+local toastRoot = UI.new("Frame", { Name = "Root", BackgroundTransparency = 1, Parent = toastGui })
+UI.fitScale(toastRoot, toastGui)
+local toastEvent = Instance.new("BindableEvent")
+toastEvent.Name = "Toast"
+toastEvent.Parent = script
 
 ------------------------------------------------------------------ лобби
 local lobby = UI.new("Frame", { Name = "Lobby", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = root })
@@ -56,17 +65,14 @@ local lobby = UI.new("Frame", { Name = "Lobby", BackgroundTransparency = 1, Size
 -- Тап по всему экрану не используем — иначе на телефоне нельзя ходить по лобби.
 
 -- Валюты сверху по центру
-local currencyRow = UI.new("Frame", {
+local currencyRow = UI.new("Frame", UI.at(L.currencies, {
 	Name = "Currencies",
 	BackgroundTransparency = 1,
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 10),
-	Size = UDim2.fromOffset(330, 40),
 	Parent = root,
-})
+}))
 -- якорь по центру: бамп при прилёте монет растёт из середины пилюли
-local coinsLabel = UI.currency(currencyRow, "coin", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(90, 20), Size = UDim2.fromOffset(140, 40) })
-local gemsLabel = UI.currency(currencyRow, "gem", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(260, 20), Size = UDim2.fromOffset(140, 40) })
+local coinsLabel = UI.currency(currencyRow, "coin", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(90, 19), Size = UDim2.fromOffset(140, 38) })
+local gemsLabel = UI.currency(currencyRow, "gem", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(260, 19), Size = UDim2.fromOffset(140, 38) })
 local pills = { Coins = coinsLabel.Parent :: GuiObject, Gems = gemsLabel.Parent :: GuiObject }
 local currencyLabels = { Coins = coinsLabel, Gems = gemsLabel }
 -- «Замороженное» значение счётчика на время полёта монет (nil — показываем атрибут как есть)
@@ -75,32 +81,27 @@ local shown: { [string]: number } = { Coins = 0, Gems = 0 }
 local gainToken: { [string]: number } = { Coins = 0, Gems = 0 }
 
 -- «УРОВЕНЬ N» + мир
-local levelTitle = UI.text({
+local levelTitle = UI.text(UI.at(L.levelTitle, {
+	Name = "LevelTitle",
 	Text = "УРОВЕНЬ 1",
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 56),
-	Size = UDim2.fromOffset(420, 46),
 	Outline = 3,
 	Parent = lobby,
-})
-local worldLine = UI.text({
+}))
+-- строка мира 84–110 (текст 26 логических); плашка сундука с 116, нарисованный сундук с 110
+local worldLine = UI.text(UI.at(L.worldLine, {
+	Name = "WorldLine",
 	Text = "",
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 100),
-	Size = UDim2.fromOffset(420, 28), -- 100–128: плашка сундука с 140, нарисованный сундук с 132
 	Parent = lobby,
-})
+}))
 
 -- «НАЖМИ, ЧТОБЫ ИГРАТЬ» — пульсирует над карточками
-local tapText = UI.new("TextButton", {
+-- зона нажатия 520×60 (≥ 34 px высоты на телефоне при ширине ~290 px), текст 44 логических
+local tapText = UI.new("TextButton", UI.at(L.play, {
 	Name = "PlayButton", -- client/Tutorial указывает на неё
 	Text = "",
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -262),
-	Size = UDim2.fromOffset(520, 44),
 	Parent = lobby,
-})
-UI.text({ Text = "НАЖМИ, ЧТОБЫ ИГРАТЬ  ▶", Size = UDim2.fromScale(1, 1), Outline = 3, Parent = tapText })
+}))
+UI.text({ Text = "НАЖМИ, ЧТОБЫ ИГРАТЬ  ▶", Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 1, -16), Outline = 3, Parent = tapText })
 local tapScale = Instance.new("UIScale")
 tapScale.Parent = tapText
 TweenService:Create(tapScale, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.08 }):Play()
@@ -139,14 +140,11 @@ end
 -- Пока идёт короткая анимация покупки, refresh не перезаписывает цифру эффекта
 local effectHold: { [string]: boolean } = {}
 
-local cardsRow = UI.new("Frame", {
+local cardsRow = UI.new("Frame", UI.at(L.cards, {
 	Name = "Upgrades",
 	BackgroundTransparency = 1,
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -14),
-	Size = UDim2.fromOffset(3 * 156 + 2 * 14, 240),
 	Parent = lobby,
-})
+}))
 local cl = Instance.new("UIListLayout")
 cl.FillDirection = Enum.FillDirection.Horizontal
 cl.Padding = UDim.new(0, 14)
@@ -165,7 +163,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	UI.stroke(card, 3)
 	UI.bounce(card)
 	if not compact then
-		UI.text({ Text = st.title, Position = UDim2.fromOffset(10, 5), Size = UDim2.new(1, -54, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card })
+		UI.text({ Text = st.title, Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -50, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card })
 	end
 	-- бейдж уровня (тёмный кружок в углу)
 	local badgeBg = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -8, 0, 8), Size = UDim2.fromOffset(38, 38), BackgroundColor3 = C.navy, BackgroundTransparency = 0, ZIndex = 5, Parent = card })
@@ -173,13 +171,14 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	UI.stroke(badgeBg, 2.5, C.white)
 	local badge = UI.text({ Text = "0", Position = UDim2.fromOffset(5, 6), Size = UDim2.new(1, -10, 1, -12), ZIndex = 6, Parent = badgeBg })
 	-- картинка
+	-- карточка 164×220: заголовок 4–30, картинка 32–122, деления 128–146, кнопка 152–212
 	local artTop = if compact then 8 else 32
-	local artH = if compact then 76 else 112
+	local artH = if compact then 76 else 90
 	local art = UI.new("Frame", { Position = UDim2.fromOffset(8, artTop), Size = UDim2.new(1, -16, 0, artH), BackgroundTransparency = 0, ZIndex = 2, Parent = card })
 	UI.grad(art, Color3.fromRGB(250, 252, 255), Color3.fromRGB(205, 225, 245))
 	UI.corner(art, 10)
 	UI.icon(st.art, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.44), Size = UDim2.fromScale(0.62, 0.74), ZIndex = 3, Parent = art })
-	local effect = UI.text({ Text = "", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, -2), Size = UDim2.new(0.8, 0, 0, if compact then 18 else 28), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = art })
+	local effect = UI.text({ Text = "", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, -2), Size = UDim2.new(0.8, 0, 0, if compact then 25 else 28), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = art })
 	-- деления тира
 	local pips = {}
 	if not compact then
@@ -187,7 +186,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 			-- деление тира: скруглённый квадратик с тёмной окантовкой и бликом (как в оригинале)
 			local pip = UI.new("Frame", {
 				Position = UDim2.new((i - 1) / Config.TIER_SIZE, 9 - (i - 1) * 18 / Config.TIER_SIZE, 0, artTop + artH + 6),
-				Size = UDim2.new(1 / Config.TIER_SIZE, -5, 0, 20),
+				Size = UDim2.new(1 / Config.TIER_SIZE, -5, 0, 18),
 				BackgroundColor3 = st.pip,
 				BackgroundTransparency = 0,
 				ZIndex = 2,
@@ -201,7 +200,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 		end
 	end
 	-- кнопка «УЛУЧШИТЬ / цена»
-	local btnH = if compact then 54 else 58
+	local btnH = if compact then 60 else 60 -- «УЛУЧШИТЬ» и цена — по 25 логических
 	local priceBtn = UI.new("Frame", { Position = UDim2.new(0, 8, 1, -(btnH + 8)), Size = UDim2.new(1, -16, 0, btnH), BackgroundTransparency = 0, ZIndex = 2, Parent = card })
 	local g = UI.grad(priceBtn, st.btn[1], st.btn[2])
 	g.Name = "Fill"
@@ -255,26 +254,25 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	return c
 end
 
--- Уведомление сверху (тёмная плашка, как «DAILY TASK COMPLETED!»): под плашкой сундука (140–190)
--- в лобби и под подсказкой рогатки (до 190) в заезде
-local noticeBox = UI.new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 198),
-	Size = UDim2.fromOffset(440, 54),
+-- Уведомление (тёмная плашка, как «DAILY TASK COMPLETED!») — в слое Toasts: в лобби под полоской
+-- сессии (UILayout.toastLobby), в заезде — под подсказкой рогатки (toastRun)
+local noticeBox = UI.new("Frame", UI.at(L.toastLobby, {
+	Name = "Toast",
 	BackgroundColor3 = C.navy,
 	BackgroundTransparency = 0.15,
 	Visible = false,
 	ZIndex = 50,
-	Parent = root,
-})
+	Parent = toastRoot,
+}))
 UI.corner(noticeBox, 16)
 UI.stroke(noticeBox, 2, C.white, 0.4)
-local noticeText = UI.text({ Text = "", Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 1, -16), TextColor3 = Color3.fromRGB(255, 225, 90), ZIndex = 51, Parent = noticeBox })
+local noticeText = UI.text({ Text = "", TextWrapped = true, Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 1, -16), TextColor3 = Color3.fromRGB(255, 225, 90), ZIndex = 51, Parent = noticeBox })
 UI.outline(noticeText, 2)
 local noticeN = 0
 notice = function(text: string, seconds: number?)
 	noticeN += 1
 	local my = noticeN
+	UI.at(if player:GetAttribute("InRun") then L.toastRun else L.toastLobby, noticeBox :: any)
 	noticeText.Text = text
 	noticeBox.Visible = true
 	UI.pop(noticeBox)
@@ -287,14 +285,16 @@ end
 if not noticeBox:FindFirstChildOfClass("UIScale") then
 	Instance.new("UIScale").Parent = noticeBox
 end
+toastEvent.Event:Connect(function(text: string, seconds: number?)
+	notice(text, seconds)
+end)
 
 for i, name in { "Launch", "Sled", "Income" } do
-	makeCard(name, cardsRow, UDim2.fromOffset(156, 240), i, false)
+	makeCard(name, cardsRow, UDim2.fromOffset(L.card[7], L.card[8]), i, false)
 end
 -- Ракета — отдельная голубая карточка справа (как UPGRADE 💎1 в оригинале)
-local rocketCard = makeCard("Rocket", lobby, UDim2.fromOffset(130, 170), 0, true)
-rocketCard.root.AnchorPoint = Vector2.new(0, 1)
-rocketCard.root.Position = UDim2.new(0.5, 3 * 156 / 2 + 14 + 18, 1, -14)
+local rocketCard = makeCard("Rocket", lobby, UDim2.fromOffset(L.rocket[7], L.rocket[8]), 0, true)
+UI.at(L.rocket, rocketCard.root :: any)
 
 ------------------------------------------------------------------ заезд
 local runUi = UI.new("Frame", { Name = "Run", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = root })
@@ -393,7 +393,7 @@ end)
 local progress = UI.new("Frame", {
 	AnchorPoint = Vector2.new(1, 0.5),
 	Position = UDim2.new(1, -40, 0.52, 0),
-	Size = UDim2.fromOffset(16, 300),
+	Size = UDim2.fromOffset(22, 300), -- 22 логических ≈ 12 px на телефоне (было 16 → 9 px)
 	BackgroundColor3 = C.track,
 	BackgroundTransparency = 0.2,
 	Parent = runUi,
@@ -405,12 +405,12 @@ UI.grad(progressFill, Color3.fromRGB(120, 230, 255), Color3.fromRGB(40, 170, 240
 UI.corner(progressFill, 1000)
 UI.icon("flag", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -2), Size = UDim2.fromOffset(34, 34), Parent = progress })
 for _, f in Config.GEMS_ON_TRACK do
-	UI.icon("gem", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 1 - f), Size = UDim2.fromOffset(26, 26), ZIndex = 3, Parent = progress })
+	UI.icon("gem", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 1 - f), Size = UDim2.fromOffset(34, 34), ZIndex = 3, Parent = progress })
 end
 local bestMark = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = C.white, BackgroundTransparency = 0, Visible = false, ZIndex = 3, Parent = progress })
 UI.corner(bestMark, 1000)
-UI.text({ Text = "BEST", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 0.5, 0), Size = UDim2.fromOffset(56, 24), Parent = bestMark }) -- слева от метки: справа край экрана
-local pctBubble = UI.text({ Text = "0%", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 1, 0), Size = UDim2.fromOffset(56, 24), TextXAlignment = Enum.TextXAlignment.Right, Parent = progress })
+UI.text({ Text = "BEST", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 0.5, 0), Size = UDim2.fromOffset(62, 26), Parent = bestMark }) -- слева от метки: справа край экрана
+local pctBubble = UI.text({ Text = "0%", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -6, 1, 0), Size = UDim2.fromOffset(62, 26), TextXAlignment = Enum.TextXAlignment.Right, Parent = progress })
 
 -- Магнит и всплывающие «+N»
 local magnetIcon, setMagnet = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.6, 0), Size = UDim2.fromOffset(120, 40), Parent = runUi })
@@ -463,7 +463,7 @@ local gaugeHint = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 0), Positi
 local backBtn = UI.button("blue", "НАЗАД", {
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -26),
-	Size = UDim2.fromOffset(200, 64),
+	Size = UDim2.fromOffset(220, 78), -- ≥ 44 px на телефоне (было 64 → 36 px)
 	Visible = false,
 	Parent = runUi,
 })
@@ -541,11 +541,11 @@ local function refresh()
 	if farm > 0 then
 		-- фарм пройденного мира: уровень не растёт, вернуться — в окне «Миры»
 		levelTitle.Text = "ФАРМ · МИР " .. farm
-		worldLine.Text = Config.worldName(farm) .. " · только монеты · вернуться: 🌍 Миры"
+		worldLine.Text = Config.worldName(farm) .. " · только монеты" -- вернуться — плитка «МИРЫ»
 	else
 		levelTitle.Text = "УРОВЕНЬ " .. level
 		worldLine.Text = (player:GetAttribute("ThemeName") or "") .. " · " .. ((level - 1) % Config.LEVELS_PER_WORLD + 1) .. "/" .. Config.LEVELS_PER_WORLD
-			.. (if best > 0 then "  ·  рекорд " .. best .. "%" else "")
+			.. (if best > 0 then " · ★ " .. best .. "%" else "") -- коротко: строка 460 при кегле 26
 	end
 
 	for name, c in cards do
@@ -777,7 +777,7 @@ end
 tapText.Activated:Connect(start)
 
 ------------------------------------------------------------------ итог заезда («Ты получил»)
-result = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(380, 326), BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
+result = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(380, 340), BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
 local resultScale = Instance.new("UIScale")
 resultScale.Parent = result
 local resultTitle = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.fromOffset(460, 52), Outline = 3, ZIndex = 22, Parent = result })
@@ -803,8 +803,8 @@ local rWeek = UI.text({ Text = "", Position = UDim2.fromOffset(20, 210), Size = 
 UI.outline(rWeek, 2)
 local continueBtn = UI.button("blue", "ПРОДОЛЖИТЬ", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 262),
-	Size = UDim2.fromOffset(230, 64),
+	Position = UDim2.new(0.5, 0, 0, 260),
+	Size = UDim2.fromOffset(250, 78), -- ≥ 44 px на телефоне
 	ZIndex = 22,
 	Parent = result,
 })

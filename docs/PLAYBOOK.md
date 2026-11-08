@@ -105,12 +105,14 @@
 5. **Старт и финиш:** `Track:buildStart` (площадка + `Look`-папка с рогаткой из
    `SledModels.slingshot`) и финишная арка + «озеро» после финиша (`lake` в `buildCrossSection`,
    `FINISH_GLIDE_MAX`) — для воды озеро = бухта, для суши = ровная парковка/пляж.
-6. **Лобби:** `shared/Lobby.luau`. `Lobby.build` (сервер) — общая архитектура: площадка, плита
-   спавна, пирс к обрыву с фонарями/гирляндами, арка-вывеска, подиумы (`showcaseSled`), табло
-   (`board`), костёр, флагштоки. `Lobby.dress(theme, parent)` (клиент, `client/LobbyScene`) —
-   декор по миру и цвет земли; витринная трасса за пирсом — `Track.new(-1, level, 0, origin,
-   LOBBY_PREVIEW_SEGMENTS)` локально у каждого игрока. Для новой игры: заменить пропсы в
-   `Lobby.dress` по темам и материалы пирса/плиты; схема сверху — комментарий над `Lobby.build`.
+6. **Лобби:** `shared/Lobby.luau`, чертёж — `Lobby.PLAN` (схема сверху в комментарии).
+   `Lobby.build` (сервер, сразу) — площадка, плита-хаб, дорожка, мостик, маяк старта, Terrain;
+   `Lobby.furnish` (после загрузки мешей) — ворота старта, фонари, подиумы, табло (`board`),
+   костёр, флаги. `Lobby.dress(theme, parent)` и `Lobby.showcase` (клиент, `client/LobbyScene`) —
+   декор по миру, витрина саней; витринная трасса — `Track.new(-1, level, 0, origin,
+   LOBBY_PREVIEW_SEGMENTS)` локально. Для новой игры: заменить пропсы в `Lobby.dress` и материалы,
+   поправить `PLAN` и прогнать `scripts/ui_layout_preview.py` — он проецирует путь к старту камерой
+   спавна поверх UI и ловит, что плашки или сам аватар его закрывают.
 7. **Борта:** невидимые стенки у края дна (`Config.WALL_HEIGHT/WALL_TILT/WALL_OFFSET`) ставятся в
    `buildCrossSection` на всех кусках, кроме жёлоба. Для воды — те же борта («буйки»), для суши
    можно ниже.
@@ -187,7 +189,9 @@ ID коммитятся из лога; (4) сервер `LoadAsset` → шабл
 2. Иконки: `assets/ui/*.png` (Fluent Emoji 3D, MIT, 256px) — добавить новые (лодка, волна,
    доска, шлем…), положить в папку; деплой загрузит, ID из лога (`UI_DECALS_JSON_BEGIN/END`)
    закоммитить в `decals.json` + `UIDecals.luau`. `UI.EMOJI` — фолбэки.
-3. Цвета дизайн-системы — `UI.C`/`UI.KIND` в `UIKit`; плитки лобби — `HUD`/`LobbyMenus`.
+3. Цвета дизайн-системы — `UI.C`/`UI.KIND` в `UIKit`; места лобби-UI — `shared/UILayout`
+   (масштаб `UI.fitScale` — от области под топбаром Roblox, а не от ViewportSize); проверка —
+   `scripts/ui_layout_preview.py` (PNG-схема 6 экранов) и DEV → «Проверить UI (телефон)».
 4. Звук: `Config.MUSIC_IDS` (свои треки, загруженные владельцем в Creator Hub как Audio — чужие
    не воспроизводятся), эффекты в `Sounds.client` (свист ветра → шум воды / шум шин).
 5. Погода: `Effects` — `Snowfall` → дождь/брызги/пыль или выключить; настройка `Snow` в меню →
