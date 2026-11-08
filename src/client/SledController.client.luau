@@ -301,6 +301,7 @@ RunService.Heartbeat:Connect(function(dt)
 		local launchLo, launchHi = hit.Instance:GetAttribute("LaunchMin"), hit.Instance:GetAttribute("LaunchMax")
 		if onRamp and typeof(launchLo) == "number" and typeof(launchHi) == "number" then
 			st.speed = math.clamp(st.speed, launchLo, launchHi)
+			sfx:Fire("spring") -- пружина островка (Sounds не чаще раза в секунду)
 		end
 
 		-- Руль с инерцией + борта скатывают к центру (right.Y > 0 — мы на наклонном борту).

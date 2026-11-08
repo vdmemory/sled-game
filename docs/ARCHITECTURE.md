@@ -25,7 +25,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `src/server` | `ServerScriptService.Server` | `Main.server` (игроки, заезды, ремоуты, покупки, DevAction), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
 | `src/shared` | `ReplicatedStorage.Shared` | `Config` (все числа и баланс, `TUNABLES` для настройки на лету), `UIKit` (дизайн-система, 3D-иконки), `UIFx` (эффекты интерфейса: полёт валюты, тик чисел, вспышка выбора, сундук; только клиент), `SledModels/` (транспорт: корпуса саней мешами с фолбэком на Part, обвес тиров `extras`, ракеты, рогатка; см. «Карта модулей»), `Track/` (генерация трассы: сервер — трассы заездов, клиент — витрина лобби; см. «Карта модулей»), `SafeLine` (чистая раскладка рядов препятствий с безопасной линией, без Instance — можно гонять в luau CLI), `Islands` (островки над пропастью #40: баллистика прыжков без Instance + постройка островков, ускорителей, пропасти, скал Terrain), `Props/` (low-poly модели ландшафта и препятствий, фасад `Props.*`), `Lobby` (`PLAN` — чертёж, `build` + `furnish` — архитектура лобби на сервере, `dress` — декор по миру и `showcase` — витрина саней на клиенте), `UILayout` (раскладка лобби-UI и минимальные размеры; читает и `scripts/ui_layout_preview.py`), `UIDecals` (генерируется деплоем: имя иконки → ID декали) |
 | `src/server` | `ServerScriptService.Server` | `Main.server` (только порядок запуска и связывание) + `Remotes`, `Environment`, `Sleds`, `PlayerState`, `Runs`, `RunEvents`, `Pickups`, `Shop`, `Purchases`, `DevTools` (см. «Карта модулей»), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
-| `src/client` | `StarterPlayerScripts.Client` | `SledController` (посадка и кадр физики санок) + `Sled/` (`State`, `Input`, `Launch`, `Tricks`, `Contacts` — см. «Карта модулей»), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты; детектор FPS → `AutoLowFps`), `PostFX` (свет и пост-обработка миров по пресетам `shared/WorldLook`: Lighting, Atmosphere, Clouds, Sky, ColorCorrection, Bloom, SunRays, DepthOfField — с твином; уровень графики 1–3 → атрибут `GfxTier`; виньетка скорости), `Sounds`, `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, витрина саней на подиумах с вращением `BulkMoveTo`, камера спавна, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
+| `src/client` | `StarterPlayerScripts.Client` | `SledController` (посадка и кадр физики санок) + `Sled/` (`State`, `Input`, `Launch`, `Tricks`, `Contacts` — см. «Карта модулей»), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты; детектор FPS → `AutoLowFps`), `PostFX` (свет и пост-обработка миров по пресетам `shared/WorldLook`: Lighting, Atmosphere, Clouds, Sky, ColorCorrection, Bloom, SunRays, DepthOfField — с твином; уровень графики 1–3 → атрибут `GfxTier`; виньетка скорости), `Sounds` (все звуки и музыка: каналы SoundGroup, атлас `shared/AudioIds`, лупы, ducking — см. «Звук»), `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, витрина саней на подиумах с вращением `BulkMoveTo`, камера спавна, флаги на ветру), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
 
 ## Карта модулей (после разбиения #17/#18, строки — 2026-11-08)
 
@@ -74,6 +74,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/SledModels/Rockets` | 162 | `ROCKETS[0..6]`, `build` (меши `rocket_*` или Part), срез сопла для `Effects` |
 | `shared/SledModels/Slingshot` | 214 | столбы рогатки по тирам 0–10, `ROPE_COLORS`, `ROPE_GLOW` |
 | `shared/MeshSpecs`, `shared/MeshIds` | — | генерируются: габариты мешей (`scripts/gen_meshes.py`), имя → ID ассета Model (деплой) |
+| `shared/AudioIds` | — | генерируется (`scripts/gen_audio.py`/`upload_audio.py`): ID аудио-атласа (0 — встроенные звуки) и куски `{начало, длина, луп}` |
 | `server/MeshAssets.server` | 45 | `InsertService:LoadAsset(MeshIds)` → шаблоны MeshPart в `ReplicatedStorage.MeshTemplates` |
 
 Зависимости сервера без циклов: `Remotes`, `Sleds` ← `PlayerState` ← `Runs` ← `RunEvents`,
@@ -320,6 +321,31 @@ Open Cloud publish не принимает Union/EditableMesh, а MeshId у Mesh
 препятствий, монет и бонусов от мешей не зависит (стенд luau: отпечаток всего, кроме чистого декора,
 совпадает 1:1 с мешами и без на 70 уровнях; ни один меш не заходит в коридор трассы, кроме арки
 над ней). Меши — только декор; ходовая часть и препятствия — Part (точная коллизия).
+
+## Звук (#49, `client/Sounds`)
+
+| Шаг | Где | Что |
+| --- | --- | --- |
+| 1. Синтез | `scripts/gen_audio.py` (numpy/scipy + ffmpeg/libvorbis, локально) | 43 звука → один атлас `assets/audio/sfx_atlas.ogg` (mono 44.1 кГц, паузы 0.12 с), `atlas.json` (имя → start/len/loop/пик), `src/shared/AudioIds.luau`; `--preview` → `assets/audio/preview.png`. Детерминирован (seed, bitexact Ogg). Проверки: пик one-shot после Vorbis ≤ −1 dBFS, UI ≤ 0.25 с |
+| 2. Загрузка | `scripts/upload_audio.py` из `publish.sh` (пути — `scripts/audio_ids.py`, без numpy) | `POST assets/v1/assets`, `assetType: "Audio"`, `audio/ogg` → операция → `assetId` → `assets/audio/audio.json` (`{ sfx_atlas: { id, sha } }`) и `AudioIds.atlas`, пересборка места, лог `AUDIO_IDS_JSON_BEGIN/END` (закоммитить оба). `SKIP_AUDIO=1` — пропустить. Ошибка — warning с инструкцией владельцу |
+| 3. Игра | `client/Sounds` | `atlas > 0` → проба `PreloadAsync` (15 с) → все звуки на атлас: `PlaybackRegionsEnabled` + `PlaybackRegion` (кусок), лупы ещё `LoopRegion`; иначе `FALLBACK` (встроенные `rbxasset://sounds/*`) |
+
+Почему атлас: Open Cloud даёт 10 аудио/мес без ID-верификации (100 с ней), аудио нельзя обновлять —
+отдельные файлы съели бы лимит за одну правку.
+
+Устройство `client/Sounds`: `SoundGroup` Music/SFX/UI/Ambience в `SoundService` (громкость каждый кадр =
+`Config.SOUND.groups` × выключатель `SetSfx`/`SetMusic` × ducking для Music); пул `Sound` на событие
+(копий — `Config.SOUND.sfx[имя][3]`, по кругу); `play(имя, высота, громкость)` с разбросом тона.
+Входы: `controller.Sfx:Fire(имя, [число])` (BindableEvent из `Sled/State`; старые `hit`/`reward` —
+синонимы `crash`/`ready`); хук `UIKit.sfx` (ставит Sounds; зовут `UI.pop` → `open`, `UIFx.shakeNo` →
+`deny`, `openChest` → `chest`, `flyCurrency` → `claim`); `Activated` любой `GuiButton` в PlayerGui →
+`click` (не в заезде); `RunEnded.reason == "fell"` → `fall`. Опросы: `Sled/State` (`sled`, `airborne`,
+`lateral`, `trick.angle`, `crashed`, `pulling`) и `SledController.State` (`Speed`, `RocketOn`, `Meter`,
+`AwaitingLaunch`) — лупы ветра/поверхности (луч вниз раз в 0.12 с, `RaycastResult.Material`), ракеты,
+натяжения; вуш вращения трюка; поджиг/выключение ракеты. Машины/поезда (`Mover`, модели `Vehicle`/
+`Train`): раз в 0.4 с 3 ближайших в радиусе получают 3D-луп мотора (`Sound` в их Part,
+`InverseTapered`), гудок — 3D из машины. Музыка: треки `MUSIC_IDS` грузятся по очереди, лобби —
+первый, заезд — `2 + (RunTheme−1) % (n−1)`, кроссфейд `MUSIC_FADE` (Pause/Resume).
 
 ## Иконки интерфейса
 

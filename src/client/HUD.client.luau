@@ -233,7 +233,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 		local newLvl = math.max(player:GetAttribute(name .. "Level") or 0, oldLvl + 1)
 		UIFx.bump(card, 1.1)
 		UIFx.bump(priceBtn, 1.12)
-		controller.Sfx:Fire("coin")
+		controller.Sfx:Fire("buy")
 		UIFx.tickNumber(effect, effectValue(name, oldLvl), effectValue(name, newLvl), 0.5, function(v)
 			return effectText(name, v)
 		end)
@@ -678,7 +678,7 @@ end
 Remotes.TaskDone.OnClientEvent:Connect(function(text)
 	task.delay(3.8, function() -- после карточки итога
 		notice("📋 ЗАДАНИЕ ВЫПОЛНЕНО! " .. text, 2.8)
-		controller.Sfx:Fire("reward")
+		controller.Sfx:Fire("task")
 	end)
 end)
 player:GetAttributeChangedSignal("Finished"):Connect(function()

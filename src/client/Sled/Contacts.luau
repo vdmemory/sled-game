@@ -72,7 +72,7 @@ local function crash()
 	rocketOn.Value = false
 	speedValue.Value = 0
 	trickPopup:Fire("💥 Врезался!")
-	sfx:Fire("hit")
+	sfx:Fire("crash")
 	Remotes.Crash:FireServer()
 end
 
@@ -201,20 +201,20 @@ local function onTouched(hit: BasePart)
 			if kind == "shield" then
 				shieldOn.Value = true
 				trickPopup:Fire("🛡 Щит!")
-				sfx:Fire("reward")
+				sfx:Fire("shield")
 			elseif kind == "fuel" then
 				st.fuel = fuelMaxValue.Value
 				fuelValue.Value = st.fuel
 				trickPopup:Fire("⛽ Полный бак!")
-				sfx:Fire("boost")
+				sfx:Fire("fuel")
 			elseif kind == "x2" then
 				st.x2Until = now + Config.POWERUPS.x2.time
 				trickPopup:Fire("✨ Монеты x2!")
-				sfx:Fire("record")
+				sfx:Fire("x2")
 				Remotes.PowerUp:FireServer(hit)
 			elseif kind == "ring" then
 				trickPopup:Fire("⭕ Кольцо! +" .. Config.POWERUPS.rings.coins)
-				sfx:Fire("coin")
+				sfx:Fire("ring")
 				Remotes.PowerUp:FireServer(hit)
 			end
 		end
@@ -264,7 +264,7 @@ local function onTouched(hit: BasePart)
 			end
 			st.speed *= 0.75
 			trickPopup:Fire("🛡 Щит спас!")
-			sfx:Fire("smash")
+			sfx:Fire("shieldhit")
 			return
 		end
 		crash()

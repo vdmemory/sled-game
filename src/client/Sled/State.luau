@@ -84,7 +84,7 @@ function State.init(controller: Instance)
 	local airborneValue = value("Airborne", "BoolValue") -- в полёте (client/Tutorial)
 	state.Parent = controller
 
-	-- Звуковые события для Sounds-скрипта: sfx:Fire("launch" | "land" | "hit" | "boost" | "coin" | "flip" | "jump")
+	-- Звуковые события для Sounds-скрипта: sfx:Fire(имя, [число]) — список в docs/GAME_DESIGN.md → «Звук»
 	local sfx = Instance.new("BindableEvent")
 	sfx.Name = "Sfx"
 	sfx.Parent = controller
