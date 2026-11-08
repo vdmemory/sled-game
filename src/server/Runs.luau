@@ -27,6 +27,7 @@ local RunEnded: RemoteEvent = Remotes.RunEnded
 local Restart: RemoteEvent = Remotes.Restart
 local Back: RemoteEvent = Remotes.Back
 local TaskDone: RemoteEvent = Remotes.TaskDone
+local Rescue: RemoteEvent = Remotes.Rescue
 
 local Runs = {}
 
@@ -78,6 +79,11 @@ export type Run = {
 	magnetCoins: number?, -- монет притянуто магнитом (задание magnetCoins)
 	flags: number?, -- мягкие нарушения античита за заезд (server/AntiCheat)
 	ac: any?, -- состояние античита (AntiCheat.start на Launch)
+	humanoid: Humanoid, -- персонаж, посаженный в санки на старте (сторож «без персонажа»)
+	unseated: number?, -- сек подряд персонажа нет в санках (Config.RUN_UNSEATED_MAX)
+	outside: number?, -- сек подряд снаружи невидимого борта (Config.RESCUE_OUT_TIME)
+	rescues: number?, -- мягких возвратов за заезд (Config.RESCUE_MAX)
+	lastRescue: number?,
 }
 local runs: { [Player]: Run } = {}
 -- Заезд закончен, но санки/трасса ещё не убраны и персонаж не пересоздан (пауза в endRun).
@@ -85,6 +91,22 @@ local runs: { [Player]: Run } = {}
 local ending: { [Player]: boolean } = {}
 
 local startRun: (Player) -> ()
+
+-- Новый персонаж в лобби. LoadCharacterAsync может упасть (сбой загрузки внешности) — повторяем;
+-- без этого игрок остаётся без персонажа, а камера — на старте трассы.
+local function respawn(player: Player)
+	for attempt = 1, 3 do
+		if not player.Parent then
+			return
+		end
+		local ok, err = pcall(player.LoadCharacterAsync, player)
+		if ok and player.Character then
+			return
+		end
+		warn(string.format("[Runs] LoadCharacterAsync %s, попытка %d: %s", player.Name, attempt, tostring(err)))
+		task.wait(0.5 * attempt)
+	end
+end
 
 local function endRun(player: Player, reason: string)
 	local run = runs[player]
@@ -230,19 +252,22 @@ local function endRun(player: Player, reason: string)
 		})
 	end
 
+	-- Любой конец заезда (finish, crash, fell, stopped, cheat, left, back, restart): санки и трасса
+	-- убираются, персонаж пересоздаётся в лобби. Новый заезд не начнётся, пока персонаж не
+	-- пересоздан: раньше `ending` снимался ДО LoadCharacterAsync, и тап «Играть»/зона посадки во
+	-- время загрузки сажали в новые санки старого персонажа — он тут же удалялся, и игрок оставался
+	-- на старте трассы без персонажа, только с санками (баг «без игрока — только сани»).
 	task.delay(if finished then 2.5 elseif quiet then 0.1 else 1.5, function()
 		run.sled:Destroy()
 		run.track:destroy()
 		if slots[run.slot] == player then
 			slots[run.slot] = nil
 		end
+		respawn(player)
 		ending[player] = nil
-		if player.Parent then
-			player:LoadCharacterAsync()
-			if reason == "restart" then
-				task.wait(0.3)
-				startRun(player)
-			end
+		if reason == "restart" and player.Parent then
+			task.wait(0.3)
+			startRun(player)
 		end
 	end)
 end
@@ -262,7 +287,7 @@ startRun = function(player: Player)
 	local d = Data.get(player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if not d or not character or not humanoid or humanoid.Health <= 0 then
+	if not d or not character or not humanoid or humanoid.Health <= 0 or not character:FindFirstChild("HumanoidRootPart") then
 		return
 	end
 
@@ -340,6 +365,7 @@ startRun = function(player: Player)
 		lastTrick = 0,
 		slowTime = 0,
 		startTime = os.clock(),
+		humanoid = humanoid,
 	}
 	runs[player] = run
 	player:SetAttribute("InRun", true)
@@ -444,6 +470,35 @@ function Runs.start()
 	end)
 end
 
+-- Страховка «мягкий возврат» (Config.RESCUE_*): сани провалились ниже дна куска, ушли за барьер
+-- или катятся снаружи невидимого борта (сугроб после жёлоба) — клиенту (у него физика саней)
+-- уходит Rescue с точкой на дне куска. Над пропастью островков и на озере точки нет (nil) —
+-- там падение остаётся концом заезда «fell». Ответ: вернули ли.
+local function rescueCheck(player: Player, run: Run, x: number, y: number, step: number): boolean
+	local track = run.track
+	local seg = track.segments[track.hint]
+	local edge = Config.TRACK_WIDTH / 2
+	local outside = seg ~= nil and not seg.chute and seg.kind ~= "lake" and math.abs(x) > edge + Config.WALL_OFFSET + 2
+	run.outside = if outside then (run.outside or 0) + step else 0
+	local need = y < -Config.RESCUE_DEPTH or math.abs(x) > edge + Config.RESCUE_SIDE or (run.outside or 0) >= Config.RESCUE_OUT_TIME
+	if not need or (run.rescues or 0) >= Config.RESCUE_MAX then
+		return false
+	end
+	if run.lastRescue and os.clock() - run.lastRescue < 1 then
+		return true -- ждём, пока клиент переставит сани (пинг)
+	end
+	local cf = track:rescueCFrame(run.sled.Position)
+	if not cf then
+		return false
+	end
+	run.rescues = (run.rescues or 0) + 1
+	run.lastRescue = os.clock()
+	run.outside = 0
+	Rescue:FireClient(player, cf, Config.RESCUE_SPEED_KEEP)
+	Analytics.custom(player, "RunRescued", run.rescues)
+	return true
+end
+
 ------------------------------------------------------------------ Цикл: прогресс, остановка, финиш
 function Runs.startLoop()
 	local acc = 0
@@ -455,9 +510,11 @@ function Runs.startLoop()
 		local step = acc
 		acc = 0
 
-		-- Упал с площадки лобби (не в заезде) — возвращаем на точку появления
+		-- Упал с площадки лобби (не в заезде) — возвращаем на точку появления. Пока заезд
+		-- заканчивается (ending), персонаж ещё сидит в санках заезда: его не трогаем — PivotTo
+		-- перенёс бы в лобби и сани (одна сборка), а через миг его всё равно пересоздаст endRun.
 		for _, p in Players:GetPlayers() do
-			if not runs[p] then
+			if not runs[p] and not ending[p] then
 				local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
 				if root and root.Position.Y < Config.LOBBY_POS.Y - 30 then
 					p.Character:PivotTo(CFrame.new(Config.LOBBY_POS + Vector3.new(0, 4, 0)))
@@ -470,6 +527,21 @@ function Runs.startLoop()
 			if not sled.Parent then
 				endRun(player, "left")
 				continue
+			end
+			-- Сторож «без персонажа»: персонаж заезда удалён/пересоздан/мёртв или не сидит в санках
+			-- дольше RUN_UNSEATED_MAX (Occupant мог не смениться) — заезд окончен, сани убираются
+			if not run.crashed then
+				local hum = run.humanoid
+				local alive = hum.Parent ~= nil and hum.Health > 0 and player.Character == hum.Parent
+				if alive and sled.Occupant == hum then
+					run.unseated = 0
+				else
+					run.unseated = (run.unseated or 0) + step
+					if not alive or run.unseated >= Config.RUN_UNSEATED_MAX then
+						endRun(player, "left")
+						continue
+					end
+				end
 			end
 			local track = run.track
 			local pos = sled.Position
@@ -500,8 +572,10 @@ function Runs.startLoop()
 				if slow or os.clock() - run.finishedAt > Config.FINISH_GLIDE_MAX then
 					endRun(player, "finish")
 				end
-			elseif y < -60 or math.abs(x) > Config.TRACK_WIDTH * 2 then
+			elseif y < -Config.FELL_DEPTH or math.abs(x) > Config.TRACK_WIDTH * 2 then
 				endRun(player, "fell")
+			elseif rescueCheck(player, run, x, y, step) then
+				continue -- вернули на трассу: остановку этого тика не считаем
 			else
 				-- Первые 2 секунды после выстрела не считаем (передача управления по сети)
 				if os.clock() - (run.launchTime or 0) > 2 and sled.AssemblyLinearVelocity.Magnitude < Config.STOP_SPEED then

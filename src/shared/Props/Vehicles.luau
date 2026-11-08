@@ -1,6 +1,7 @@
 -- Транспорт: машины, фургоны, джип, живой трафик дорог (автобус, такси, полиция, поезд),
 -- канатная дорога, знаки и шлагбаум у дороги. Часть shared/Props (см. Props/init).
 
+local Config = require(script.Parent.Parent.Config)
 local Base = require(script.Parent.Base)
 
 local Props = Base.Props
@@ -34,6 +35,17 @@ function Props.car(rng: Random, base: CFrame, parent: Instance, color: Color3?)
 	deco({ Size = Vector3.new(5.4, 0.5, 0.3), CFrame = base * CFrame.new(0, 1.4, -6.1), Color = Color3.fromRGB(150, 150, 160) }, parent) -- бампер
 	deco({ Size = Vector3.new(6, 0.5, 6.2), CFrame = base * CFrame.new(0, 5.65, 0.6), Material = Enum.Material.Snow, Color = SNOW }, parent) -- снег на крыше
 	wheels(base, 3.05, { -3.8, 3.8 }, 1.2, parent)
+	-- Невидимая «шапка» до CAR_HITBOX_H: прыжок (≈ 6.4 studs) выше крыши (5.4), но легковушку
+	-- по-прежнему не перепрыгнуть — её видят Touched и GetPartBoundsInBox санок, не физика
+	local capTop = math.max(5.4, Config.CAR_HITBOX_H)
+	part("Part", {
+		Name = "Hitbox",
+		Size = Vector3.new(6.2, capTop - 3.2, 12),
+		CFrame = base * CFrame.new(0, (capTop + 3.2) / 2, 0),
+		Transparency = 1,
+		CanCollide = false,
+		CastShadow = false,
+	}, parent)
 end
 
 -- Фургон / скорая

@@ -540,6 +540,22 @@ function Track:progressOf(pos: Vector3): (number, number, number)
 	return seg.hStart + math.clamp(bestT, 0, seg.length) * math.cos(math.rad(seg.angle)), bestRel.X, bestRel.Y
 end
 
+-- Куда вернуть сани, вылетевшие с трассы (страховка «мягкий возврат», server/Runs): на дно
+-- текущего куска (последний найденный progressOf) ближе к оси, на RESCUE_LIFT над снегом, лицом
+-- вниз по склону. Над пропастью островков, на островках и разгоне к ним, на озере после финиша
+-- и до рогатки — nil: там падение — честный конец заезда («fell»).
+local NO_RESCUE = { gap = true, isle = true, isleIn = true, lake = true, start = true }
+function Track:rescueCFrame(pos: Vector3): CFrame?
+	local seg = self.segments[self.hint]
+	if not seg or NO_RESCUE[seg.kind] then
+		return nil
+	end
+	local rel = seg.cf:PointToObjectSpace(pos)
+	local t = math.clamp(-rel.Z, 2, math.max(2, seg.length - 2))
+	local x = math.clamp(rel.X, -(W / 2 - Config.RESCUE_INSET), W / 2 - Config.RESCUE_INSET)
+	return seg.cf * CFrame.new(x, Config.RESCUE_LIFT, -t)
+end
+
 function Track:destroy()
 	for idx, c in self.clears do
 		Islands.clear(c)
