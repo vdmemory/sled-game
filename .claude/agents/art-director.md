@@ -38,8 +38,9 @@ UI/UX (читаемость на телефоне, крупные кнопки, 
   закоммитить в `assets/ui/decals.json` и `src/shared/UIDecals.luau`.
 
 ## Правила
-- Модели — из Part/WedgePart/Cylinder/Ball без Union, SurfaceAppearance и MeshPart с внешними
-  мешами (Open Cloud не публикует Union/SurfaceAppearance). `CastShadow` только у частей с
+- Модели — из Part/WedgePart/Cylinder/Ball или из своих мешей (`scripts/gen_meshes.py` → загрузка
+  `scripts/upload_meshes.py` → `MeshIds` → `MeshPart`, с фолбэком на Part). Без Union и SurfaceAppearance
+  (Open Cloud их не публикует). `CastShadow` только у частей с
   `Size.Magnitude > 1.5`. Детали — через цвет, материал (`Neon`, `Metal`, `Glass`), мелкие
   части, а не через количество полигонов.
 - Каждый тир должен быть виден с игровой камеры (сзади-сверху): менять силуэт, цвет, свечение.
