@@ -22,6 +22,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Track = require(Shared:WaitForChild("Track"))
 local Lobby = require(Shared:WaitForChild("Lobby"))
 local Meshes = require(Shared:WaitForChild("Meshes"))
+local SledModels = require(Shared:WaitForChild("SledModels"))
 
 local player = Players.LocalPlayer
 local previewOrigin = CFrame.new(Config.LOBBY_POS + Vector3.new(0, 0, -70)) -- как LaunchPad в server/Runs
@@ -242,6 +243,15 @@ end
 task.spawn(function()
 	if Meshes.waitFor({ "crag", "pine_foliage", "mountain_rock" }, 40) and not builtWithMeshes then
 		schedule(true)
+	end
+end)
+-- меши саней (корпуса, обвес, ракеты) догрузились после первой витрины — пересобираем её один раз
+task.spawn(function()
+	if Meshes.has(table.unpack(SledModels.MESHES)) then
+		return
+	end
+	if Meshes.waitFor(SledModels.MESHES, 60) and not player:GetAttribute("InRun") then
+		rebuildShowcase(true)
 	end
 end)
 
