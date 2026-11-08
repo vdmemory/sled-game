@@ -100,7 +100,7 @@ local function smash(model: Model)
 			p.CanTouch = false
 			p.CanQuery = false
 			-- обломки
-			if p.Size.Magnitude > 1.5 and s then
+			if p.Size.Magnitude > 1.5 and p.Transparency < 1 and s then -- невидимые «шапки» — без обломков
 				local chunk = Instance.new("Part")
 				chunk.Size = p.Size * 0.45
 				chunk.Color = p.Color
