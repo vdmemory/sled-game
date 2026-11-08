@@ -2,7 +2,7 @@
 -- atlas = ID аудио-ассета (0 — ещё не загружен: играют встроенные rbxasset-звуки, см. client/Sounds).
 -- regions: имя → { начало, длина (с), луп, источник } — Sound.PlaybackRegion / LoopRegion.
 return {
-	atlas = 0,
+	atlas = 119790293061397,
 	regions = {
 		click = { 0.12, 0.16, false, "Oculus CC BY" },
 		open = { 0.4, 0.36, false, "Oculus CC BY" },
