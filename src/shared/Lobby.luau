@@ -9,6 +9,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Props = require(ReplicatedStorage.Shared.Props)
 local SledModels = require(ReplicatedStorage.Shared.SledModels)
 local Meshes = require(ReplicatedStorage.Shared.Meshes)
+local LobbyPodium = require(ReplicatedStorage.Shared.LobbyPodium)
 
 local part, deco = Props.part, Props.deco
 local SNOW = Color3.fromRGB(250, 252, 255)
@@ -29,6 +30,7 @@ local Lobby = {}
 --   z=−12…−38          ║ дорожка-плитка 10 wide, неоновые шевроны ║  фонари x ±7.5 z −8/−28
 --   z=−16   ПОДИУМ x=−16 (витрина: что купить дальше)   ПОДИУМ x=+16 (витрина: «мечта»)
 --   z=−38   ТАБЛО x=−27 «обновление»                    ТАБЛО x=+27 «неделя → чистые → всё время»
+--   z=−35                                                      ПЬЕДЕСТАЛ ТОП-3 x=+40 (2-1-3, аватары)
 --   z=−38.5   ╔══ ВОРОТА СТАРТА (меш) · вывеска «МИР ▼ СТАРТ» ══╗
 --   z=−40   ─────── край площадки: Terrain-обрыв вниз ───────
 --   z=−39…−61       ║ мостик 14 wide, перила, гирлянды, фонари x ±8.2 z −51 ║
@@ -52,6 +54,10 @@ Lobby.PLAN = {
 	podiumR = { 16, -16, 6.5 },
 	boardL = { -27, -38 },
 	boardR = { 27, -38 },
+	-- пьедестал топ-3 недели (#48): центр x, z, ширина ступени, масштаб аватаров. Правее табло лидеров
+	-- у края обрыва — со спавна виден в правой половине кадра, где нет плашек UI (макет: 0–3% под UI)
+	top3 = { 40, -35, 5.6, 1.25 },
+	top3H = { 4, 2.8, 1.8 }, -- высота ступеней 1, 2, 3 места (2 — слева, 1 — центр, 3 — справа)
 	fire = { -20, 16 },
 	accent = { 20, 16 },
 	flags = { -26, -4, 26, -4, -14, 26, 14, 26 },
@@ -326,6 +332,8 @@ function Lobby.furnish(lobby: Instance)
 		return CFrame.lookAt((base * CFrame.new(xz[1], 0, xz[2])).Position, p)
 	end
 	board("Leaderboard", facing(PLAN.boardR), "🏆 Неделя", lobby, true)
+	-- правее табло — пьедестал топ-3 недели (аватары — server/Podium)
+	LobbyPodium.build(base, PLAN, lobby)
 	local upText = board("NextUpdate", facing(PLAN.boardL), "⏳ Следующее обновление", lobby)
 	task.spawn(function()
 		while lobby.Parent do

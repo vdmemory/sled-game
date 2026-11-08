@@ -266,6 +266,9 @@ def scene_objects():
             sx_, sz_ = tx + lx * c, tz - lx * s_
             pts += box_pts(sx_, sz_, tw / 2, 2.0, 0, sh, yaw)
             pts += box_pts(sx_, sz_, 1.1 * ts, 0.6 * ts, sh, sh + (5.5 + 1.5) * ts, yaw)  # аватар R15 + табличка
+        # корона над 1-м местом — как в Lobby.top3Podium
+        cy = 0.5 + P["top3H"][0] + 8.4 * ts
+        pts += box_pts(tx, tz, 0.9, 0.9, cy - 0.3, cy + 1.2, yaw)
         objs.append(("top3", "пьедестал топ-3", pts, (255, 215, 80), True))
     f = P["flags"]
     for i in range(0, len(f), 2):
