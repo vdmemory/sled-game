@@ -46,7 +46,7 @@ def upload(path: pathlib.Path, user_id: str):
     meta = json.dumps({
         "assetType": "Audio",
         "displayName": f"SledSfx_{path.stem}",
-        "description": "Sled game sound effects atlas (synthesized by scripts/gen_audio.py, CC0)",
+        "description": "Sled game sound effects atlas v2 (CC0 + CC BY 4.0 recordings, scripts/gen_audio.py)",
         "creationContext": {"creator": {"userId": user_id}},
     })
     body = b"".join([
