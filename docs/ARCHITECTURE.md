@@ -8,7 +8,8 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | Что | Где |
 | --- | --- |
 | Сборка | `rojo build default.project.json -o game.rbxl` (Rojo 7.4.4, `rokit.toml`) |
-| Публикация | `scripts/publish.sh` → `POST apis.roblox.com/universes/v1/{universe}/places/{place}/versions?versionType=Published`, ретраи на 409/429/5xx |
+| Публикация | `scripts/publish.sh` → `POST apis.roblox.com/universes/v1/{universe}/places/{place}/versions?versionType=Published`, ретраи на 409/429/5xx. Нет `game.rbxl` — собирает сам (rojo из PATH / `.tools/bin`, ставит `check.sh` с `curl --retry`) |
+| Ассеты при деплое (#22) | `upload_ui_assets.py` → `upload_meshes.py` → `upload_audio.py`: код 3 = загружено не всё → аннотация `warning` + строка в Summary (в игре фолбэк). Новые ID → пересборка; пересборка не удалась → публикация **отменяется** (`ALLOW_STALE_BUILD=1` — публиковать старую). Новые ID не закоммичены (`git status` по `assets/**/*.json`, `src/shared/*Ids.luau`) → JSON в лог и Summary, job **красный после публикации** (иначе следующий деплой загрузит их заново; аудио — 10/мес; `ASSET_IDS_UNCOMMITTED_OK=1` — только warning). HTTP-повторы (`upload_ui_assets.http`): GET — при 0/429/5xx, POST создания ассета — только 429/503 (повтор после таймаута мог бы создать дубликат) |
 | Workflow | `.github/workflows/deploy.yml` (правится только через веб GitHub — у сессии нет scope `workflow`) |
 | staging | любой push в `main` → тестовый плейс «Игра на санях [ТЕСТ]» |
 | production | тег `v*` → боевой плейс |

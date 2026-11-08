@@ -1,4 +1,6 @@
 {
   "_comment": "Universe ID опыта, чьи метрики собираем (Universe ID публичный, не секрет). 0 = брать UNIVERSE_ID окружения деплоя (staging).",
-  "analytics_universe_id": 10773722262
+  "analytics_universe_id": 10773722262,
+  "_rate_format": "Как Analytics Query API отдаёт доли (ретеншн, конверсия): percent (0.8 = 0.8 %) или fraction (0.008). Документация не указывает; при rate_format=fraction и значениях > 1 fetch_metrics.py предупредит.",
+  "rate_format": "percent"
 }

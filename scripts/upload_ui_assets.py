@@ -25,15 +25,31 @@ OUT = ROOT / "src" / "shared" / "UIDecals.luau"
 KEY = os.environ.get("ROBLOX_API_KEY", "")
 
 
-def http(method, url, data=None, headers=None):
-    req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, r.read().decode()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode(errors="replace")
-    except (urllib.error.URLError, TimeoutError) as e:  # сеть/таймаут: не роняем цикл, уже загруженные ID сохранятся
-        return 0, str(e)
+# Повторы: GET (опрос операции, модерация, поиск пользователя) — при сетевой ошибке, 429 и 5xx;
+# POST создания ассета — только при 429/503 (запрос точно не принят): повтор после таймаута/504 мог
+# бы создать дубликат, а у аудио лимит 10 загрузок в месяц.
+RETRY_GET = (0, 429, 500, 502, 503, 504)
+RETRY_POST = (429, 503)
+
+
+def http(method, url, data=None, headers=None, attempts=4):
+    retry = RETRY_GET if method == "GET" else RETRY_POST
+    code, body = 0, ""
+    for i in range(attempts):
+        req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.status, r.read().decode()
+        except urllib.error.HTTPError as e:
+            code, body = e.code, e.read().decode(errors="replace")
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:  # сеть/таймаут: код 0
+            code, body = 0, f"{type(e).__name__}: {e}"
+        if code not in retry or i == attempts - 1:
+            break
+        wait = 2 ** (i + 1)
+        print(f"  {method} {url.split('?')[0]}: HTTP {code} — повтор через {wait} с ({i + 1}/{attempts - 1})")
+        time.sleep(wait)
+    return code, body
 
 
 def creator_id():
@@ -111,23 +127,35 @@ def main():
                     break
         DB.write_text(json.dumps(ids, indent=1, sort_keys=True) + "\n")
     write_luau(ids)
+    missing = [p.stem for p in sorted(ICONS.glob("*.png")) if p.stem not in ids]
     print(f"Иконок с ID: {len(ids)}")
     # статус модерации (новые картинки Roblox показывает только после одобрения)
     if KEY and ids:
         states = {}
         for name, aid in sorted(ids.items()):
-            code, body = http("GET", f"https://apis.roblox.com/assets/v1/assets/{aid}?readMask=moderationResult", headers={"x-api-key": KEY})
+            code, body = http("GET", f"https://apis.roblox.com/assets/v1/assets/{aid}?readMask=moderationResult", headers={"x-api-key": KEY}, attempts=1)  # справочно
             st = json.loads(body).get("moderationResult", {}).get("moderationState", f"HTTP {code}") if code == 200 else f"HTTP {code}: {body[:120]}"
             states.setdefault(st, []).append(name)
         for st, names in states.items():
             print(f"Модерация {st}: {len(names)} — {', '.join(names[:8])}")
+    if missing:
+        print(f"::warning::Не загружены иконки ({len(missing)}): {', '.join(missing[:12])} — в игре будут эмодзи")
+        return 3
+    return 0
 
 
+# Код выхода: 0 — всё загружено (или нечего), 3 — часть иконок не загружена (publish.sh громко
+# предупреждает, деплой продолжается: игра покажет эмодзи).
 if __name__ == "__main__":
     try:
-        main()
+        sys.exit(main())
     except SystemExit as e:
+        if isinstance(e.code, int):
+            raise
         print(f"::warning::{e}")
         if not OUT.exists():
             write_luau({})
-        sys.exit(0)
+        sys.exit(3)
+    except Exception as e:  # noqa: BLE001
+        print(f"::warning::загрузка иконок: {type(e).__name__}: {e}")
+        sys.exit(3)
