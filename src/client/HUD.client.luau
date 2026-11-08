@@ -233,7 +233,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 		buying = true
 		local oldLvl = player:GetAttribute(name .. "Level") or 0
 		effectHold[name] = true
-		local ok, msg = Remotes.BuyUpgrade:InvokeServer(name)
+		local ok, msg = UI.invoke(Remotes.BuyUpgrade, name)
 		buying = false
 		if not ok then
 			effectHold[name] = nil

@@ -65,7 +65,7 @@ UI.closeButton(win, function()
 end)
 
 local function dev(action: string, a: any?, b: any?, c: any?)
-	local ok, msg = Remotes.DevAction:InvokeServer(action, a, b, c)
+	local ok, msg = UI.invoke(Remotes.DevAction, action, a, b, c)
 	status.TextColor3 = if ok then Color3.fromRGB(150, 230, 150) else Color3.fromRGB(255, 120, 120)
 	status.Text = tostring(msg)
 end
@@ -619,7 +619,7 @@ local function loadPending(): ({ [string]: number }?, string?)
 	if targetText == "" then
 		return nil, "Укажи UserId или ник игрока"
 	end
-	local ok, res = Remotes.DevAction:InvokeServer("tuneGet", targetText)
+	local ok, res = UI.invoke(Remotes.DevAction, "tuneGet", targetText)
 	if not ok or type(res) ~= "table" then
 		return nil, tostring(res)
 	end

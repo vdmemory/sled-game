@@ -174,7 +174,7 @@ local function clock(sec: number): string
 	return string.format("%d:%02d", sec // 60, sec % 60)
 end
 local function act(action: string, arg: any?): (boolean, any)
-	local ok, res = Remotes.RewardAction:InvokeServer(action, arg)
+	local ok, res = UI.invoke(Remotes.RewardAction, action, arg)
 	if typeof(res) == "string" then
 		say(ok, res)
 	end
@@ -376,7 +376,7 @@ local function drawWorlds()
 		local st = UI.button(kind, text, { Position = UDim2.new(0, 10, 1, -58), Size = UDim2.new(1, -20, 0, 48), ZIndex = 34, Parent = card })
 		if action then
 			st.Activated:Connect(function()
-				local ok, msg = Remotes.WorldAction:InvokeServer(action, arg)
+				local ok, msg = UI.invoke(Remotes.WorldAction, action, arg)
 				if typeof(msg) == "string" then
 					say(ok, msg)
 				end
@@ -667,7 +667,7 @@ for mi, model in Config.SLEDS do
 		status.Activated:Connect(function()
 			local key = model.id .. ":" .. r
 			local hadIt = csvSet("OwnedSleds")[key] == true
-			local ok, res = Remotes.SledAction:InvokeServer(model.id, r)
+			local ok, res = UI.invoke(Remotes.SledAction, model.id, r)
 			say(ok, res)
 			if ok then
 				selectSled(cell, not hadIt, status)
@@ -737,7 +737,7 @@ for i, t in Config.TRAILS do
 	UI.ink({ Text = if t.bonus > 0 then "+" .. t.bonus .. "% монет" else "без бонуса", Position = UDim2.fromOffset(8, 98), Size = UDim2.new(1, -16, 0, 24), TextColor3 = Color3.fromRGB(200, 140, 20), ZIndex = 34, Parent = card })
 	local st = UI.button("blue", "", { Position = UDim2.new(0, 10, 1, -54), Size = UDim2.new(1, -20, 0, 48), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = card })
 	st.Activated:Connect(function()
-		say(Remotes.TrailAction:InvokeServer(t.id))
+		say(UI.invoke(Remotes.TrailAction, t.id))
 	end)
 	trailCells[t.id] = st
 end

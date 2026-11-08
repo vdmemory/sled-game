@@ -83,7 +83,10 @@
 - Числа — в `Config` (+ `TUNABLES`), логика — в модулях; shared-код не зависит от серверных
   сервисов.
 - Ремоуты создаются в `server/Remotes` (`remote(className, name)`), клиент ждёт
-  `ReplicatedStorage:WaitForChild("Remotes")`.
+  `ReplicatedStorage:WaitForChild("Remotes")`. RemoteFunction с клиента — только `UI.invoke(remote, ...)`
+  (pcall + таймаут `Config.INVOKE_TIMEOUT`, #19), не голый `InvokeServer`: ошибка сервера иначе
+  обрывает поток кнопки и её флаги (`buying`) не сбрасываются. Код после вызова обрабатывает
+  `false, текст` (тост) — состояние кнопки сбрасывается в любом исходе.
 - Новый предмет на трассе: `make*` в `Track/Items` + тег + обработчик в `client/Sled/Contacts` +
   ремоут `PowerUp` + серверный учёт в `server/Pickups`.
 - Новый серверный обработчик — в модуле своей зоны (`Runs`/`RunEvents`/`Pickups`/`Shop`/

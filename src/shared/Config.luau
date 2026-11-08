@@ -17,6 +17,7 @@ Config.KEEP_BEHIND = 150 -- и держим столько позади
 
 -- СОХРАНЕНИЯ (DataService; не баланс — не в TUNABLES)
 Config.DATA_AUTOSAVE = 120 -- секунд между автосейвами
+Config.INVOKE_TIMEOUT = 12 -- сек: клиент ждёт ответа RemoteFunction (UI.invoke), потом «сервер не отвечает» (#19)
 Config.DATA_LOCK_WAIT = 30 -- сколько ждать, пока другой сервер снимет блокировку сейва
 Config.DATA_LOCK_STALE = 2 * Config.DATA_AUTOSAVE + 30 -- блокировка старше этого (сервер упал) — забираем сразу
 

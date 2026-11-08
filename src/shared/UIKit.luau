@@ -7,6 +7,8 @@
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Config = require(script.Parent.Config)
+
 local UI = {}
 
 -- Раскладка лобби и минимальные размеры под палец (#34) — Shared/UILayout
@@ -705,6 +707,52 @@ function UI.iconText(props: { [string]: any }): (Frame, (string, string?) -> ())
 	set("", "coin")
 	f.Parent = props.Parent
 	return f, set
+end
+
+------------------------------------------------------------------ Вызов сервера (#19)
+UI.INVOKE_ERROR = "Ошибка сервера, попробуй ещё раз"
+UI.INVOKE_TIMEOUT_TEXT = "Сервер не отвечает, попробуй ещё раз"
+
+-- Все RemoteFunction клиента — только через UI.invoke: InvokeServer в pcall и с таймаутом
+-- (Config.INVOKE_TIMEOUT). Ошибка обработчика на сервере или потерянный ответ не роняют поток
+-- кнопки (иначе флаги вида `buying` не сбрасываются и кнопка «залипает»): возвращается
+-- false, текст для тоста + warn в консоль. Иначе — ровно то, что вернул сервер (обычно ok, msg).
+-- Поздний ответ после таймаута отбрасывается.
+function UI.invoke(remote: RemoteFunction, ...: any): ...any
+	local args = table.pack(...)
+	local thread = coroutine.running()
+	local result: { any }? = nil
+	local waiting = false
+	local function finish(...: any)
+		if result then
+			return
+		end
+		result = table.pack(...)
+		if waiting then
+			task.spawn(thread, ...)
+		end
+	end
+	task.spawn(function()
+		local res = table.pack(pcall(remote.InvokeServer, remote, table.unpack(args, 1, args.n)))
+		if res[1] then
+			finish(table.unpack(res, 2, res.n))
+		else
+			warn(string.format("[UI.invoke] %s: %s", remote.Name, tostring(res[2])))
+			finish(false, UI.INVOKE_ERROR)
+		end
+	end)
+	if result then -- ответ без ожидания (ошибка до отправки)
+		local r = result :: any
+		return table.unpack(r, 1, r.n)
+	end
+	task.delay(Config.INVOKE_TIMEOUT, function()
+		if not result then
+			warn(string.format("[UI.invoke] %s: нет ответа %d с", remote.Name, Config.INVOKE_TIMEOUT))
+			finish(false, UI.INVOKE_TIMEOUT_TEXT)
+		end
+	end)
+	waiting = true
+	return coroutine.yield()
 end
 
 return UI
