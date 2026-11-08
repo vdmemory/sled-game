@@ -27,6 +27,46 @@
   "id": 73945040474047,
   "sha": "dc69644802dc4ef1"
  },
+ "kit_bumper": {
+  "id": 108266941556048,
+  "sha": "4a22518015ac5511"
+ },
+ "kit_crown": {
+  "id": 128153741746127,
+  "sha": "2bd737fdc88eaf95"
+ },
+ "kit_exhaust": {
+  "id": 116867140869030,
+  "sha": "40644f6797b92e2c"
+ },
+ "kit_flag": {
+  "id": 101425550910159,
+  "sha": "841b7165b2337241"
+ },
+ "kit_headlamp": {
+  "id": 74248901786493,
+  "sha": "7a0084b693afef5f"
+ },
+ "kit_shield": {
+  "id": 134505991976892,
+  "sha": "563dae0ad2c75b1d"
+ },
+ "kit_shield_frame": {
+  "id": 76907861763539,
+  "sha": "618d12b5db39bad5"
+ },
+ "kit_spoiler": {
+  "id": 90986094198221,
+  "sha": "7207175f7380cca1"
+ },
+ "kit_spoiler_mount": {
+  "id": 114745101754723,
+  "sha": "03ea777d3673d107"
+ },
+ "kit_wing": {
+  "id": 124321291853774,
+  "sha": "dd0e73b57ec18177"
+ },
  "lamp_post": {
   "id": 89493244546754,
   "sha": "4551f7b3dbc50197"
@@ -63,6 +103,210 @@
   "id": 103381047367090,
   "sha": "35e0836c8c14df4b"
  },
+ "rocket_band": {
+  "id": 103835434525911,
+  "sha": "65959cf36bfcdac2"
+ },
+ "rocket_bell": {
+  "id": 88053436227471,
+  "sha": "7863dbd83aa2d3a6"
+ },
+ "rocket_body": {
+  "id": 93297711211477,
+  "sha": "89f1ef9f74a83012"
+ },
+ "rocket_canards": {
+  "id": 109466897289267,
+  "sha": "ee57e6cb525a0039"
+ },
+ "rocket_fins2": {
+  "id": 88828180305538,
+  "sha": "ee1177dbd10401dc"
+ },
+ "rocket_fins3": {
+  "id": 100639868128001,
+  "sha": "0f83c105f74c49e4"
+ },
+ "rocket_fins4": {
+  "id": 82453040525129,
+  "sha": "806a055a22e6776b"
+ },
+ "rocket_nose": {
+  "id": 135840429034468,
+  "sha": "9448fff178f69d9e"
+ },
+ "sled_board_accent": {
+  "id": 92487513533614,
+  "sha": "631de3d159e2e5ac"
+ },
+ "sled_board_base": {
+  "id": 132503525001011,
+  "sha": "9479be08ffa5e9ae"
+ },
+ "sled_board_bind": {
+  "id": 93493024841168,
+  "sha": "20417faa0d8cea24"
+ },
+ "sled_board_deck": {
+  "id": 91385701934208,
+  "sha": "b30a3fc1671280a2"
+ },
+ "sled_bob_body": {
+  "id": 105821253506567,
+  "sha": "7c3d660c8fcb9ac0"
+ },
+ "sled_bob_inner": {
+  "id": 124134824200946,
+  "sha": "5739c15e9beb3e4e"
+ },
+ "sled_bob_metal": {
+  "id": 116604527792057,
+  "sha": "e082d8eb42d76714"
+ },
+ "sled_bob_stripe": {
+  "id": 99445766508882,
+  "sha": "1cc483851e017eca"
+ },
+ "sled_classic_frame": {
+  "id": 136848890524705,
+  "sha": "0027374587625cd2"
+ },
+ "sled_classic_metal": {
+  "id": 73595932735063,
+  "sha": "ffa43afb38dfa6e2"
+ },
+ "sled_classic_rope": {
+  "id": 131982569379222,
+  "sha": "4dfcaf13d6b2ad35"
+ },
+ "sled_classic_runner": {
+  "id": 131392672687996,
+  "sha": "12d2bd2e090da46c"
+ },
+ "sled_classic_slats": {
+  "id": 89762643873653,
+  "sha": "3747ca036838b139"
+ },
+ "sled_kayak_black": {
+  "id": 112819942758131,
+  "sha": "3980f01be3b71390"
+ },
+ "sled_kayak_hull": {
+  "id": 72517545393556,
+  "sha": "2559fbd56e5527a6"
+ },
+ "sled_kayak_paddle": {
+  "id": 83675877096074,
+  "sha": "0940ca8a19806d7d"
+ },
+ "sled_kayak_trim": {
+  "id": 137362656321659,
+  "sha": "69e5329ee6707f3d"
+ },
+ "sled_plane_black": {
+  "id": 130615414493104,
+  "sha": "01536761b9f843a8"
+ },
+ "sled_plane_body": {
+  "id": 85396731205490,
+  "sha": "4af9ae932ade5705"
+ },
+ "sled_plane_glass": {
+  "id": 84442132781391,
+  "sha": "ccb23c065fe8d1d3"
+ },
+ "sled_plane_metal": {
+  "id": 82402662560601,
+  "sha": "df0db476d758cac0"
+ },
+ "sled_plane_ski": {
+  "id": 79986374606582,
+  "sha": "fdc6fe78f56cea5f"
+ },
+ "sled_plane_wing": {
+  "id": 119138371965051,
+  "sha": "12ead940d0b5eb72"
+ },
+ "sled_saucer_body": {
+  "id": 78995920842549,
+  "sha": "f7ebb136f1056c41"
+ },
+ "sled_saucer_dish": {
+  "id": 130401483196761,
+  "sha": "160ccc46a6f894e3"
+ },
+ "sled_saucer_trim": {
+  "id": 138941696384575,
+  "sha": "e85855c9bde32571"
+ },
+ "sled_snow_accent": {
+  "id": 132447034315186,
+  "sha": "2228af9d7c13f052"
+ },
+ "sled_snow_glass": {
+  "id": 103130842454966,
+  "sha": "77f175dc21c7dd43"
+ },
+ "sled_snow_hood": {
+  "id": 119381209891156,
+  "sha": "f7b032b5a6452ca9"
+ },
+ "sled_snow_metal": {
+  "id": 94690456000823,
+  "sha": "c5a81f7d1e9a3e3f"
+ },
+ "sled_snow_seat": {
+  "id": 70821277629124,
+  "sha": "f519c1d537facba8"
+ },
+ "sled_snow_ski": {
+  "id": 94457385766897,
+  "sha": "1b8c443588f8493c"
+ },
+ "sled_snow_track": {
+  "id": 100076566430459,
+  "sha": "f84d1a773f127197"
+ },
+ "sled_tob_frame": {
+  "id": 82706537960932,
+  "sha": "c49b97f87aa6d678"
+ },
+ "sled_tob_pad": {
+  "id": 89296168182245,
+  "sha": "127d3e28fc7eef39"
+ },
+ "sled_tob_planks_a": {
+  "id": 100462314762166,
+  "sha": "23e5c42cf093743c"
+ },
+ "sled_tob_planks_b": {
+  "id": 75478511705299,
+  "sha": "a86fff7951765673"
+ },
+ "sled_tob_rope": {
+  "id": 105306774617041,
+  "sha": "24719aa4007ca2a6"
+ },
+ "sled_tube_base": {
+  "id": 126632411748567,
+  "sha": "184a4dd002679d91"
+ },
+ "sled_tube_seat": {
+  "id": 111254581712271,
+  "sha": "c05358ecb8999134"
+ },
+ "sled_tube_strap": {
+  "id": 113742391331648,
+  "sha": "3f9a0427c9c40b01"
+ },
+ "sled_tube_top": {
+  "id": 111895615020133,
+  "sha": "d3711a940bfc13b9"
+ },
+ "sled_tube_trim": {
+  "id": 83445911083579,
+  "sha": "653e97a821d15e51"
+ },
  "snowdrift": {
   "id": 134018618789587,
   "sha": "6d1e1f79d4a91e49"
@@ -70,5 +314,41 @@
  "start_gate": {
   "id": 95610583000093,
   "sha": "0792c2f6137518e9"
+ },
+ "trim_board": {
+  "id": 130137672047559,
+  "sha": "e37474bb99558af4"
+ },
+ "trim_bobsled": {
+  "id": 118882906531568,
+  "sha": "49527f6b6f0ba0de"
+ },
+ "trim_classic": {
+  "id": 138475363269266,
+  "sha": "3f14c988e4c827c7"
+ },
+ "trim_kayak": {
+  "id": 76994123716693,
+  "sha": "a18aa04926ee68d5"
+ },
+ "trim_plane": {
+  "id": 123092939565067,
+  "sha": "7b77f6e48e87ab22"
+ },
+ "trim_saucer": {
+  "id": 74412742010238,
+  "sha": "94debff3667515e8"
+ },
+ "trim_snowmobile": {
+  "id": 84168913654559,
+  "sha": "5fa7a7e770f4d904"
+ },
+ "trim_toboggan": {
+  "id": 123337532042858,
+  "sha": "2b32c0b379cd1c56"
+ },
+ "trim_tube": {
+  "id": 125424761040411,
+  "sha": "19dc9bb3f9f92995"
  }
 }
