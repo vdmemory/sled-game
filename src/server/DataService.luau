@@ -139,6 +139,19 @@ local function migrate(data: { [string]: any })
 		data.OwnedSkins = nil
 		data.Skin = nil
 	end
+	-- Ракета без промежуточных уровней (#47): уровень только кратен 5 (тир = ур. // 5). Уровни сверх
+	-- границы тира откатываем и возвращаем их гемы по прежней цене (1 + ур. // 3) — новая цена тира =
+	-- сумма прежних цен его 5 уровней, поэтому «вернули + заплатить за тир» = ровно прежний остаток.
+	local rl = data.RocketLevel
+	if type(rl) == "number" and rl % Config.TIER_SIZE ~= 0 then
+		local floorLvl = rl - rl % Config.TIER_SIZE
+		local refund = 0
+		for l = floorLvl, math.floor(rl) - 1 do
+			refund += 1 + l // 3
+		end
+		data.Gems = (data.Gems or 0) + refund
+		data.RocketLevel = floorLvl
+	end
 	-- новые ключи вложенных таблиц (Settings.Music, Streak.save…) у старых профилей
 	-- титул (#26): битые типы → без титула
 	if type(data.Title) ~= "string" then

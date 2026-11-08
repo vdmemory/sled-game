@@ -343,3 +343,26 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 	workspace:BulkMoveTo(bulkParts, bulkCFs, Enum.BulkMoveMode.FireCFrameChanged)
 end)
+
+------------------------------------------------------------------ Корона пьедестала топ-3 (#48)
+-- Корона над 1-м местом (shared/Lobby → top3Podium, атрибут BaseCF) медленно вращается и покачивается.
+-- Только в лобби, ~30 раз в секунду, один PivotTo на 11 деталей.
+task.spawn(function()
+	local lobby = workspace:WaitForChild("Lobby", 60)
+	local top3 = lobby and lobby:WaitForChild("Top3", 60)
+	local crown = top3 and top3:WaitForChild("Crown", 10) :: Model?
+	local baseCF = crown and crown:GetAttribute("BaseCF")
+	if not crown or typeof(baseCF) ~= "CFrame" then
+		return
+	end
+	local t, acc = 0, 0
+	RunService.Heartbeat:Connect(function(dt)
+		t += dt
+		acc += dt
+		if acc < 1 / 30 or player:GetAttribute("InRun") or not crown.Parent then
+			return
+		end
+		acc = 0
+		crown:PivotTo(baseCF * CFrame.new(0, math.sin(t * 1.5) * 0.25, 0) * CFrame.Angles(0, t * 0.9, 0))
+	end)
+end)

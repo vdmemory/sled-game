@@ -121,8 +121,9 @@ def elements(pw, ph):
         E.append(dict(key=key, r=r, kind=kind, label=label, sample=sample, text_h=text_h, text_w=text_w))
 
     cur = rect(L["currencies"], pw, ph)
-    add("coins", [cur[0] + 20, cur[1], cur[0] + 160, cur[3]], "panel", "монеты", "12.5K", 28, 95)
-    add("gems", [cur[0] + 190, cur[1], cur[0] + 330, cur[3]], "panel", "гемы", "1.2K", 28, 95)
+    cw_ = L["CURRENCY_W"]  # одна строка: монеты слева, «УРОВЕНЬ N» в центре, гемы справа (#46)
+    add("coins", [cur[0], cur[1], cur[0] + cw_, cur[3]], "panel", "монеты", "12.5K", 28, cw_ - 45)
+    add("gems", [cur[2] - cw_, cur[1], cur[2], cur[3]], "panel", "гемы", "1.2K", 28, cw_ - 45)
     add("title", rect(L["levelTitle"], pw, ph), "text", "УРОВЕНЬ N", "УРОВЕНЬ 35", 38)
     wl = rect(L["worldLine"], pw, ph)
     add("world", wl, "text", "строка мира", "Северное сияние · 3/5 · ★ 64%", 26)
@@ -140,11 +141,18 @@ def elements(pw, ph):
     add("play", pl, "hit", "НАЖМИ, ЧТОБЫ ИГРАТЬ", "НАЖМИ, ЧТОБЫ ИГРАТЬ  ▶", pl[3] - pl[1] - 16)
     cr = rect(L["cards"], pw, ph)
     cw = L["card"][6]
+    bh = L["CARD_BTN_H"]
     for i, name in enumerate(["РОГАТКА", "САНИ", "ДОХОД"]):
         x = cr[0] + i * (cw + 14)
-        add(f"card{i}", [x, cr[1], x + cw, cr[3]], "btn", name, "РОГАТКА", 26, cw - 50)
-        add(f"cardBtn{i}", [x + 8, cr[3] - 68, x + cw - 8, cr[3] - 8], "sub", "", "УЛУЧШИТЬ", 25, cw - 28)
-    add("rocket", rect(L["rocket"], pw, ph), "btn", "РАКЕТА", None)
+        add(f"card{i}", [x, cr[1], x + cw, cr[3]], "btn", name, "РОГАТКА", L["CARD_TITLE_H"], cw - 50)
+        # иконка 42 слева, цифра эффекта справа в одну строку («+45%», «x2.25», «348»)
+        ay = cr[1] + L["CARD_ART_Y"]
+        add(f"cardFx{i}", [x + 56, ay, x + cw - 8, ay + L["CARD_ART_H"]], "sub", "", "+45%", 26, cw - 72)
+        add(f"cardBtn{i}", [x + 8, cr[3] - bh - 6, x + cw - 8, cr[3] - 6], "sub", "", "12.5K", bh - 4, cw - 70)
+    rk = rect(L["rocket"], pw, ph)
+    add("rocket", rk, "btn", "РАКЕТА", "РАКЕТА", L["CARD_TITLE_H"], rk[2] - rk[0] - 50)
+    add("rocketFx", [rk[0] + 8, rk[1] + 62, rk[2] - 8, rk[1] + 88], "sub", "", "2.1→3.6с", 26, rk[2] - rk[0] - 16)
+    add("rocketBtn", [rk[0] + 8, rk[3] - bh - 6, rk[2] - 8, rk[3] - 6], "sub", "", "48", bh - 4, rk[2] - rk[0] - 70)
     tx, ty, ts = L["tiles"][3], L["tiles"][5], L["tiles"][6]
     for i, name in enumerate(["МИРЫ", "ЗАДАНИЯ", "САНИ", "СЛЕДЫ", "ПОДАРКИ"]):
         t = [tx, ty + i * L["TILE_STEP"], tx + ts, ty + i * L["TILE_STEP"] + ts]
@@ -249,6 +257,19 @@ def scene_objects():
     for key, name in (("boardL", "табло: обновление"), ("boardR", "табло: лидеры")):
         x, z = P[key]
         objs.append((key, name, box_pts(x, z, 10.8, 0.6, 0, 18.6, facing_yaw(x, z)), (120, 80, 45), True))
+    if "top3" in P:  # пьедестал топ-3 недели (#48): ступени 2-1-3 и аватары на них, лицом к спавну
+        tx, tz, tw, ts = P["top3"][0], P["top3"][1], P["top3"][2], P["top3"][3]
+        yaw = facing_yaw(tx, tz)
+        c, s_ = math.cos(yaw), math.sin(yaw)
+        pts = []
+        for lx, sh in ((-tw, P["top3H"][1]), (0, P["top3H"][0]), (tw, P["top3H"][2])):
+            sx_, sz_ = tx + lx * c, tz - lx * s_
+            pts += box_pts(sx_, sz_, tw / 2, 2.0, 0, sh, yaw)
+            pts += box_pts(sx_, sz_, 1.1 * ts, 0.6 * ts, sh, sh + (5.5 + 1.5) * ts, yaw)  # аватар R15 + табличка
+        # корона над 1-м местом — как в Lobby.top3Podium
+        cy = 0.5 + P["top3H"][0] + 8.4 * ts
+        pts += box_pts(tx, tz, 0.9, 0.9, cy - 0.3, cy + 1.2, yaw)
+        objs.append(("top3", "пьедестал топ-3", pts, (255, 215, 80), True))
     f = P["flags"]
     for i in range(0, len(f), 2):
         objs.append((f"flag{i}", "", box_pts(f[i], f[i + 1], 0.3, 0.3, 0, 15 if f[i + 1] < 0 else 18), (230, 230, 240), False))
@@ -287,7 +308,7 @@ COLORS = {
     "deco": ((205, 130, 60, 160), (120, 70, 30)),
 }
 OPAQUE = {"panel", "btn", "sub", "deco"}
-OWN = [("chest", "chestArt")] + [(f"tile{i}", f"cap{i}") for i in range(5)] + [(f"tile{i}", f"badge{i}") for i in range(5)] + [(f"card{i}", f"cardBtn{i}") for i in range(3)]
+OWN = [("chest", "chestArt"), ("rocket", "rocketFx"), ("rocket", "rocketBtn")] + [(f"tile{i}", f"cap{i}") for i in range(5)] + [(f"tile{i}", f"badge{i}") for i in range(5)] + [(f"card{i}", f"cardBtn{i}") for i in range(3)] + [(f"card{i}", f"cardFx{i}") for i in range(3)]
 TRANSIENT_MUST_AVOID = {"chest", "chestArt", "coins", "gems", "title", "world", "card0", "card1", "card2", "rocket", "play", "gear"} | {f"tile{i}" for i in range(5)} | {f"cap{i}" for i in range(5)}
 
 
@@ -314,7 +335,7 @@ def render_screen(name, vw, vh, ins):
             ea, eb = byk[a], byk[b]
             if (a, b) in OWN or (b, a) in OWN:
                 continue
-            if a.startswith("cardBtn") or b.startswith("cardBtn"):
+            if a.startswith("cardBtn") or b.startswith("cardBtn") or a.startswith("cardFx") or b.startswith("cardFx"):
                 continue
             if inter(ea["r"], eb["r"]) <= 1:
                 continue

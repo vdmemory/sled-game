@@ -490,14 +490,20 @@ end
 ------------------------------------------------------------------ АПГРЕЙДЫ
 -- 4 апгрейда как в оригинале. Ракета качается за гемы, остальные — за монеты.
 -- Каждые TIER_SIZE уровней — новый «тир»: меняется вид рогатки/санок, а переход на него стоит гемы.
+-- step — уровней за одну покупку: у ракеты (#47) = TIER_SIZE, без промежуточных делений — каждая
+-- покупка сразу следующая ракета (уровень хранится в прежней шкале 0…30, кратно 5: тир = ур. // 5,
+-- поэтому rocketFuel/tierOf/обвес саней работают без изменений).
 Config.TIER_SIZE = 5
 Config.UPGRADES = {
 	Launch = { title = "Рогатка", icon = "🎯", color = Color3.fromRGB(225, 80, 70), BaseCost = 100, Growth = 1.01, MaxLevel = 50 },
 	Sled = { title = "Сани", icon = "🛷", color = Color3.fromRGB(60, 130, 230), BaseCost = 130, Growth = 1.01, MaxLevel = 50 },
 	Income = { title = "Доход", icon = "💰", color = Color3.fromRGB(235, 165, 35), BaseCost = 180, Growth = 1.02, MaxLevel = 50 },
-	Rocket = { title = "Ракета", icon = "🚀", color = Color3.fromRGB(240, 115, 45), MaxLevel = 30, gems = true },
+	Rocket = { title = "Ракета", icon = "🚀", color = Color3.fromRGB(240, 115, 45), MaxLevel = 30, gems = true, step = 5 },
 }
 Config.UPGRADE_ORDER = { "Launch", "Sled", "Income", "Rocket" }
+-- Цена следующей ракеты в гемах (#47): [1] — Петарда → Ракета, …, [6] — Гиперджет → Плазменный.
+-- = сумма прежних цен 5 уровней тира (1 + ур./3): 7, 15, 23, 32, 40, 48 — всего 165, как было.
+Config.ROCKET_TIER_PRICES = { 7, 15, 23, 32, 40, 48 }
 
 -- Названия тиров (показываются при получении: «ПОЛУЧЕНА СТАЛЬНАЯ РОГАТКА!»)
 -- Названия тиров: новый тир каждые TIER_SIZE уровней (рогатка/сани/доход — до 50 ур., ракета — до 30)
@@ -603,12 +609,19 @@ Config.UPGRADE_PRICE_POW = 2
 function Config.upgradePrice(name: string, level: number): (number, string)
 	local u = Config.UPGRADES[name]
 	if u.gems then
-		return 1 + level // 3, "Gems"
+		local list = Config.ROCKET_TIER_PRICES
+		return list[math.clamp(level // Config.TIER_SIZE + 1, 1, #list)], "Gems"
 	end
 	if level > 0 and level % Config.TIER_SIZE == 0 then
 		return 1 + level // (Config.TIER_SIZE * 2), "Gems" -- переход на новый тир
 	end
 	return math.floor(u.BaseCost * (1 + level) ^ Config.UPGRADE_PRICE_POW * u.Growth ^ level), "Coins"
+end
+-- Уровень после покупки: +1, у апгрейда со step — до следующей границы тира (ракета: 0 → 5 → … → 30)
+function Config.upgradeNext(name: string, level: number): number
+	local u = Config.UPGRADES[name]
+	local step = u.step or 1
+	return math.min((level // step + 1) * step, u.MaxLevel)
 end
 -- совместимость со старым кодом
 function Config.upgradeCost(name: string, level: number): number
@@ -764,6 +777,20 @@ Config.WEEKLY = {
 	},
 }
 
+-- Пьедестал топ-3 недели в лобби (#48): Lobby.PLAN.top3 — место, server/Podium — аватары.
+-- Обновляется вместе с табло (WEEKLY.REFRESH); аватар пересоздаётся только при смене игрока на месте.
+Config.PODIUM = {
+	BOARD = "clean", -- доска из WeeklyBoard: «чистые финиши недели» — одна на всех миров
+	MAX_DIST = 160, -- studs: дальше таблички и «?» не рисуются
+	CACHE = 6, -- аватаров в кэше сервера (топ-3 + недавно выбывшие — если вернутся, не грузим заново)
+	WAVE_EVERY = 6, -- с: 2-е и 3-е место по очереди машут рукой
+	-- бесплатные анимации Roblox (эмоции стандартного Animate): 1-е — «ура», 2–3 — стойка и взмах
+	ANIM = {
+		R15 = { win = 507770677, idle = 507766388, wave = 507770239 },
+		R6 = { win = 129423030, idle = 180435571, wave = 128777973 },
+	},
+}
+
 ------------------------------------------------------------------ НАСТРОЙКА В ИГРЕ
 -- Параметры, которые владелец меняет в панели разработчика (вкладка «Настройка»).
 -- Изменения хранятся в DataStore и применяются на всех серверах без перевыпуска игры.
@@ -807,7 +834,13 @@ Config.TUNABLES = {
 	{ "UPGRADES.Income.Growth", "Доход: рост цены ×", "Прокачка", 1.01, 1.5, 0.01 },
 	{ "UPGRADE_PRICE_POW", "Апгрейды: степень цены (1+ур)^x", "Прокачка", 0, 4, 0.1 },
 	{ "F.fuelBase", "Ракета: топливо на 0 ур., с", "Прокачка", 0.1, 5, 0.1 },
-	{ "F.fuelStep", "Ракета: + топлива за ур., с", "Прокачка", 0.05, 2, 0.05 },
+	{ "F.fuelStep", "Ракета: + топлива за ур., с (ракета = 5 ур.)", "Прокачка", 0.05, 2, 0.05 },
+	{ "ROCKET_TIER_PRICES.1", "Ракета 2 (Ракета): цена 💎", "Прокачка", 1, 200, 1 },
+	{ "ROCKET_TIER_PRICES.2", "Ракета 3 (Турбо): цена 💎", "Прокачка", 1, 200, 1 },
+	{ "ROCKET_TIER_PRICES.3", "Ракета 4 (Мега): цена 💎", "Прокачка", 1, 200, 1 },
+	{ "ROCKET_TIER_PRICES.4", "Ракета 5 (Бласт): цена 💎", "Прокачка", 1, 300, 1 },
+	{ "ROCKET_TIER_PRICES.5", "Ракета 6 (Гиперджет): цена 💎", "Прокачка", 1, 300, 1 },
+	{ "ROCKET_TIER_PRICES.6", "Ракета 7 (Плазменный): цена 💎", "Прокачка", 1, 300, 1 },
 	{ "ROCKET_THRUST", "Ракета: тяга", "Прокачка", 5, 150, 1 },
 
 	{ "STUDS_PER_COIN", "Studs за 1 монету дистанции", "Экономика", 1, 20, 1 },

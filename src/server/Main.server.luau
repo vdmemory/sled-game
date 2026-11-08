@@ -2,7 +2,7 @@
 --   Remotes — ремоуты; Environment — свет; Sleds — сани и ragdoll; PlayerState — профиль в атрибуты,
 --   вход, табло уровня, обучение; Runs — заезды и цикл Heartbeat; RunEvents — Launch/Air/Crash/
 --   Smash/Trick; Pickups — монеты и бонусы; Shop — магазин и награды; Purchases — Robux;
---   DevTools — панель владельца.
+--   DevTools — панель владельца; Weekly — лидерборд недели; Podium — пьедестал топ-3 в лобби.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,6 +14,7 @@ local Rewards = require(script.Parent.Rewards)
 local Tuning = require(script.Parent.Tuning)
 local Analytics = require(script.Parent.Analytics)
 local Weekly = require(script.Parent.Weekly) -- лидерборд недели и титулы (#26)
+local Podium = require(script.Parent.Podium) -- пьедестал топ-3 недели в лобби (#48)
 local Remotes = require(script.Parent.Remotes)
 local Environment = require(script.Parent.Environment)
 local Sleds = require(script.Parent.Sleds)
@@ -35,6 +36,7 @@ Track.buildLobby()
 
 -- Табло в лобби (неделя по мирам, чистые финиши, всё время) — server/Weekly + client/WeeklyBoard
 Weekly.start()
+Podium.start() -- аватары топ-3 на пьедестале у табло, обновление вместе с табло
 
 ------------------------------------------------------------------ Обработчики
 Runs.start() -- StartRun, зона посадки, ⟳ и BACK
