@@ -577,7 +577,7 @@ Config.SOUND = {
 		fall = { 0.8, "SFX", 1 }, rocket_on = { 0.7, "SFX", 1 }, rocket_off = { 0.6, "SFX", 1 },
 		finish = { 0.85, "SFX", 1 }, record = { 0.8, "SFX", 1 }, horn = { 0.9, "Ambience", 2 },
 		-- лупы: громкость в полную силу
-		wind = { 0.55, "Ambience", 1 }, snow = { 0.5, "SFX", 1 }, ice = { 0.45, "SFX", 1 }, hard = { 0.5, "SFX", 1 },
+		wind = { 0.25, "Ambience", 1 }, snow = { 0.15, "SFX", 1 }, ice = { 0.14, "SFX", 1 }, hard = { 0.15, "SFX", 1 },
 		rocket = { 0.6, "SFX", 1 }, stretch = { 0.5, "SFX", 1 }, car = { 0.7, "Ambience", 1 }, train = { 0.9, "Ambience", 1 },
 	},
 }
