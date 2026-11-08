@@ -11,6 +11,10 @@ B.STEEL = Color3.fromRGB(70, 74, 86)
 B.BLACK = Color3.fromRGB(32, 34, 40)
 B.WHITE = Color3.fromRGB(245, 247, 250)
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(script.Parent.Parent.Config)
+local Specs = require(script.Parent.Parent.MeshSpecs)
+
 -- Контекст сборки: куда класть, к чему приваривать
 local Builder = {}
 Builder.__index = Builder
@@ -19,11 +23,59 @@ function B.new(parent: Instance, base: CFrame, weldTo: BasePart?)
 	return setmetatable({ parent = parent, base = base, weldTo = weldTo, count = 0, main = nil, shine = 0 }, Builder)
 end
 
+-- Шаблоны мешей (server/MeshAssets кладёт MeshPart в ReplicatedStorage.MeshTemplates)
+local function templates(): Instance?
+	return ReplicatedStorage:FindFirstChild("MeshTemplates")
+end
+
+-- Есть ли все шаблоны мешей (модель/деталь включается мешами целиком или строится из Part).
+-- Config.MESH_SLEDS = 0 — всегда Part (как до мешей транспорта).
+function B.meshesReady(names: { string }): boolean
+	if (Config.MESH_SLEDS or 0) < 0.5 then
+		return false
+	end
+	local f = templates()
+	if not f then
+		return false
+	end
+	for _, n in names do
+		if not f:FindFirstChild(n) or not (Specs :: any)[n] then
+			return false
+		end
+	end
+	return true
+end
+
 function Builder:part(shape: Enum.PartType, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, props: { [string]: any }?): BasePart
 	local p = Instance.new("Part")
 	p.Shape = shape
 	p.Size = size
 	p.CFrame = self.base * cf
+	return self:finish(p, size, color, material, props)
+end
+
+-- MeshPart из шаблона: cf — кадр детали (начало координат меша из scripts/gen_*_meshes.py),
+-- scale — масштаб по осям детали. Свойства — как у Part (без коллизий, Massless, приварка).
+-- Нет шаблона — nil (вызывающий заранее проверяет B.meshesReady).
+function Builder:mesh(name: string, color: Color3, material: Enum.Material?, cf: CFrame?, scale: Vector3?, props: { [string]: any }?): BasePart?
+	local f = templates()
+	local tpl = f and f:FindFirstChild(name)
+	local spec = (Specs :: any)[name]
+	if not tpl or not spec then
+		return nil
+	end
+	local s = scale or Vector3.one
+	local p = (tpl :: Instance):Clone() :: BasePart
+	p.Size = spec.size * s
+	local at = (cf or CFrame.identity) * CFrame.new(spec.offset * s)
+	if (Config.MESH_SLED_FLIP or 0) > 0.5 then
+		at *= CFrame.Angles(0, math.pi, 0) -- страховка: импорт развернул нос меша (модели симметричны по X)
+	end
+	p.CFrame = self.base * at
+	return self:finish(p, p.Size, color, material, props)
+end
+
+function Builder:finish(p: BasePart, size: Vector3, color: Color3, material: Enum.Material?, props: { [string]: any }?): BasePart
 	p.Color = color
 	p.Material = material or Enum.Material.SmoothPlastic
 	p.TopSurface = Enum.SurfaceType.Smooth

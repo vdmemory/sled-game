@@ -589,6 +589,12 @@ def build_all():
         m = finish(fn(), flat)
         assert len(m.faces) <= TRI_LIMIT, f"{name}: {len(m.faces)} треугольников > {TRI_LIMIT}"
         out[name] = (m, title)
+    # меши транспорта (сани, обвес, ракеты): уже с нормалями (гладкие с жёсткими рёбрами) — только UV
+    from gen_kit_meshes import all_meshes  # noqa: E402  (scripts/ в sys.path — рядом с этим файлом)
+    for name, (m, title) in all_meshes().items():
+        assert len(m.faces) <= TRI_LIMIT, f"{name}: {len(m.faces)} треугольников > {TRI_LIMIT}"
+        add_uv(m)
+        out[name] = (m, title)
     return out
 
 

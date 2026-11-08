@@ -20,7 +20,7 @@ local ROCKETS = {
 Rockets.ROCKETS = ROCKETS
 
 -- Одна ракета: центр at, нос смотрит по −Z. Возвращает позицию среза сопла (для огня).
-function Rockets.build(b, at: Vector3, tier: number): Vector3
+local function buildParts(b, at: Vector3, tier: number): Vector3
 	local r = ROCKETS[math.clamp(tier, 0, 6)]
 	local d, len = r.d, r.len
 	local front, back = at.Z - len / 2, at.Z + len / 2
@@ -96,6 +96,67 @@ function Rockets.build(b, at: Vector3, tier: number): Vector3
 		end
 	end
 	return Vector3.new(at.X, at.Y, back + 0.78)
+end
+
+-- Меши ракеты (scripts/gen_kit_meshes.py → rocket_*): единицы d = 1, корпус L = 3.1 d
+Rockets.MESHES = { "rocket_body", "rocket_nose", "rocket_bell", "rocket_fins2", "rocket_fins3", "rocket_fins4", "rocket_canards", "rocket_band" }
+local MESH_LEN = 3.1
+
+-- Та же ракета из мешей: корпус с шеей, оживальный нос, хомуты с заклёпками, сопло-колокол с
+-- полостью, стреловидные стабилизаторы; мелкие детали (иллюминаторы, заборники, фитиль, огонёк) — Part.
+-- ~12–18 деталей вместо ~50 из Part. Срез сопла — там же (back + 0.78), пламя Effects не сдвигается.
+local function buildMesh(b, at: Vector3, tier: number): Vector3
+	local r = ROCKETS[math.clamp(tier, 0, 6)]
+	local d, len = r.d, r.len
+	local front, back = at.Z - len / 2, at.Z + len / 2
+	local metal = Enum.Material.Metal
+	local sd = Vector3.new(d, d, 1)
+	local body = b:mesh("rocket_body", r.body, r.bodyMat, CFrame.new(at), Vector3.new(d, d, len / MESH_LEN))
+	if body then
+		body.Reflectance = r.shine or 0
+	end
+	b:mesh("rocket_nose", r.nose, if r.nose == BLACK then metal else nil, CFrame.new(at.X, at.Y, front), Vector3.new(d, d, d))
+	b:ball(d * 0.13, CFrame.new(at.X, at.Y, front - d * 0.96), r.band, r.bandMat)
+	b:cyl(d * 0.95, 0.12, Vector3.new(at.X, at.Y, front + 0.02), Vector3.zAxis, r.band, r.bandMat)
+	for _, k in { -0.18, 0.2 } do
+		b:mesh("rocket_band", r.band, r.bandMat, CFrame.new(at.X, at.Y, at.Z + len * k), sd)
+	end
+	if tier >= 2 then
+		b:block(Vector3.new(d * 0.22, 0.04, len * 0.7), CFrame.new(at.X, at.Y + d / 2 + 0.01, at.Z + len * 0.05), r.band, r.bandMat)
+	end
+	if tier >= 1 then
+		for _, sx in { -1, 1 } do
+			local ox = sx * (d / 2 + 0.01)
+			b:part(Enum.PartType.Cylinder, Vector3.new(0.05, d * 0.32, d * 0.32), CFrame.new(at.X + ox, at.Y, at.Z - len * 0.02), STEEL, metal)
+			b:part(Enum.PartType.Cylinder, Vector3.new(0.06, d * 0.22, d * 0.22), CFrame.new(at.X + ox, at.Y, at.Z - len * 0.02), Color3.fromRGB(150, 210, 255), Enum.Material.Glass)
+		end
+	end
+	if r.wick then -- фитиль у петарды
+		b:rod({ Vector3.new(at.X, at.Y + d * 0.4, at.Z + len * 0.3), Vector3.new(at.X, at.Y + d * 0.75, at.Z + len * 0.38), Vector3.new(at.X, at.Y + d * 0.85, at.Z + len * 0.5) }, 0.08, Color3.fromRGB(60, 50, 40), Enum.Material.Fabric)
+		b:ball(0.16, CFrame.new(at.X, at.Y + d * 0.88, at.Z + len * 0.52), Color3.fromRGB(255, 170, 60), Enum.Material.Neon)
+	end
+	if r.intake then -- воздухозаборники по бокам сверху
+		for _, sx in { -1, 1 } do
+			local c = CFrame.new(at.X + sx * d * 0.32, at.Y + d * 0.4, at.Z - len * 0.02) * CFrame.Angles(0, 0, sx * math.rad(-40))
+			b:block(Vector3.new(d * 0.28, d * 0.2, len * 0.32), c, r.band, r.bandMat)
+			b:block(Vector3.new(d * 0.18, d * 0.12, 0.05), c * CFrame.new(0, 0, -len * 0.16), BLACK)
+		end
+	end
+	b:mesh("rocket_bell", r.nozzle, metal, CFrame.new(at.X, at.Y, back), sd)
+	b:cyl(d * 0.5, 0.05, Vector3.new(at.X, at.Y, back + 0.36), Vector3.zAxis, r.glow or Color3.fromRGB(255, 140, 50), Enum.Material.Neon)
+	b:mesh("rocket_fins" .. math.clamp(r.fins, 2, 4), r.fin, r.finMat, CFrame.new(at.X, at.Y, back), sd)
+	if r.canards then
+		b:mesh("rocket_canards", r.fin, r.finMat, CFrame.new(at.X, at.Y, front + len * 0.25), sd)
+	end
+	return Vector3.new(at.X, at.Y, back + 0.78)
+end
+
+-- Одна ракета: центр at, нос смотрит по −Z. Возвращает позицию среза сопла (для огня).
+function Rockets.build(b, at: Vector3, tier: number): Vector3
+	if B.meshesReady(Rockets.MESHES) then
+		return buildMesh(b, at, tier)
+	end
+	return buildParts(b, at, tier)
 end
 
 return Rockets
