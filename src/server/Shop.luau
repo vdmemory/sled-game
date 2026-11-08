@@ -99,16 +99,17 @@ local function buyUpgrade(player: Player, name: any): (boolean, string?)
 		return false, if currency == "Gems" then "Не хватает гемов 💎" else "Не хватает монет"
 	end
 	d[currency] -= cost
-	d[field] = level + 1
-	Analytics.economy(player, "Sink", currency, cost, d[currency], Enum.AnalyticsEconomyTransactionType.Shop.Name, "Upgrade:" .. name, Analytics.fields(Config.worldOf(d.Level), level + 1, "Upgrade " .. name))
+	local nextLevel = Config.upgradeNext(name, level) -- ракета: сразу до следующего тира (#47)
+	d[field] = nextLevel
+	Analytics.economy(player, "Sink", currency, cost, d[currency], Enum.AnalyticsEconomyTransactionType.Shop.Name, "Upgrade:" .. name, Analytics.fields(Config.worldOf(d.Level), nextLevel, "Upgrade " .. name))
 	Analytics.onboarding(player, d, 4)
 	syncPlayer(player)
 	for _, text in Rewards.add(player, "upgrades") do
 		TaskDone:FireClient(player, text)
 	end
-	-- новый тир → клиент покажет «ПОЛУЧЕНО: …»
-	if (level + 1) % Config.TIER_SIZE == 0 then
-		return true, Config.tierName(name, level + 1)
+	-- новый тир → клиент покажет «ПОЛУЧЕНО: …» (Reveal «было → стало»; у ракеты — каждая покупка)
+	if nextLevel % Config.TIER_SIZE == 0 then
+		return true, Config.tierName(name, nextLevel)
 	end
 	return true
 end

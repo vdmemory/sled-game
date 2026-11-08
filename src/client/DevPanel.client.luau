@@ -318,16 +318,16 @@ tabs["Сани"] = function()
 end
 
 tabs["Ракета"] = function()
-	heading("Ракета — " .. tierCount("Rocket") .. " видов, прокачка за гемы")
-	note("Топливо = " .. Config.F.fuelBase .. " + " .. Config.F.fuelStep .. " × уровень секунд. Цена уровня: 1 + уровень/3 гемов. Вид: корпус, нос, пояски, стабилизаторы, сопло (Shared/SledModels.ROCKETS); пламя у тиров 5+ голубое (Effects).")
+	heading("Ракета — " .. tierCount("Rocket") .. " видов, каждая покупка — новая ракета (за гемы)")
+	note("Без промежуточных уровней (#47): покупка = следующая ракета + анимация «было → стало». Уровень в сейве кратен " .. Config.TIER_SIZE .. " (ракета N = ур. " .. Config.TIER_SIZE .. "×(N−1)). Топливо = " .. Config.F.fuelBase .. " + " .. Config.F.fuelStep .. " × уровень секунд (+" .. Config.F.fuelStep * Config.TIER_SIZE .. " с за ракету). Цены ракет 2–7: " .. table.concat(Config.ROCKET_TIER_PRICES, ", ") .. " 💎 (сумма прежних цен 5 уровней, всего 165) — Настройка → «Прокачка». Старые сейвы: уровни сверх границы тира откатаны, их гемы возвращены. Вид: корпус, нос, пояски, стабилизаторы, сопло (Shared/SledModels.ROCKETS); пламя у тиров 5+ голубое (Effects).")
 	local g = cardGrid()
 	local cur = Config.tierOf(player:GetAttribute("RocketLevel") or 0)
 	for t = 0, tierCount("Rocket") - 1 do
 		local lvl = t * Config.TIER_SIZE
 		card(g, t, Config.TIERS.Rocket[t + 1] or ("Тир " .. t), {
-			levelRange(t, "Rocket"),
-			string.format("топливо %.1f–%.1f с", Config.rocketFuel(lvl), Config.rocketFuel(math.min(lvl + 4, Config.UPGRADES.Rocket.MaxLevel))),
-			"цена тира: " .. priceText("Rocket", lvl),
+			"ракета " .. (t + 1) .. " · ур. " .. lvl,
+			string.format("топливо %.1f с", Config.rocketFuel(lvl)),
+			"следующая: " .. priceText("Rocket", lvl),
 		}, t == cur, function(m)
 			SledModels.rocket(m, CFrame.Angles(0, math.rad(90), 0), t)
 		end, function()

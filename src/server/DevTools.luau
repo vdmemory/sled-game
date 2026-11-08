@@ -63,7 +63,8 @@ function DevTools.start()
 			endRun(player, "back")
 		end
 		if action == "setLevel" and typeof(a) == "string" and Config.UPGRADES[a] and typeof(b) == "number" then
-			d[a .. "Level"] = math.clamp(math.floor(b), 0, Config.UPGRADES[a].MaxLevel)
+			local step = Config.UPGRADES[a].step or 1 -- ракета: только границы тира (#47)
+			d[a .. "Level"] = math.clamp(math.floor(b) // step * step, 0, Config.UPGRADES[a].MaxLevel)
 		elseif action == "add" and (a == "Coins" or a == "Gems") and typeof(b) == "number" then
 			d[a] = math.max(0, d[a] + math.floor(b))
 		elseif action == "setWorldLevel" and typeof(a) == "number" then

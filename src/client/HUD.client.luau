@@ -115,7 +115,7 @@ local CARD_STYLE = {
 	Rocket = { title = "РАКЕТА", pip = Color3.fromRGB(110, 200, 255), btn = { Color3.fromRGB(110, 190, 255), Color3.fromRGB(50, 130, 230) }, art = "rocket" },
 }
 local notice: (string, number?) -> ()
-type Card = { root: TextButton, badge: TextLabel, pips: { Frame }, setPrice: (string, string?) -> (), priceBtn: Frame, effect: TextLabel, style: any }
+type Card = { root: TextButton, badge: TextLabel, pips: { Frame }, setPrice: (string, string?) -> (), priceBtn: Frame, effect: TextLabel, art: Frame, style: any }
 local cards: { [string]: Card } = {}
 -- Число эффекта апгрейда и его формат — чтобы цифра могла «тикать» при покупке
 local function effectValue(name: string, lvl: number): number
@@ -132,6 +132,12 @@ local function effectText(name: string, v: number): string
 	if name == "Launch" then
 		return tostring(math.floor(v + 0.5)) -- коротко: карточка 164, цифра рядом с иконкой (#46)
 	elseif name == "Rocket" then
+		-- «сейчас→после покупки» (#47): каждая покупка — следующая ракета
+		local lvl = player:GetAttribute("RocketLevel") or 0
+		local nxt = Config.upgradeNext("Rocket", lvl)
+		if nxt > lvl then
+			return string.format("%.1f→%.1fс", v, Config.rocketFuel(nxt))
+		end
 		return string.format("%.1fс", v)
 	elseif name == "Income" then
 		return (string.format("x%.2f", v):gsub("%.?0+$", ""))
@@ -171,12 +177,22 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	UI.stroke(badgeBg, 2.5, C.white)
 	local badge = UI.text({ Text = "0", Position = UDim2.fromOffset(5, 6), Size = UDim2.new(1, -10, 1, -12), ZIndex = 6, Parent = badgeBg })
 	-- картинка: иконка слева, цифра эффекта справа — одной строкой
-	local artH = L.CARD_ART_H
+	-- Рогатка/Сани/Доход: иконка слева, цифра эффекта справа — одной строкой.
+	-- Ракета (#47): без делений — «текущая ▶ следующая» и топливо «2.1→3.6с» (каждая покупка — новая ракета)
+	local artH = if compact then L.ROCKET_ART_H else L.CARD_ART_H
 	local art = UI.new("Frame", { Name = "Art", Position = UDim2.fromOffset(8, L.CARD_ART_Y), Size = UDim2.new(1, -16, 0, artH), BackgroundTransparency = 0, ZIndex = 2, Parent = card })
 	UI.grad(art, Color3.fromRGB(250, 252, 255), Color3.fromRGB(205, 225, 245))
 	UI.corner(art, 10)
-	UI.icon(st.art, { Name = "Icon", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 2, 0.5, 0), Size = UDim2.fromOffset(artH - 4, artH - 4), ZIndex = 3, Parent = art })
-	local effect = UI.text({ Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(1, -(artH + 8), 0, 26), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = art })
+	local effect: TextLabel
+	if compact then
+		UI.icon(st.art, { Name = "Icon", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.25, 0, 0, 17), Size = UDim2.fromOffset(26, 26), ZIndex = 3, Parent = art })
+		UI.text({ Name = "Arrow", Text = "▶", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.48, 0, 0, 17), Size = UDim2.fromOffset(22, 20), TextColor3 = Color3.fromRGB(60, 130, 230), ZIndex = 3, Parent = art })
+		UI.icon(st.art, { Name = "Next", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.73, 0, 0, 16), Size = UDim2.fromOffset(34, 34), ZIndex = 3, Parent = art })
+		effect = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -2), Size = UDim2.new(1, -8, 0, 26), ZIndex = 4, Parent = art })
+	else
+		UI.icon(st.art, { Name = "Icon", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 2, 0.5, 0), Size = UDim2.fromOffset(artH - 4, artH - 4), ZIndex = 3, Parent = art })
+		effect = UI.text({ Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.new(1, -(artH + 8), 0, 26), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 4, Parent = art })
+	end
 	-- деления тира
 	local pips = {}
 	if not compact then
@@ -207,7 +223,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 	local btnShine = UI.new("Frame", { Position = UDim2.new(0, 6, 0, 3), Size = UDim2.new(1, -12, 0, 3), BackgroundColor3 = C.white, BackgroundTransparency = 0.6, ZIndex = 3, Parent = priceBtn })
 	UI.corner(btnShine, 1000)
 	local _, setPrice = UI.iconText({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -12, 0, btnH - 4), ZIndex = 3, Parent = priceBtn })
-	local c = { root = card, badge = badge, pips = pips, setPrice = setPrice, priceBtn = priceBtn, effect = effect, style = st }
+	local c = { root = card, badge = badge, pips = pips, setPrice = setPrice, priceBtn = priceBtn, effect = effect, art = art, style = st }
 	cards[name] = c
 	local buying = false
 	card.Activated:Connect(function()
@@ -227,7 +243,7 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 		end
 		-- короткая анимация любого апгрейда (~0.8 с): карточка подпрыгивает, цифра тикает,
 		-- новое деление тира загорается
-		local newLvl = math.max(player:GetAttribute(name .. "Level") or 0, oldLvl + 1)
+		local newLvl = math.max(player:GetAttribute(name .. "Level") or 0, Config.upgradeNext(name, oldLvl))
 		UIFx.bump(card, 1.1)
 		UIFx.bump(priceBtn, 1.12)
 		controller.Sfx:Fire("coin")
@@ -551,13 +567,29 @@ local function refresh()
 		if not effectHold[name] then
 			c.effect.Text = effectText(name, effectValue(name, lvl))
 		end
-		c.badge.Text = tostring(lvl)
+		local maxed = lvl >= u.MaxLevel
+		if name == "Rocket" then
+			-- номер ракеты 1…7 вместо уровня; на максимуме — одна ракета без стрелки
+			c.badge.Text = tostring(Config.tierOf(lvl) + 1)
+			for _, k in { "Arrow", "Next" } do
+				local o = c.art:FindFirstChild(k) :: GuiObject?
+				if o then
+					o.Visible = not maxed
+				end
+			end
+			local icon = c.art:FindFirstChild("Icon") :: GuiObject?
+			if icon then
+				icon.Position = if maxed then UDim2.new(0.5, 0, 0, 17) else UDim2.new(0.25, 0, 0, 17)
+			end
+		else
+			c.badge.Text = tostring(lvl)
+		end
 		local inTier = if lvl > 0 and lvl % Config.TIER_SIZE == 0 then Config.TIER_SIZE else lvl % Config.TIER_SIZE
 		for i, pip in c.pips do
 			pip.BackgroundColor3 = if i <= inTier then c.style.pip else c.style.pip:Lerp(Color3.fromRGB(30, 40, 70), 0.72)
 		end
 		local fill = c.priceBtn:FindFirstChild("Fill") :: UIGradient
-		if lvl >= u.MaxLevel then
+		if maxed then
 			c.setPrice("MAX")
 			fill.Color = ColorSequence.new(UI.KIND.grey[1], UI.KIND.grey[2])
 		else
