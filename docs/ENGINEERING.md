@@ -79,7 +79,8 @@
 - Новый серверный обработчик — в модуле своей зоны (`Runs`/`RunEvents`/`Pickups`/`Shop`/
   `Purchases`/`DevTools`) внутри его `start()`; `Main.server` только вызывает `start()`.
 - Новое поле сейва: `DataService.DEFAULT`; удаление — миграция с компенсацией.
-- Новая модель транспорта: builder + `BUILDERS` + `MOUNTS` в `SledModels`, запись в
+- Новая модель транспорта: меши (`scripts/gen_sled_meshes.py`) + роли в `SledModels/BodyMeshes`, Part-фолбэк
+  (`Bodies.BUILDERS`) + `MOUNTS` в `SledModels/Mounts`, запись в
   `Config.SLEDS`, иконка в `assets/ui`.
 - Документация с каждым изменением: `CHANGELOG`, при смене правил `GAME_DESIGN`, устройства —
   `ARCHITECTURE`, денег — `BUSINESS`, идей — `IDEAS`, движка для похожих игр — `PLAYBOOK`.

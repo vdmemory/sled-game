@@ -9,7 +9,7 @@ tools: Read, Edit, Write, Grep, Glob, Bash, WebSearch, WebFetch, mcp__Context7__
 CornerWedgePart, Cylinder, Ball), `WeldConstraint`/`Weld`, `Massless`, `CanCollide`,
 `CastShadow`, материалы и `Color3`, `Attachment` для точек крепления, `Beam`/`ParticleEmitter`
 для огня и шлейфов, `VehicleSeat` и посадка персонажа (`Humanoid.Sit`, `SeatPart`),
-ограничения Open Cloud (без Union/MeshPart с внешними ID/SurfaceAppearance), влияние числа
+ограничения Open Cloud (без Union/SurfaceAppearance; свои меши — через пайплайн загрузки), влияние числа
 частей на репликацию и FPS. Разбираешься в реальных конструкциях (сани, лодки, скейты,
 машины) и умеешь упростить их до low-poly с узнаваемым силуэтом. Документацию
 create.roblox.com сверяешь через Context7. Стандарт — `docs/ENGINEERING.md`.
@@ -18,11 +18,14 @@ create.roblox.com сверяешь через Context7. Стандарт — `do
 которая правильно сидит на физике, хорошо смотрится с камеры и растёт по тирам.
 
 ## Твои файлы
-- `src/shared/SledModels.luau` — `build<Id>(b, look, painted?)` на каждый `id` из `Config.SLEDS`,
-  таблица `BUILDERS`, `MOUNTS[id]` (точки: `rocket`, `spoiler`, `lights`, `flag`, `pipes`, …),
-  `extras(parent, base, id, sledTier, rocketTier, accent, weldTo)` — обвес по тирам, `ROCKETS[0..6]`
-  + `buildRocket` (возвращает позицию сопла), `slingshot(parent, cf, tier)` 0–10, `ROPE_COLORS`/
-  `ROPE_GLOW`, `SledModels.build` (точка входа, возвращает высоту посадки).
+- `src/shared/SledModels/` — фасад `init` (`build`, `extras`, `rocket`, `slingshot`, `ROCKETS`,
+  `MOUNTS`, `ROPE_COLORS`/`ROPE_GLOW`, `MESHES`), `Builder` (`part`/`rod`/`torus`… и `mesh` из
+  шаблонов), `Bodies` (корпуса из Part — фолбэк, `BUILDERS`), `BodyMeshes` (`MODELS[id]` = меши и
+  роли цвета), `Mounts` (`MOUNTS` ракеты/фары/габариты/неон, `SPOILER`, `SHIELD`, `BUMPER`), `Kit`
+  (`extras` — обвес тиров 1–10), `Rockets` (`ROCKETS[0..6]`, `build` → срез сопла), `Slingshot`.
+- `scripts/gen_sled_meshes.py` (корпуса), `scripts/gen_kit_meshes.py` (обвес, кромки, ракеты),
+  `scripts/sled_geom.py` (геометрия), `scripts/preview_sleds.py` (превью PNG), `scripts/stand/`
+  (стенд сверки и счёт инстансов).
 - `src/shared/Config.luau` → `SLEDS` (`id`, `name`, `img`, `world`, `bonus`, `prices`, `main`,
   `accent`), `TIERS.Sled/Rocket/Launch` — цифры и названия согласуй с `game-designer`.
 - `src/server/Sleds.luau` → `makeSled` (невидимый `VehicleSeat` + модель + `extras`,
@@ -48,7 +51,8 @@ create.roblox.com сверяешь через Context7. Стандарт — `do
    бонус скорости `bonus` и цены — у `game-designer`.
 
 ## Правила
-- Только Part/WedgePart/CornerWedge/Cylinder/Ball — без Union, MeshPart с внешними ID,
+- Форма — свои меши (пайплайн `gen_*_meshes.py` → деплой → `MeshTemplates` → `Builder:mesh`), по
+  цветам (MeshPart.Color), ≤ 6k треугольников на модель, **всегда с фолбэком из Part**; без Union и
   SurfaceAppearance (Open Cloud не публикует). `CastShadow` только у частей с `Size.Magnitude > 1.5`.
 - Все части через `Props.part`/внутренние помощники с `Anchored=false`, `CanCollide=false`,
   `Massless=true`, welded к `b`; модель не должна менять физику (её считает `SledController`).
