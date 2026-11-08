@@ -760,7 +760,166 @@ tabs["Настройка"] = function()
 	end
 end
 
-local TAB_ORDER = { "Рогатка", "Сани", "Ракета", "Доход", "Миры", "Бонусы", "Трюки", "Настройка", "Инструменты" }
+------------------------------------------------------------------ Звуки (#52)
+-- Все звуки игры по группам. ▶ играет через Sounds (BindableEvent «SoundTest») — тот же код и та же
+-- громкость из Config.SOUND, что в игре. −/+ меняют громкость сразу (локально), «Сохранить для всех» пишет
+-- их в TUNABLES «Звук: события» (как вкладка «Настройка»).
+local SoundService = game:GetService("SoundService")
+local AudioIds = require(Shared:WaitForChild("AudioIds")) :: any
+local SOUND_GROUPS = {
+	{ "Интерфейс", { "click", "open", "deny", "buy" } },
+	{ "Награды", { "claim", "chest", "ready", "task", "reveal", "tierup", "finish", "record" } },
+	{ "Трасса: подбор и бонусы", { "coin", "gem", "crystal", "shield", "shieldhit", "x2", "magnet", "fuel", "ring", "boost", "spring" } },
+	{ "Действия", { "launch", "jump", "land", "spin", "flip", "wipe", "smash", "crash", "fall", "rocket_on", "rocket_off", "horn" } },
+	{ "Лупы (звучат, пока включены)", { "wind", "snow", "ice", "hard", "rocket", "stretch", "car", "train" } },
+}
+local LOOP_SET = { wind = true, snow = true, ice = true, hard = true, rocket = true, stretch = true, car = true, train = true }
+local soundPending: { [string]: number } = {} -- путь TUNABLES → новая громкость (ещё не сохранено)
+local loopOn: string? = nil
+local loopF = 1 -- доля скорости для проверки лупов (1 = loopFullSpeed)
+local soundTest: BindableEvent? = nil
+
+local function testSound(cmd: string, a: any?, b: any?, c: any?)
+	if not soundTest then
+		local sc = script.Parent:FindFirstChild("Sounds")
+		soundTest = sc and sc:FindFirstChild("SoundTest") :: BindableEvent?
+	end
+	if soundTest then
+		soundTest:Fire(cmd, a, b, c)
+	else
+		status.TextColor3 = Color3.fromRGB(255, 120, 120)
+		status.Text = "Sounds ещё не запущен"
+	end
+end
+
+local function soundSource(name: string): string
+	local lib = Config.SOUND.library[name]
+	if lib and lib > 0 then
+		return "Roblox ID " .. lib
+	end
+	local r = AudioIds.regions[name]
+	if not r then
+		return "встроенный rbxasset"
+	end
+	if SoundService:GetAttribute("SoundSource") == "atlas" then
+		return "атлас v2 · " .. tostring(r[4] or "")
+	end
+	return (if (AudioIds.atlas or 0) == 0 then "встроенный (атлас v2 не загружен) · " else "встроенный (атлас грузится) · ") .. tostring(r[4] or "")
+end
+
+tabs["Звуки"] = function()
+	heading("Звуки игры — как в игре")
+	note("▶ — сыграть один раз тем же кодом, что в игре (с текущей громкостью канала и звука). Лупы: ▶/■ и доля скорости — громкость и тон скольжения/ветра зависят от скорости. Источник: Roblox ID (Config.SOUND.library) → атлас v2 (записи CC0/CC BY, assets/audio) → встроенные звуки, пока атлас не загружен. Громкость −/+ слышна сразу; сохранить — кнопкой ниже (это TUNABLES «Звук: события»), каналы и музыка — во вкладке «Настройка».")
+	local n = 0
+	for _ in soundPending do
+		n += 1
+	end
+	buttonRow({
+		{ "green", "СОХРАНИТЬ ДЛЯ ВСЕХ" .. (if n > 0 then " (" .. n .. ")" else ""), function()
+			local merged = globalOverrides()
+			for path, v in soundPending do
+				merged[path] = v
+			end
+			dev("tune", merged, "all")
+			table.clear(soundPending)
+			task.delay(0.3, tabs.redraw)
+		end },
+		{ "grey", "ОТМЕНИТЬ ПРАВКИ", function()
+			local g = globalOverrides()
+			for path in soundPending do
+				Config.setPath(path, g[path] or Config.TUNABLE_DEFAULTS[path])
+			end
+			table.clear(soundPending)
+			tabs.redraw()
+		end },
+	})
+	-- музыка
+	heading("Музыка — Config.MUSIC_IDS (громкость " .. Config.MUSIC_VOLUME .. ", в заезде ×" .. Config.MUSIC_RUN_MULT .. ")")
+	local mus = { { "dark", "КАК В ИГРЕ", function()
+		testSound("music", nil)
+	end }, { "blue", "ЛОББИ", function()
+		testSound("music", 0)
+	end } }
+	for w = 1, #Config.THEMES do
+		table.insert(mus, { "blue", "МИР " .. w, function()
+			testSound("music", w)
+		end })
+	end
+	buttonRow(mus)
+	note("Треки: " .. table.concat(Config.MUSIC_IDS, ", ") .. " — первый в лобби, в заезде по миру. Не загрузился ни один — тихая «музыкальная шкатулка».")
+	-- скорость для лупов
+	heading("Скорость для проверки лупов")
+	local speeds = {}
+	for _, fr in { 0.1, 0.25, 0.5, 0.75, 1 } do
+		table.insert(speeds, { if math.abs(loopF - fr) < 0.01 then "yellow" else "dark", string.format("%d%% · %d", fr * 100, fr * Config.SOUND.loopFullSpeed), function()
+			loopF = fr
+			if loopOn then
+				testSound("loop", loopOn, true, loopF)
+			end
+			tabs.redraw()
+		end })
+	end
+	buttonRow(speeds)
+
+	for _, grp in SOUND_GROUPS do
+		heading(grp[1])
+		for _, name in grp[2] do
+			local spec = Config.SOUND.sfx[name]
+			if not spec then
+				continue
+			end
+			local path = "SOUND.sfx." .. name .. ".1"
+			local row = UI.new("Frame", { LayoutOrder = nextOrder(), Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = if soundPending[path] then Color3.fromRGB(90, 80, 40) else Color3.fromRGB(42, 56, 90), BackgroundTransparency = 0, ZIndex = 52, Parent = content })
+			UI.corner(row, 8)
+			UI.new("TextLabel", { Text = name, Position = UDim2.fromOffset(10, 0), Size = UDim2.fromOffset(110, 40), TextScaled = false, TextSize = 16, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(255, 255, 255), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 53, Parent = row })
+			UI.new("TextLabel", { Text = soundSource(name) .. "  ·  " .. spec[2], Position = UDim2.fromOffset(122, 0), Size = UDim2.new(1, -470, 1, 0), TextScaled = false, TextSize = 13, TextWrapped = true, Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(170, 190, 220), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 53, Parent = row })
+			local vol = UI.new("TextLabel", { Text = string.format("%.2f", spec[1]), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -176, 0.5, 0), Size = UDim2.fromOffset(50, 30), TextScaled = false, TextSize = 17, Font = Enum.Font.GothamBold, TextColor3 = Color3.new(1, 1, 1), ZIndex = 53, Parent = row })
+			for _, d in { -1, 1 } do
+				local b = UI.button(if d < 0 then "dark" else "blue", if d < 0 then "−" else "+", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, if d < 0 then -228 else -134, 0.5, 0), Size = UDim2.fromOffset(36, 30), Radius = 6, StrokeThickness = 1.5, ZIndex = 53, Parent = row })
+				b.Activated:Connect(function()
+					local nv = math.clamp(math.floor((spec[1] + d * 0.05) * 20 + 0.5) / 20, 0, 1)
+					Config.setPath(path, nv) -- слышно сразу: Sounds читает громкость при каждом проигрывании
+					local base = globalOverrides()[path] or Config.TUNABLE_DEFAULTS[path]
+					soundPending[path] = if math.abs(nv - base) < 0.025 then nil else nv
+					vol.Text = string.format("%.2f", nv)
+					row.BackgroundColor3 = if soundPending[path] then Color3.fromRGB(90, 80, 40) else Color3.fromRGB(42, 56, 90)
+				end)
+			end
+			local isLoop = LOOP_SET[name] == true
+			local playing = isLoop and loopOn == name
+			local play = UI.button(if playing then "red" else "green", if isLoop then (if playing then "■" else "▶ луп") else "▶", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(110, 30), Radius = 6, StrokeThickness = 1.5, ZIndex = 53, Parent = row })
+			play.Activated:Connect(function()
+				if not isLoop then
+					testSound("sfx", name)
+					return
+				end
+				if loopOn then
+					testSound("loop", loopOn, false)
+				end
+				loopOn = if loopOn == name then nil else name
+				if loopOn then
+					testSound("loop", loopOn, true, loopF)
+				end
+				tabs.redraw()
+			end)
+		end
+	end
+end
+-- закрыли окно или ушли с вкладки — луп и выбор трека не должны звучать дальше
+local function stopSoundTests()
+	if loopOn then
+		testSound("loop", loopOn, false)
+		loopOn = nil
+	end
+	testSound("music", nil)
+end
+win:GetPropertyChangedSignal("Visible"):Connect(function()
+	if not win.Visible then
+		stopSoundTests()
+	end
+end)
+
+local TAB_ORDER = { "Рогатка", "Сани", "Ракета", "Доход", "Миры", "Бонусы", "Трюки", "Звуки", "Настройка", "Инструменты" }
 function tabs.redraw()
 	clear()
 	order = 0
@@ -774,6 +933,9 @@ for i, name in TAB_ORDER do
 	local b = UI.button("dark", name, { LayoutOrder = i, Size = UDim2.new(1, 0, 0, 46), Radius = 10, ZIndex = 52, Parent = tabsCol })
 	tabButtons[name] = b
 	b.Activated:Connect(function()
+		if currentTab == "Звуки" and name ~= "Звуки" then
+			stopSoundTests()
+		end
 		currentTab = name
 		tabs.redraw()
 	end)

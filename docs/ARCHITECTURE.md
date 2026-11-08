@@ -331,13 +331,13 @@ Open Cloud publish не принимает Union/EditableMesh, а MeshId у Mesh
 совпадает 1:1 с мешами и без на 70 уровнях; ни один меш не заходит в коридор трассы, кроме арки
 над ней). Меши — только декор; ходовая часть и препятствия — Part (точная коллизия).
 
-## Звук (#49, `client/Sounds`)
+## Звук (#49, v2 #52, `client/Sounds`)
 
 | Шаг | Где | Что |
 | --- | --- | --- |
-| 1. Синтез | `scripts/gen_audio.py` (numpy/scipy + ffmpeg/libvorbis, локально) | 43 звука → один атлас `assets/audio/sfx_atlas.ogg` (mono 44.1 кГц, паузы 0.12 с), `atlas.json` (имя → start/len/loop/пик), `src/shared/AudioIds.luau`; `--preview` → `assets/audio/preview.png`. Детерминирован (seed, bitexact Ogg). Проверки: пик one-shot после Vorbis ≤ −1 dBFS, UI ≤ 0.25 с |
-| 2. Загрузка | `scripts/upload_audio.py` из `publish.sh` (пути — `scripts/audio_ids.py`, без numpy) | `POST assets/v1/assets`, `assetType: "Audio"`, `audio/ogg` → операция → `assetId` → `assets/audio/audio.json` (`{ sfx_atlas: { id, sha } }`) и `AudioIds.atlas`, пересборка места, лог `AUDIO_IDS_JSON_BEGIN/END` (закоммитить оба). `SKIP_AUDIO=1` — пропустить. Ошибка — warning с инструкцией владельцу |
-| 3. Игра | `client/Sounds` | `atlas > 0` → проба `PreloadAsync` (15 с) → все звуки на атлас: `PlaybackRegionsEnabled` + `PlaybackRegion` (кусок), лупы ещё `LoopRegion`; иначе `FALLBACK` (встроенные `rbxasset://sounds/*`) |
+| 1. Сборка | `scripts/gen_audio.py` (numpy/scipy + ffmpeg/libvorbis, локально) | 43 звука из записей `assets/audio/sources/` (обрезка, фильтры, скорость, микс, грануляция лупов) + немного синтеза → один атлас `assets/audio/sfx_atlas_v2.ogg` (mono 44.1 кГц, паузы 0.12 с), `atlas.json` (имя → start/len/loop/src/пик/RMS), `src/shared/AudioIds.luau` (`regions[имя] = { start, len, loop, src }`); `--preview` → `assets/audio/preview.png`. Детерминирован (seed, bitexact Ogg). Выравнивание: one-shot RMS −16 dBFS, лупы −22; проверки: пик one-shot после Vorbis ≤ −1 dBFS, длина UI-звуков |
+| 2. Загрузка | `scripts/upload_audio.py` из `publish.sh` (пути — `scripts/audio_ids.py`, без numpy) | `POST assets/v1/assets`, `assetType: "Audio"`, `audio/ogg` → операция → `assetId` → `assets/audio/audio.json` (`{ sfx_atlas_v2: { id, sha } }`; `sfx_atlas` — v1, история) и `AudioIds.atlas`, пересборка места, лог `AUDIO_IDS_JSON_BEGIN/END` (закоммитить оба). `SKIP_AUDIO=1` — пропустить. Ошибка — warning с инструкцией владельцу |
+| 3. Игра | `client/Sounds` | `Config.SOUND.library[имя]` (ID Creator Store) — весь ассет; иначе `atlas > 0` → проба `PreloadAsync` (15 с) → звуки на атлас: `PlaybackRegionsEnabled` + `PlaybackRegion` (кусок), лупы ещё `LoopRegion`; иначе `FALLBACK` (встроенные `rbxasset://sounds/*`). Атрибут `SoundService.SoundSource` = `atlas`/`builtin` |
 
 Почему атлас: Open Cloud даёт 10 аудио/мес без ID-верификации (100 с ней), аудио нельзя обновлять —
 отдельные файлы съели бы лимит за одну правку.
@@ -355,6 +355,11 @@ Open Cloud publish не принимает Union/EditableMesh, а MeshId у Mesh
 `Train`): раз в 0.4 с 3 ближайших в радиусе получают 3D-луп мотора (`Sound` в их Part,
 `InverseTapered`), гудок — 3D из машины. Музыка: треки `MUSIC_IDS` грузятся по очереди, лобби —
 первый, заезд — `2 + (RunTheme−1) % (n−1)`, кроссфейд `MUSIC_FADE` (Pause/Resume).
+Громкость звука берётся из `Config.SOUND.sfx[имя][1]` при каждом проигрывании (лупы — каждый кадр), поэтому
+правки TUNABLES «Звук: события» и −/+ в DEV слышны сразу. Проверка владельцем: `Sounds` создаёт (только для
+`CreatorId`) BindableEvent `SoundTest` под собой — `("sfx", имя)` → тот же `onEvent`; `("loop", имя, вкл, f)` →
+`devLoop` в кадре микса (луп как на скорости `f`·`loopFullSpeed`, даже в лобби; `car`/`train` — 2D-копия);
+`("music", nil|0|N)` → `devMusic` в `musicTarget`. Вкладка DEV → «Звуки» (`DevPanel`) зовёт только его.
 
 ## Иконки интерфейса
 

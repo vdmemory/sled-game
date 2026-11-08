@@ -1,8 +1,14 @@
 -- Звук игры (docs/GAME_DESIGN.md → «Звук», docs/ARCHITECTURE.md → «Звук»).
 --
--- Источник: свой атлас assets/audio/sfx_atlas.ogg (синтез scripts/gen_audio.py, CC0) — один аудио-ассет,
--- каждый звук играет свой кусок через Sound.PlaybackRegion, лупы — через LoopRegion (shared/AudioIds).
--- Пока атлас не загружен/на модерации — встроенные rbxasset://sounds/* (FALLBACK), переключение на лету.
+-- Источник (по приоритету): Config.SOUND.library[имя] — ID из Roblox Creator Store (играет весь ассет, без
+-- загрузки и лимита) → свой атлас assets/audio/sfx_atlas_v2.ogg (записи CC0/CC BY + синтез, scripts/gen_audio.py)
+-- — один аудио-ассет, каждый звук играет свой кусок через Sound.PlaybackRegion, лупы — через LoopRegion
+-- (shared/AudioIds) → пока атлас не загружен/на модерации — встроенные rbxasset://sounds/* (FALLBACK).
+-- Громкость каждого звука берётся из Config.SOUND.sfx в момент проигрывания (правится в DEV → «Звуки»).
+--
+-- Проверка из панели DEV: BindableEvent «SoundTest» под этим скриптом — ("sfx", имя) сыграть как в игре,
+-- ("loop", имя, вкл, доля скорости 0..1) — луп как на этой скорости, ("music", nil | 0 лобби | номер мира).
+-- Атрибут SoundService «SoundSource»: "atlas" | "builtin" — что сейчас играет.
 --
 -- Каналы SoundGroup в SoundService: Music, SFX, UI, Ambience (Config.SOUND.groups). Выключатели ⚙
 -- «Звуки»/«Музыка» (атрибуты SetSfx/SetMusic) глушат каналы. Музыка приглушается (ducking) на финише,
@@ -83,11 +89,32 @@ local ALIAS: { [string]: string } = { hit = "crash", reward = "ready" } -- ст�
 
 local useAtlas = false -- атлас загружен и играет
 local atlasId = "rbxassetid://" .. tostring(AudioIds.atlas or 0)
+SoundService:SetAttribute("SoundSource", "builtin")
+
+-- Множитель громкости источника: у встроенных свой (FALLBACK[2]), у атласа и библиотеки — 1
+local function srcGain(name: string): number
+	if (SND.library and SND.library[name]) or (useAtlas and AudioIds.regions[name]) then
+		return 1
+	end
+	local fb = FALLBACK[name]
+	return if fb then fb[2] else 1
+end
+local function specVol(name: string): number
+	local spec = SND.sfx[name]
+	return (if spec then spec[1] else 0.5) * srcGain(name)
+end
 
 -- Настроить Sound на звук name. Возвращает базовую высоту (у встроенных своя) или nil — звука нет.
 local function setup(s: Sound, name: string): number?
 	local spec = SND.sfx[name]
 	local region = AudioIds.regions[name]
+	local lib = SND.library and SND.library[name]
+	if lib and lib > 0 then -- Roblox Creator Store: весь ассет целиком
+		s.SoundId = "rbxassetid://" .. tostring(lib)
+		s.PlaybackRegionsEnabled = false
+		s.Volume = if spec then spec[1] else 0.5
+		return 1
+	end
 	if useAtlas and region then
 		s.SoundId = atlasId
 		s.PlaybackRegionsEnabled = true
@@ -110,7 +137,7 @@ local function setup(s: Sound, name: string): number?
 end
 
 ------------------------------------------------------------------ одиночные звуки: пулы
-type Pool = { list: { Sound }, base: number?, next: number, vol: number }
+type Pool = { list: { Sound }, base: number?, next: number }
 local pools: { [string]: Pool } = {}
 
 local function pool(name: string): Pool
@@ -120,7 +147,7 @@ local function pool(name: string): Pool
 	end
 	local spec = SND.sfx[name]
 	local copies = if spec then spec[3] else 2
-	p = { list = {}, base = nil, next = 1, vol = 0 }
+	p = { list = {}, base = nil, next = 1 }
 	for i = 1, copies do
 		local s = Instance.new("Sound")
 		s.Name = name
@@ -129,7 +156,6 @@ local function pool(name: string): Pool
 		s.Parent = SoundService
 		p.list[i] = s
 	end
-	p.vol = p.list[1].Volume
 	pools[name] = p
 	return p
 end
@@ -155,7 +181,7 @@ local function play(name: string, pitch: number?, vol: number?)
 	local s = p.list[p.next]
 	p.next = p.next % #p.list + 1
 	s.PlaybackSpeed = p.base * (pitch or 1) * (1 + (math.random() * 2 - 1) * SND.jitter)
-	s.Volume = p.vol * (vol or 1)
+	s.Volume = specVol(name) * (vol or 1) -- громкость живая: правки из DEV слышны сразу
 	s:Play() -- играет с начала куска (PlaybackRegion), даже если эта копия ещё звучала
 end
 
@@ -371,6 +397,8 @@ local SURFACE: { [Enum.Material]: string } = {
 	[Enum.Material.DiamondPlate] = "hard",
 }
 local surface, surfacePitch = "snow", 1
+-- проверка из DEV: луп звучит как на скорости f (доля loopFullSpeed), даже в лобби
+local devLoop: { name: string, f: number }? = nil
 local surfaceScan = 0
 local wasRocket = false
 
@@ -402,22 +430,32 @@ RunService.RenderStepped:Connect(function(dt)
 	for _, k in { "snow", "ice", "hard" } do
 		target[k] = if grounded and surface == k and speed > 3 then (0.25 + 0.75 * f) * (1 + 0.5 * carve) else 0
 	end
+	local loopF = f -- скорость, от которой зависят тон/громкость лупа
+	if devLoop then
+		local name, df = devLoop.name, devLoop.f
+		loopF = df
+		target[name] = if name == "wind" then df ^ 1.5
+			elseif name == "rocket" then 1
+			elseif name == "stretch" then math.max(0.15, df)
+			elseif name == "snow" or name == "ice" or name == "hard" then 0.25 + 0.75 * df
+			else 1
+	end
 	for name, l in loops do
 		if not l.base then
 			continue
 		end
-		local full = SND.sfx[name][1] * (if useAtlas then 1 else (FALLBACK[name] or { 0, 1 })[2])
+		local full = specVol(name)
 		local rate = if name == "rocket" or name == "stretch" then 12 else 5
 		l.vol += ((target[name] or 0) * full - l.vol) * math.min(1, dt * rate)
 		l.s.Volume = l.vol
 		if name == "wind" then
-			l.s.PlaybackSpeed = l.base * (0.8 + 0.5 * f)
+			l.s.PlaybackSpeed = l.base * (0.8 + 0.5 * loopF)
 		elseif name == "stretch" then
-			l.s.PlaybackSpeed = l.base * (0.7 + 0.8 * state.Meter.Value)
+			l.s.PlaybackSpeed = l.base * (0.7 + 0.8 * (if devLoop then loopF else state.Meter.Value))
 		elseif name == "rocket" then
-			l.s.PlaybackSpeed = l.base * (0.9 + 0.2 * f)
+			l.s.PlaybackSpeed = l.base * (0.9 + 0.2 * loopF)
 		else
-			l.s.PlaybackSpeed = l.base * surfacePitch * (0.85 + 0.35 * f)
+			l.s.PlaybackSpeed = l.base * (if devLoop then 1 else surfacePitch) * (0.85 + 0.35 * loopF)
 		end
 	end
 
@@ -455,9 +493,16 @@ type Track = { s: Sound, vol: number }
 local tracks: { Track } = {}
 local current: Track? = nil
 
+local devMusic: number? = nil -- проверка из DEV: 0 — трек лобби, N — трек мира N
 local function musicTarget(): Track?
 	if #tracks == 0 then
 		return nil
+	end
+	if devMusic then
+		if devMusic == 0 or #tracks == 1 then
+			return tracks[1]
+		end
+		return tracks[2 + (devMusic - 1) % (#tracks - 1)]
 	end
 	if player:GetAttribute("InRun") == true and #tracks > 1 then
 		local theme = player:GetAttribute("RunTheme") or 1
@@ -577,6 +622,7 @@ if (AudioIds.atlas or 0) > 0 then
 			return
 		end
 		useAtlas = true
+		SoundService:SetAttribute("SoundSource", "atlas")
 		for name, p in pools do
 			for _, s in p.list do
 				s:Destroy()
@@ -587,6 +633,50 @@ if (AudioIds.atlas or 0) > 0 then
 		for m, s in engines do
 			s:Destroy()
 			engines[m] = nil
+		end
+	end)
+end
+
+------------------------------------------------------------------ проверка из панели DEV (только владелец)
+-- Тот же код, что в игре: одиночные — через onEvent (серии, ducking, громкость из Config), лупы — через
+-- кадр микса выше (devLoop), моторы машин/поезда — 2D-копия лупа, музыка — выбор трека (devMusic).
+if player.UserId == game.CreatorId then
+	local test = Instance.new("BindableEvent")
+	test.Name = "SoundTest"
+	test.Parent = script
+	local engineTest: Sound? = nil
+	test.Event:Connect(function(cmd: string, name: any?, on: any?, f: any?)
+		if cmd == "sfx" and typeof(name) == "string" then
+			onEvent(name)
+		elseif cmd == "loop" and typeof(name) == "string" then
+			local df = if typeof(f) == "number" then math.clamp(f, 0, 1) else 1
+			if name == "car" or name == "train" then
+				if engineTest then
+					engineTest:Destroy()
+					engineTest = nil
+				end
+				if on then
+					local s = Instance.new("Sound")
+					s.Name = "EngineTest"
+					s.Looped = true
+					s.SoundGroup = groups.Ambience
+					local base = setup(s, name)
+					if base then
+						s.PlaybackSpeed = base
+						s.Parent = SoundService
+						s:Play()
+						engineTest = s
+					else
+						s:Destroy()
+					end
+				end
+			elseif on then
+				devLoop = { name = name, f = df }
+			elseif devLoop and devLoop.name == name then
+				devLoop = nil
+			end
+		elseif cmd == "music" then
+			devMusic = if typeof(name) == "number" then name else nil
 		end
 	end)
 end

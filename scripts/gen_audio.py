@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
-"""Синтез всех звуковых эффектов игры кодом (numpy/scipy) → один «атлас» assets/audio/sfx_atlas.ogg.
+"""Звуки игры v2 (#52): реальные записи (CC0 / CC BY 4.0) + синтез там, где он уместен → один «атлас»
+assets/audio/sfx_atlas_v2.ogg.
 
 Почему атлас: Open Cloud разрешает загрузить через ключ всего 10 аудио в месяц без ID-верификации
-(100 — с верификацией; create.roblox.com/docs/cloud/guides/usage-assets). Все звуки лежат в одном
-файле подряд с паузами, клиент играет нужный кусок через Sound.PlaybackRegion, лупы — через
-Sound.LoopRegion. Карта кусков (start/len, loop) → assets/audio/atlas.json и src/shared/AudioIds.luau.
+(100 — с верификацией; create.roblox.com/docs/cloud/guides/usage-assets), и загруженное аудио нельзя
+обновить. Все звуки лежат в одном файле подряд с паузами, клиент играет нужный кусок через
+Sound.PlaybackRegion, лупы — через Sound.LoopRegion. Карта кусков (start/len, loop, src) →
+assets/audio/atlas.json и src/shared/AudioIds.luau.
 
-Всё синтезировано здесь же — без чужих сэмплов, лицензия CC0 (assets/audio/README.md).
-Пики one-shot нормализуются в −1.5 dBFS до кодирования (после Vorbis ≤ −1 dBFS проверяется),
-UI-звуки ≤ 0.25 с. Лупы склеиваются кроссфейдом и сами по себе бесшовные.
+Источники — assets/audio/sources/ (лицензии и авторы — assets/audio/README.md):
+  kenney/    — Kenney «Impact Sounds» и «RPG Audio», CC0 (реальные фоли-записи);
+  oculus/    — Oculus Audio Pack 1 (© 2015 Oculus VR, LLC), CC BY 4.0 — нужна строка в титрах;
+  freesound/ — felix.blume, «Wind on bushes…» (freesound.org/s/711106), CC0.
+Синтез (numpy/scipy) остался только для райзера нового тира, свиста падения, хлопков ракеты, гудка
+и как тонкий слой «звона» поверх записей монет/колец.
+
+Громкость: one-shot выравниваются по средней громкости звучащей части (RMS −16 dBFS), пик ≤ −1.5 dBFS
+до кодирования (после Vorbis ≤ −1 dBFS проверяется); лупы — RMS −22 dBFS, их громкость ведёт код
+(Config.SOUND). Лупы склеиваются кроссфейдом и сами по себе бесшовные. Скольжение по снегу/льду/
+асфальту — не шум, а грануляция реальных записей (сотни коротких кусочков хруста снега, скрежета
+волочения), поэтому не повторяется и не звучит как «белый шум».
 
     python3 scripts/gen_audio.py            # атлас + atlas.json + AudioIds.luau (id сохраняется)
     python3 scripts/gen_audio.py --preview  # ещё PNG-сводка волн/спектрограмм (assets/audio/preview.png)
@@ -29,11 +40,14 @@ from audio_ids import ATLAS, MAP, OUT, ROOT, write_luau  # noqa: E402
 SR = 44100
 GAP = 0.12  # тишина между кусками, с
 PEAK_DB = -1.5
+RMS_SHOT = -16.0  # средняя громкость звучащей части one-shot
+RMS_LOOP = -22.0  # лупы тише: их громкость ведёт код
+SRC = OUT / "sources"
 
 rng = np.random.default_rng(20261108)  # детерминизм: один и тот же атлас при каждом запуске
 
 
-# ------------------------------------------------------------------ примитивы
+# ------------------------------------------------------------------ примитивы синтеза
 def t_(dur):
     return np.arange(int(dur * SR)) / SR
 
@@ -54,6 +68,13 @@ def fade_out(x, sec=0.01):
     n = min(len(x), int(sec * SR))
     if n:
         x[-n:] *= np.linspace(1, 0, n)
+    return x
+
+
+def fade_in(x, sec=0.002):
+    n = min(len(x), int(sec * SR))
+    if n:
+        x[:n] *= np.linspace(0, 1, n)
     return x
 
 
@@ -128,10 +149,6 @@ def tone(freq, dur, shape="sine", a=0.004, curve=5.0, bright=0.5):
         x = np.sin(ph)
     elif shape == "square":  # мягкий «квадрат» из нечётных гармоник
         x = sum(np.sin(k * ph) / k * bright ** ((k - 1) / 2) for k in range(1, 12, 2))
-    elif shape == "saw":
-        x = sum(np.sin(k * ph) / k * bright ** (k - 1) for k in range(1, 16))
-    elif shape == "brass":
-        x = sum(np.sin(k * ph) / k ** 1.2 for k in range(1, 10))
     else:
         raise ValueError(shape)
     return x * env(dur, a=a, curve=curve)
@@ -153,22 +170,8 @@ def note(n):  # полутоны от A4
     return 440.0 * 2 ** (n / 12)
 
 
-C5, E5, G5, A5, B5, C6, D6, E6, G6, C7 = (note(x) for x in (3, 7, 10, 12, 14, 15, 17, 19, 22, 27))
-
-
-def karplus(freq, dur, damp=0.996):
-    n = int(dur * SR)
-    p = int(SR / freq)
-    buf = rng.uniform(-1, 1, p)
-    out = np.zeros(n)
-    for i in range(n):
-        out[i] = buf[i % p]
-        buf[i % p] = damp * 0.5 * (buf[i % p] + buf[(i + 1) % p])
-    return out
-
-
 def clicks(dur, rate, lo, hi, amp_jitter=0.7):
-    """Случайные короткие щелчки (хруст снега, обломки)."""
+    """Случайные короткие щелчки (треск)."""
     n = int(dur * SR)
     x = np.zeros(n)
     k = rng.poisson(rate * dur)
@@ -186,190 +189,266 @@ def loopify(x, xfade=0.25):
     return body
 
 
-# ------------------------------------------------------------------ звуки
-S = {}  # имя → (сигнал, loop: bool, описание)
-
-
-def add(name, x, desc, loop=False):
-    S[name] = (np.asarray(x, dtype=np.float64), loop, desc)
-
-
-# --- UI (≤ 0.25 с)
-add("click", mix((sine_sweep(1500, 700, 0.05) * env(0.05, a=0.001, curve=7), 0, 1),
-                 (hp(noise(0.01), 3000) * env(0.01, a=0.0005), 0, 0.25)),
-    "мягкий деревянный «ток»: синус 1.5→0.7 кГц, 50 мс")
-add("open", mix((sweep_bp(noise(0.16), 500, 4000, q=2) * env(0.16, a=0.06, curve=3), 0, 0.6),
-                (tone(note(7), 0.08, "sine", curve=4), 0.06, 0.5),
-                (tone(note(14), 0.12, "sine", curve=5), 0.1, 0.6)),
-    "открытие окна: короткий вуш вверх + блип E5→B5, 0.22 с")
-add("deny", mix((tone(note(-5), 0.09, "square", bright=0.35, curve=2), 0, 0.7),
-                (tone(note(-9), 0.12, "square", bright=0.35, curve=3), 0.1, 0.7)),
-    "«нет»: два глухих низких тона вниз (E4→C4), 0.22 с")
-add("buy", mix((hp(noise(0.012), 2500) * env(0.012, a=0.0005), 0, 0.5),
-               (bell(note(22), 0.22, decay=0.12), 0.0, 0.6),
-               (bell(note(27), 0.19, decay=0.1), 0.05, 0.7)),
-    "покупка: «дзынь-дзынь» кассы, два колокольчика G6→C7, 0.25 с")
-
-# --- награды в лобби
-sparkle = mix(*[(bell(rng.uniform(2500, 5000), 0.18, decay=0.05), rng.uniform(0, 0.25), rng.uniform(0.2, 0.5)) for _ in range(9)], length=0.45)
-add("claim", mix((sweep_bp(noise(0.3), 800, 6000, q=2) * env(0.3, a=0.12, curve=3), 0, 0.5), (sparkle, 0.05, 0.6)),
-    "забрать награду: вуш вверх + рассыпанные искорки, 0.5 с")
-rattle = mix(*[(lp(noise(0.035), 2500) * env(0.035, a=0.001, curve=6), i * 0.06, 0.8) for i in range(5)])
-add("chest", mix((rattle, 0, 0.8),
-                 (sine_sweep(140, 60, 0.18) * env(0.18, a=0.002, curve=5), 0.38, 0.9),
-                 (sweep_bp(noise(0.35), 1500, 8000, q=2) * env(0.35, a=0.005, curve=4), 0.38, 0.45),
-                 (bell(C6, 0.5), 0.4, 0.5), (bell(E6, 0.5), 0.43, 0.4), (bell(G6, 0.5), 0.46, 0.4), (bell(C7, 0.55), 0.5, 0.35)),
-    "сундук: дребезг крышки (5 стуков) → хлопок и аккорд колокольчиков C-E-G-C, 1.05 с")
-add("ready", mix((bell(G5, 0.5), 0, 0.6), (bell(C6, 0.6), 0.12, 0.7), (sparkle, 0.12, 0.4)),
-    "подарок готов: два колокольчика G5→C6 и искорки, 0.7 с")
-add("task", mix((tone(C5, 0.15, "square", bright=0.4), 0, 0.4), (tone(E5, 0.15, "square", bright=0.4), 0.09, 0.4),
-                (tone(G5, 0.4, "square", bright=0.4, curve=3), 0.18, 0.45), (bell(C7, 0.4), 0.18, 0.25)),
-    "задание выполнено: короткое арпеджио C-E-G (мягкий квадрат) + звон, 0.6 с")
-riser = sweep_bp(pink(1.0), 300, 7000, q=1.5) * np.linspace(0, 1, int(SR * 1.0)) ** 2
-add("reveal", mix((riser, 0, 0.8), (sine_sweep(110, 440, 1.0) * np.linspace(0, 1, int(SR * 1.0)) ** 2 * 0.4, 0, 1)),
-    "новый тир, вход: нарастающий шумовой «райзер» 0.3→7 кГц с тоном 110→440 Гц, 1.0 с")
-chord = mix(*[(tone(f, 1.4, "brass", a=0.01, curve=2.5), 0, 0.3) for f in (C5, E5, G5, C6)])
-add("tierup", mix((lp(noise(0.08), 400) * env(0.08, a=0.001), 0, 0.8), (chord, 0, 1), (sparkle, 0.05, 0.5), (bell(C7, 0.9), 0.05, 0.3)),
-    "новый тир, смена модели: удар + мажорный аккорд C (медь) + искры, 1.4 с")
-
-# --- подбор на трассе
-add("coin", mix((tone(B5, 0.07, "square", bright=0.25, a=0.001, curve=1.5), 0, 0.55),
-                (tone(E6, 0.16, "square", bright=0.25, a=0.001, curve=4), 0.06, 0.55)),
-    "монета: классический «бли-инь» B5→E6, 0.22 с (серия поднимает тон, см. Sounds)")
-add("gem", mix((bell(note(31), 0.5, partials=((1, 1), (2.0, 0.35), (3.01, 0.2), (4.2, 0.1)), decay=0.25), 0, 0.7),
-               (bell(note(38), 0.4, decay=0.15), 0.05, 0.35)),
-    "гем: стеклянный колокольчик ~2.8 кГц с отзвуком, 0.55 с")
-shards = clicks(0.5, 160, 3000, 11000) * env(0.5, a=0.001, curve=5)
-add("crystal", mix((hp(noise(0.06), 2000) * env(0.06, a=0.0005), 0, 0.7), (shards, 0, 1.4),
-                   *[(bell(rng.uniform(2200, 4200), 0.4, decay=0.1), rng.uniform(0, 0.15), 0.3) for _ in range(5)]),
-    "ледяной кристалл: хрусткий звон стекла — щелчок + россыпь осколков + 5 тонких звонов, 0.6 с")
-t = t_(0.6)
-shimmer = np.sin(2 * np.pi * np.cumsum(350 * 2 ** (1.3 * t / 0.6) * (1 + 0.02 * np.sin(2 * np.pi * 18 * t))) / SR)
-add("shield", mix((shimmer * env(0.6, a=0.05, curve=3) * (0.7 + 0.3 * np.sin(2 * np.pi * 14 * t)), 0, 0.6),
-                  (bell(E6, 0.4), 0.2, 0.3)),
-    "щит: «пузырь» — синус 350→860 Гц с тремоло 14 Гц, мягкий звон в конце, 0.6 с")
-add("shieldhit", mix((sine_sweep(220, 90, 0.2) * env(0.2, a=0.001, curve=5), 0, 0.5),
-                     (hp(noise(0.25), 3000) * env(0.25, a=0.001, curve=6), 0, 0.8),
-                     (bell(note(19), 0.35, decay=0.08), 0, 0.4), (bell(note(26), 0.35, decay=0.06), 0.01, 0.3)),
-    "щит спас: глухой удар + лопнувшее стекло, 0.4 с")
-add("x2", mix((tone(C6, 0.1, "square", bright=0.3, curve=3), 0, 0.45), (tone(G6, 0.1, "square", bright=0.3, curve=3), 0.08, 0.45),
-              (tone(C7, 0.3, "square", bright=0.3, curve=4), 0.16, 0.45), (sparkle, 0.1, 0.4)),
-    "x2 монеты: быстрое восхождение C6-G6-C7 + искры, 0.55 с")
-t = t_(0.6)
-wob = signal.sawtooth(2 * np.pi * np.cumsum(220 * 2 ** (1.4 * t / 0.6)) / SR)
-add("magnet", lp(wob * (0.55 + 0.45 * np.sin(2 * np.pi * 11 * t)), 2200) * env(0.6, a=0.02, curve=2.5),
-    "магнит: «вуом-вуом» — пила 220→580 Гц с вибрацией 11 Гц через фильтр, 0.6 с")
-glug = mix(*[(np.sin(2 * np.pi * np.cumsum(np.linspace(f, f * 1.7, int(0.07 * SR))) / SR) * env(0.07, a=0.003, curve=4), d, 0.7)
-             for f, d in ((180, 0), (230, 0.09), (290, 0.18))])
-add("fuel", mix((glug, 0, 1), (hp(noise(0.015), 2000) * env(0.015, a=0.0005), 0.33, 0.6), (bell(note(19), 0.25, decay=0.08), 0.33, 0.35)),
-    "канистра: три «бульк» вверх + щелчок крышки, 0.55 с")
-add("ring", mix((sweep_bp(noise(0.45), 600, 3500, q=2.5) * env(0.45, a=0.15, curve=3), 0, 0.7), (bell(E6, 0.5), 0.12, 0.45), (bell(B5, 0.5), 0.12, 0.3)),
-    "кольцо: воздушный вуш + мягкий звон E6/B5, 0.6 с")
-t = t_(0.5)
-add("boost", mix((lp(signal.sawtooth(2 * np.pi * np.cumsum(180 * 2 ** (2.6 * t / 0.5)) / SR), 5000) * env(0.5, a=0.005, curve=3), 0, 0.45),
-                 (sweep_bp(noise(0.5), 400, 5000, q=2) * env(0.5, a=0.02, curve=2.5), 0, 0.8)),
-    "ускоритель: электрический «вжжух» — пила 180→1100 Гц + шумовой вуш, 0.5 с")
-t = t_(0.55)
-boing = np.sin(2 * np.pi * np.cumsum((140 + 260 * (t / 0.55) ** 0.5) * (1 + 0.12 * np.sin(2 * np.pi * 22 * t) * np.exp(-t * 4))) / SR)
-add("spring", mix((boing * env(0.55, a=0.002, curve=3), 0, 0.8), (sweep_bp(noise(0.4), 500, 3000, q=2) * env(0.4, a=0.05, curve=3), 0.1, 0.35)),
-    "трамплин островка: пружинное «бойнг» 140→400 Гц с дрожью + вуш, 0.55 с")
-
-# --- рогатка, прыжки, трюки
-add("launch", mix((karplus(98, 0.6, damp=0.993) * env(0.6, a=0.001, curve=3), 0, 0.9),
-                  (sweep_bp(noise(0.55), 300, 2500, q=1.8) * env(0.55, a=0.03, curve=2.5), 0.03, 0.9),
-                  (lp(noise(0.03), 600) * env(0.03, a=0.0005), 0, 0.7)),
-    "выстрел рогатки: «тванг» резинки (щипок струны 98 Гц) + вуш отлёта, 0.65 с")
-add("jump", mix((lp(noise(0.08), 1800) * env(0.08, a=0.002, curve=5), 0, 0.6),
-                (sine_sweep(220, 520, 0.12) * env(0.12, a=0.002, curve=4), 0.01, 0.5)),
-    "прыжок: снежный «пф» + короткий блип вверх 220→520 Гц, 0.14 с")
-add("land", mix((sine_sweep(180, 70, 0.2) * env(0.2, a=0.001, curve=5), 0, 0.5),
-                (lp(noise(0.3), 2500) * env(0.3, a=0.002, curve=5), 0, 0.9),
-                (clicks(0.2, 300, 800, 4000) * env(0.2, a=0.001, curve=4), 0, 1.6)),
-    "приземление: снежный «пумф» — шум до 2.5 кГц + хруст + удар 180→70 Гц, 0.3 с")
-add("spin", sweep_bp(noise(0.32), 500, 2200, q=3) * np.sin(np.linspace(0, np.pi, int(0.32 * SR))) ** 2,
-    "вращение трюка: воздушный свист-вуш, 0.32 с")
-add("flip", mix((tone(G5, 0.1, "square", bright=0.35, curve=3), 0, 0.4), (tone(C6, 0.3, "square", bright=0.35, curve=3.5), 0.08, 0.45),
-                (bell(G6, 0.3), 0.08, 0.25)),
-    "трюк засчитан: «та-да» G5→C6; в комбо тон выше на кварту за каждый трюк")
-wah = bp(signal.sawtooth(2 * np.pi * np.cumsum(np.linspace(420, 160, int(0.4 * SR))) / SR), 200, 1600) * env(0.4, a=0.01, curve=2)
-add("wipe", mix((sine_sweep(170, 70, 0.25) * env(0.25, a=0.001, curve=4), 0, 0.45), (lp(noise(0.35), 2000) * env(0.35, a=0.002, curve=4), 0, 0.9),
-                (wah, 0.05, 0.6)),
-    "неудачное приземление трюка: шлепок в снег + сползающее «уа-а» 420→160 Гц, 0.45 с")
-add("smash", mix((sine_sweep(200, 80, 0.15) * env(0.15, a=0.001, curve=4), 0, 0.4),
-                 (lp(noise(0.3), 4000) * env(0.3, a=0.001, curve=6), 0, 1.0),
-                 (clicks(0.4, 120, 600, 3500) * env(0.4, a=0.001, curve=3), 0.02, 3.0)),
-    "разбил препятствие: короткий удар + громкий хруст и разлёт обломков (щелчки 0.6–3.5 кГц), 0.42 с")
-add("crash", mix((sine_sweep(160, 50, 0.4) * env(0.4, a=0.001, curve=3), 0, 0.5),
-                 (lp(brown(0.6), 1200) * env(0.6, a=0.001, curve=4), 0, 0.6),
-                 (lp(noise(0.3), 5000) * env(0.3, a=0.0005, curve=5), 0, 1.0),
-                 (clicks(0.7, 80, 500, 3000) * env(0.7, a=0.001, curve=2.5), 0.05, 3.0),
-                 (tone(note(-12), 0.35, "square", bright=0.4, curve=3), 0.12, 0.45)),
-    "авария: тяжёлый удар 160→50 Гц, шумовой хлопок, хруст и разлёт обломков, «бонк» A3, 0.75 с")
-t = t_(1.3)
-add("fall", np.sin(2 * np.pi * np.cumsum(1400 * (160 / 1400) ** (t / 1.3)) / SR) * env(1.3, a=0.02, curve=1.5) * 0.6
-    + sweep_bp(noise(1.3), 2500, 300, q=2) * env(1.3, a=0.2, curve=2) * 0.4,
-    "падение в пропасть: мультяшный свист вниз 1.4 кГц→160 Гц + ветер, 1.3 с")
-add("rocket_on", mix((lp(noise(0.08), 1200) * env(0.08, a=0.001), 0, 0.25), (sweep_bp(pink(0.5), 200, 3000, q=1.2) * env(0.5, a=0.02, curve=1.5), 0, 6)),
-    "ракета: поджиг — хлопок + нарастающее шипение, 0.5 с")
-add("rocket_off", mix(*[(lp(noise(0.06), 1500) * env(0.06, a=0.001, curve=5), d, g) for d, g in ((0, 0.8), (0.12, 0.55), (0.22, 0.35), (0.3, 0.2))]),
-    "ракета: «пых-пых» — четыре затухающих хлопка, 0.4 с")
-add("finish", mix((tone(C5, 0.14, "brass", curve=2), 0, 0.35), (tone(E5, 0.14, "brass", curve=2), 0.12, 0.35),
-                  (tone(G5, 0.14, "brass", curve=2), 0.24, 0.35),
-                  *[(tone(f, 1.2, "brass", a=0.01, curve=2.2), 0.36, 0.28) for f in (C5, E5, G5, C6)],
-                  (sparkle, 0.36, 0.5), (bell(C7, 1.0), 0.36, 0.2)),
-    "финиш: фанфара C-E-G → аккорд до-мажор (медь) + искры, 1.6 с")
-add("record", mix((bell(G5, 0.6), 0, 0.5), (bell(B5, 0.6), 0.08, 0.5), (bell(D6, 0.6), 0.16, 0.5), (bell(G6, 0.9), 0.24, 0.6), (sparkle, 0.24, 0.5)),
-    "рекорд: сияющее арпеджио колокольчиков G-B-D-G + искры, 1.15 с")
-add("horn", lp(tone(note(-4), 0.22, "square", bright=0.6, a=0.01, curve=0.5) + tone(note(0), 0.22, "square", bright=0.6, a=0.01, curve=0.5), 1800) * 0.5,
-    "гудок машины: два тона F4+A4 (мягкий квадрат), 0.22 с — играется дважды «би-бип»")
-
-
-# --- лупы (2 с, бесшовные; частоты LFO кратны 0.5 Гц)
 def lfo(dur, hz, depth, phase=0.0):
     return 1 - depth + depth * 0.5 * (1 + np.sin(2 * np.pi * hz * t_(dur) + phase))
 
 
-L = 2.25  # длина сырья, после loopify (−0.25 с) — 2.0 с
-add("wind", loopify(bp(pink(L), 250, 1400) * lfo(L, 0.5, 0.5) + bp(pink(L), 1200, 3500) * lfo(L, 1.0, 0.6, 1.3) * 0.3),
-    "луп ветра: розовый шум 250–1400 Гц с порывами (0.5 и 1 Гц), 2.0 с", loop=True)
-add("snow", loopify(lp(pink(L), 2600) * 0.8 + clicks(L, 900, 1500, 6000) * 0.9 + bp(noise(L), 3000, 7000) * 0.12),
-    "луп снега: мягкое «шшш» + мелкий хруст (импульсы 1.5–6 кГц), 2.0 с", loop=True)
-add("ice", loopify(hp(pink(L), 2500) * 0.6 + bp(noise(L), 5000, 9000) * 0.25 * lfo(L, 2.0, 0.3)
-                   + sum(np.sin(2 * np.pi * f * t_(L)) * 0.02 for f in (1760.0, 2637.0))),
-    "луп льда: гладкое высокое шипение лезвия 2.5–9 кГц с тонким звенящим призвуком, 2.0 с", loop=True)
-add("hard", loopify(lp(clicks(L, 4000, 200, 2500), 2500) * 1.4 + lp(brown(L), 180) * 0.6 + bp(noise(L), 600, 1800) * 0.12),
-    "луп асфальта/камня: шершавый рокот — плотные щелчки гравия + низкий гул, 2.0 с", loop=True)
-add("rocket", loopify(lp(brown(L), 700) * 0.9 + bp(pink(L), 600, 4000) * 0.5 * lfo(L, 8.0, 0.25) + clicks(L, 300, 800, 4000) * 0.5),
-    "луп ракеты: рёв — бурый шум до 700 Гц + шипение с дрожью 8 Гц + треск, 2.0 с", loop=True)
-add("stretch", loopify(bp(signal.sawtooth(2 * np.pi * 70 * t_(L)) * lfo(L, 6.0, 0.6), 150, 900) * 0.7 + bp(noise(L), 400, 1500) * 0.15),
-    "луп натяжения рогатки: скрип резинки — пила 70 Гц через полосу 150–900 с дрожью 6 Гц, 2.0 с (тон растёт с натяжением)", loop=True)
-add("car", loopify(lp(tone(82, L, "saw", a=0.0001, curve=0, bright=0.8) * lfo(L, 4.0, 0.2), 1300) + lp(brown(L), 400) * 0.3),
-    "луп мотора машины (3D): пила 82 Гц с гармониками до 1.3 кГц, лёгкая «раскачка» 4 Гц + шум, 2.0 с", loop=True)
-clack = mix(*[(lp(noise(0.05), 2500) * env(0.05, a=0.0005, curve=6), d, 1) for d in (0.1, 0.32, 1.1, 1.32)], length=L)
-add("train", loopify(lp(brown(L), 220) * 0.8 + clack * 0.9 + lp(tone(41, L, "saw", a=0.0001, curve=0), 300) * 0.3),
-    "луп поезда (3D): гул рельсов + «тук-тук… тук-тук» стыков, 2.0 с", loop=True)
+# ------------------------------------------------------------------ записи
+def decode(path):
+    raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(path), "-f", "s16le", "-ac", "1", "-ar", str(SR), "-"],
+                         check=True, capture_output=True).stdout
+    return np.frombuffer(raw, dtype="<i2").astype(np.float64) / 32768
 
-UI_NAMES = {"click", "open", "deny", "buy"}
+
+_cache = {}
+
+
+def load(rel):
+    if rel not in _cache:
+        x = decode(SRC / rel)
+        _cache[rel] = x - np.mean(x)
+    return _cache[rel].copy()
+
+
+def speed(x, r):
+    """Смена скорости (r > 1 — выше и короче), как Sound.PlaybackSpeed."""
+    if r == 1.0:
+        return x
+    return np.interp(np.arange(0, len(x) - 1, r), np.arange(len(x)), x)
+
+
+def active(x, db=-45.0):
+    """Индексы начала и конца звучащей части (огибающая выше пика + db)."""
+    e = np.convolve(np.abs(x), np.ones(220) / 220, "same")
+    idx = np.where(e > e.max() * 10 ** (db / 20))[0]
+    return (int(idx[0]), int(idx[-1]) + 1) if len(idx) else (0, len(x))
+
+
+def rec(rel, start=0.0, dur=None, rate=1.0, hpf=None, lpf=None, fade=0.02, trim_db=-48.0):
+    """Кусок записи: с start (с), длиной dur (или до конца звучания), с фильтрами и короткими фейдами."""
+    x = load(rel)[int(start * SR):]
+    x = speed(x, rate)
+    if dur:
+        x = x[:int(dur * SR)]
+    else:
+        a, b = active(x, trim_db)
+        x = x[:b]
+    if hpf:
+        x = hp(x, hpf)
+    if lpf:
+        x = lp(x, lpf)
+    return fade_out(fade_in(x.copy()), fade)
+
+
+def unit(x):
+    return x / (np.sqrt(np.mean(x[slice(*active(x, -30))] ** 2)) + 1e-12)
+
+
+def granular(sources, dur, density, glen=(0.04, 0.1), pitch=(0.92, 1.08), gain=(0.5, 1.0), db=-30.0):
+    """Текстура из коротких кусочков записей (грануляция): density кусочков в секунду, у каждого своя
+    длина, тон и громкость; окно Ханна — без щелчков. Источники берутся только из звучащей части."""
+    pool = []
+    for s in sources:
+        x = unit(s)
+        a, b = active(x, db)
+        pool.append(x[a:b])
+    n = int(dur * SR)
+    out = np.zeros(n)
+    for _ in range(rng.poisson(density * dur)):
+        src = pool[rng.integers(len(pool))]
+        L = int(rng.uniform(*glen) * SR)
+        r = rng.uniform(*pitch)
+        need = int(L * r) + 2
+        if len(src) <= need:
+            continue
+        o = rng.integers(0, len(src) - need)
+        g = speed(src[o:o + need], r)[:L] * np.hanning(L) * rng.uniform(*gain) * rng.choice([-1, 1])
+        p = rng.integers(0, n)
+        m = min(L, n - p)
+        out[p:p + m] += g[:m]
+        if m < L:  # хвост — в начало: текстура сразу бесшовная по кругу
+            out[:L - m] += g[m:]
+    return out
+
+
+# ------------------------------------------------------------------ звуки
+S = {}  # имя → (сигнал, loop: bool, описание, источник)
+OC, KE, FS, SY = "Oculus CC BY", "Kenney CC0", "felix.blume CC0", "синтез"
+
+
+def add(name, x, desc, src, loop=False, rms=None):
+    S[name] = (np.asarray(x, dtype=np.float64), loop, desc, src, rms)
+
+
+def o(n, **k):
+    return rec(f"oculus/{n}.ogg", **k)
+
+
+def k(n, **kw):
+    return rec(f"kenney/{n}.ogg", **kw)
+
+
+SNOW_RUN = [o(f"FEETHmn_ShoeSnowRun_OS_0{i}") for i in range(1, 6)]
+SNOW_WALK = [o(f"FEETHmn_ShoeSnowWalk_OS_0{i}") for i in (1, 2, 4)]
+SNOW_K = [k(f"footstep_snow_00{i}") for i in range(5)]
+WOOD_L = [k(f"impact_wood_light_00{i}") for i in range(5)]
+
+
+def debris(dur, n, gain=0.5, spread=0.35):
+    """Разлёт обломков: несколько лёгких деревянных стуков с затуханием."""
+    parts = []
+    for i in range(n):
+        d = spread * (i / max(1, n - 1)) ** 1.3 + rng.uniform(0, 0.03)
+        parts.append((speed(WOOD_L[rng.integers(5)], rng.uniform(0.9, 1.25)), d, gain * (1 - 0.6 * i / n)))
+    return mix(*parts, length=dur)
+
+
+# --- UI
+add("click", o("UIClick_CasualPopsConfirm_OS_01", dur=0.16, fade=0.04),
+    "клик кнопки: мягкий «поп» (Casual Pops Confirm), 0.16 с", OC)
+add("open", o("UIClick_CasualOpen_OS_01", dur=0.36, fade=0.08),
+    "открытие окна: «поп-вжик» вверх (Casual Open), 0.36 с", OC)
+add("deny", o("UIAlert_CasualPopsError_OS_01", dur=0.34, fade=0.06),
+    "«нет»: двойной глухой поп вниз (Casual Pops Error), 0.34 с", OC)
+add("buy", mix((k("handleCoins", start=0.04, dur=0.45, fade=0.12), 0, 1.0), (bell(note(22), 0.3, decay=0.1), 0.02, 0.05)),
+    "покупка: горсть настоящих монет в ладони + тихий «дзынь», 0.45 с", KE + " + " + SY)
+
+# --- награды в лобби
+add("claim", o("UIMisc_BelltreeUp_OS_01", dur=0.9, fade=0.4),
+    "забрать награду: глиссандо «бель-три» вверх (настоящий инструмент), 0.9 с", OC)
+add("chest", mix((o("OBJLug_CaseOpen_OS_01", dur=0.36), 0, 1.0), (k("handleCoins", start=0.04, dur=0.5, fade=0.15), 0.22, 0.9),
+                 (o("UIMisc_BelltreeUp_OS_01", dur=0.8, fade=0.4), 0.25, 0.45)),
+    "сундук: щелчок замков и крышка кейса → звон монет и «бель-три», 1.05 с", OC + " + " + KE)
+add("ready", o("UIAlert_Notification_OS_02", dur=0.7, fade=0.3),
+    "подарок готов: светлое уведомление-колокольчик, 0.7 с", OC)
+add("task", o("MUSCStngr_LevelUpMallet_OS_01", dur=1.9, fade=0.5),
+    "задание выполнено: стингер на маримбе «level up», 1.9 с", OC)
+riser = sweep_bp(pink(1.0), 300, 7000, q=1.5) * np.linspace(0, 1, int(SR * 1.0)) ** 2
+add("reveal", mix((riser, 0, 0.8), (sine_sweep(110, 440, 1.0) * np.linspace(0, 1, int(SR * 1.0)) ** 2 * 0.4, 0, 1)),
+    "новый тир, вход: нарастающий «райзер» 0.3→7 кГц с тоном 110→440 Гц, 1.0 с", SY)
+add("tierup", o("MUSCStngr_LevelUpOrchestral_OS_01", dur=1.6, fade=0.4),
+    "новый тир, смена модели: оркестровый стингер «level up», 1.6 с", OC)
+
+# --- подбор на трассе
+coin_hit = o("OBJCoin_CoinDrop_OS_01", dur=0.2, fade=0.08)
+add("coin", mix((coin_hit, 0, 1.0), (bell(note(26), 0.25, decay=0.07), 0.0, 0.06)),
+    "монета: звон настоящей монеты + еле слышный «дзынь» для читаемости, 0.25 с (серия поднимает тон)", OC + " + " + SY)
+add("gem", mix((k("impact_glass_light_000"), 0, 1.0), (speed(k("impact_glass_light_001"), 1.5), 0.05, 0.6),
+               (bell(note(31), 0.45, partials=((1, 1), (2.0, 0.35), (3.01, 0.2)), decay=0.15), 0.0, 0.03)),
+    "гем: двойной «тинь» стекла (записи) с лёгким отзвуком, 0.45 с", KE + " + " + SY)
+add("crystal", mix((o("GLASBrk_WindowPaneSmallBreak_OS_01", dur=0.55, fade=0.2), 0, 1.0), (k("impact_glass_medium_000"), 0, 0.5)),
+    "ледяной кристалл: лопнуло маленькое стекло — хруст и осколки, 0.55 с", OC + " + " + KE)
+add("shield", o("MAGSpel_MagicSpell_OS_01", start=0.05, dur=1.1, fade=0.5),
+    "щит: мерцающее «заклинание» — включение защиты, 1.1 с", OC)
+add("shieldhit", mix((k("impact_metal_heavy_000"), 0, 0.8), (k("impact_glass_medium_000"), 0.01, 1.0), (k("impact_soft_heavy_000", lpf=400), 0, 0.6)),
+    "щит спас: удар по металлу + лопнувшее стекло, 0.4 с", KE)
+add("x2", o("UIMisc_Powerup_OS_01", dur=1.1, fade=0.4),
+    "x2 монеты: восходящий «пауэр-ап», 1.1 с", OC)
+add("magnet", o("UIMisc_Powerup_OS_02", dur=0.9, rate=0.85, fade=0.4),
+    "магнит: «пауэр-ап» ниже тоном, 0.9 с", OC)
+add("fuel", mix((o("WATRBubl_WaterBubbles_LOOP_01", start=0.3, dur=0.45, fade=0.15, lpf=3000), 0, 1.0), (k("metalClick"), 0.4, 0.8)),
+    "канистра: бульканье жидкости + щелчок крышки, 0.65 с", OC + " + " + KE)
+add("ring", mix((o("WHSH_WhooshSmall_OS_01"), 0, 1.0), (bell(note(19), 0.5, decay=0.18), 0.08, 0.12), (bell(note(14), 0.5, decay=0.18), 0.08, 0.08)),
+    "кольцо: воздушный вуш (запись) + мягкий звон E6/B5, 0.55 с", OC + " + " + SY)
+add("boost", mix((o("WHSH_WhooshMedium_OS_03", rate=0.75), 0, 1.0), (o("WHSH_WhooshMedium_OS_02", rate=1.15), 0.08, 0.7)),
+    "ускоритель: двойной мощный вуш (записи), 0.4 с", OC)
+add("spring", o("TOONBoing_BounceCartoony_OS_01", dur=0.5, fade=0.15),
+    "трамплин островка: пружинное «бойнг», 0.5 с", OC)
+
+# --- рогатка, прыжки, трюки
+add("launch", mix((k("impact_plank_medium_000", dur=0.2), 0, 0.7), (o("WHSH_WhooshMedium_OS_02", rate=0.7), 0.02, 1.0),
+                  (k("creak3", rate=1.6), 0, 0.5)),
+    "выстрел рогатки: щелчок деревянной рамы + скрип отпущенной резины + вуш отлёта, 0.4 с", KE + " + " + OC)
+add("jump", mix((SNOW_RUN[2][:int(0.16 * SR)], 0, 1.0), (o("WHSH_WhooshSmall_OS_01", rate=1.3), 0.03, 0.6)),
+    "прыжок: толчок по снегу (хруст) + короткий вуш, 0.2 с", OC)
+add("land", mix((o("FEETHmn_ShoeSnowLand_OS_02"), 0, 1.0), (k("impact_soft_heavy_000", lpf=500), 0, 0.5)),
+    "приземление: настоящий снежный «пумф» — хруст наста + мягкий удар, 0.35 с", OC + " + " + KE)
+add("spin", o("SWSH_Swoosh_OS_02", dur=0.42, fade=0.12),
+    "вращение трюка: свист рассекаемого воздуха, 0.4 с", OC)
+add("flip", o("UIClick_CasualMusicalConfirm_OS_01", dur=0.55, fade=0.25),
+    "трюк засчитан: короткое музыкальное «та-да»; в комбо — на кварту выше за трюк", OC)
+add("wipe", mix((k("impact_soft_heavy_001"), 0, 0.9), (o("FEETHmn_ShoeSnowLand_OS_01"), 0, 1.0),
+                (o("UIAlert_CasualMusicalError_OS_01", dur=0.7, fade=0.3), 0.08, 0.35)),
+    "трюк сорван: шлепок в снег + сползающая музыкальная «ошибка», 0.8 с", KE + " + " + OC)
+add("smash", mix((k("impact_wood_heavy_000"), 0, 1.0), (k("impact_plank_medium_001", dur=0.3), 0.01, 0.6),
+                 (o("FEETHmn_ShoeSnowLand_OS_01"), 0.0, 0.6), (debris(0.6, 5, 0.45), 0.06, 1.0)),
+    "разбил препятствие: удар по дереву + разлёт щепок + снег, 0.65 с", KE + " + " + OC)
+add("crash", mix((k("impact_punch_heavy_000"), 0, 1.0), (k("impact_wood_heavy_001"), 0.0, 0.8), (k("impact_metal_heavy_000"), 0.02, 0.5),
+                 (o("FEETHmn_ShoeSnowLand_OS_02"), 0.03, 0.8), (debris(0.8, 6, 0.4, 0.5), 0.08, 1.0)),
+    "авария: тяжёлый удар корпусом + дерево и металл, снег, разлёт обломков, 0.9 с", KE + " + " + OC)
+t = t_(1.3)
+fall_wind = rec("freesound/felix.blume_711106_wind_cut.ogg", start=2.0, dur=1.3, hpf=300, lpf=3000) * env(1.3, a=0.25, curve=1.5)
+add("fall", mix((np.sin(2 * np.pi * np.cumsum(1400 * (160 / 1400) ** (t / 1.3)) / SR) * env(1.3, a=0.02, curve=1.5), 0, 0.25),
+                (unit(fall_wind) * 0.12, 0, 1.0)),
+    "падение в пропасть: порыв ветра (запись) + тихий свист вниз 1.4 кГц→160 Гц, 1.3 с", FS + " + " + SY)
+add("rocket_on", mix((lp(noise(0.08), 1200) * env(0.08, a=0.001), 0, 0.25), (sweep_bp(pink(0.5), 200, 3000, q=1.2) * env(0.5, a=0.02, curve=1.5), 0, 6),
+                     (o("WHSH_WhooshMedium_OS_03", rate=0.6), 0, 0.5)),
+    "ракета: поджиг — хлопок + нарастающее шипение и вуш, 0.5 с", SY + " + " + OC)
+add("rocket_off", mix(*[(lp(noise(0.06), 1500) * env(0.06, a=0.001, curve=5), d, g) for d, g in ((0, 0.8), (0.12, 0.55), (0.22, 0.35), (0.3, 0.2))]),
+    "ракета: «пых-пых» — четыре затухающих хлопка, 0.4 с", SY)
+add("finish", o("MUSCStngr_VictoryOrchestral_OS_01", dur=2.3, fade=0.5),
+    "финиш: оркестровая фанфара победы, 2.3 с", OC)
+add("record", o("MUSCStngr_VictoryMallet_OS_01", dur=2.4, fade=0.6),
+    "рекорд: победный стингер на маримбе, 2.4 с", OC)
+add("horn", lp(tone(note(-4), 0.22, "square", bright=0.6, a=0.01, curve=0.5) + tone(note(0), 0.22, "square", bright=0.6, a=0.01, curve=0.5), 1800) * 0.5,
+    "гудок машины: два тона F4+A4, 0.22 с — играется дважды «би-бип»", SY)
+
+# --- лупы (бесшовные)
+wind = rec("freesound/felix.blume_711106_wind_cut.ogg", dur=16.0, hpf=110, lpf=2200, fade=0.001)
+add("wind", loopify(wind, 1.0),
+    "луп ветра: настоящий ветер с порывами (felix.blume, Freesound 711106, CC0), без верхов >2.2 кГц, 15 с", FS, loop=True)
+
+LS = 5.4  # длина сырья лупов скольжения (после loopify 5 с)
+snow_tex = granular(SNOW_RUN + SNOW_WALK + SNOW_K, LS, 55, glen=(0.05, 0.14), pitch=(0.85, 1.05))
+snow_body = granular(SNOW_K + SNOW_WALK, LS, 18, glen=(0.15, 0.3), pitch=(0.7, 0.85))
+add("snow", loopify(lp(snow_tex, 5000, 4) * 0.8 + lp(snow_body, 1500) * 0.6, 0.4),
+    "луп снега: полозья по снегу — грануляция записей хруста снега (55 кусочков/с) + мягкий низ, 5 с", OC + " + " + KE, loop=True)
+ice_tex = granular(SNOW_RUN, LS, 45, glen=(0.03, 0.08), pitch=(1.0, 1.25), gain=(0.3, 0.8))
+ice_crk = granular([k("impact_glass_light_000"), k("impact_glass_light_001")], LS, 2.5, glen=(0.03, 0.06), pitch=(1.2, 1.8), gain=(0.2, 0.5))
+add("ice", loopify(lp(hp(ice_tex, 2500), 7000, 4) * 0.9 + hp(ice_crk, 2000) * 0.25 + lp(snow_body, 1200) * 0.25, 0.4),
+    "луп льда: лёгкий шелест лезвия (грануляция снега 2.5–7 кГц) + редкий треск льда, 5 с", OC + " + " + KE, loop=True)
+drag = o("WOODFric_LargeWoodMetalDrag_OS_01", start=0.1, dur=2.5)
+hard_tex = granular([drag], LS, 24, glen=(0.2, 0.4), pitch=(0.85, 1.1))
+hard_grv = granular([o(f"FEETHmn_ShoeConcreteRun_OS_0{i}") for i in (1, 2, 3)], LS, 30, glen=(0.02, 0.06), pitch=(0.8, 1.1), gain=(0.2, 0.6))
+add("hard", loopify(lp(hard_tex, 4000) + lp(hard_grv, 3500) * 0.5, 0.4),
+    "луп асфальта/камня/дерева: скрежет волочения (запись) + шорох гравия, 5 с", OC, loop=True)
+L = 3.3
+roar = speed(rec("freesound/felix.blume_711106_wind_cut.ogg", start=4.0, dur=6.0, lpf=1200, fade=0.001), 0.55)[:int(L * SR)]
+add("rocket", loopify(unit(roar) * 0.7 + unit(lp(brown(L), 300)) * 0.5 + clicks(L, 300, 800, 4000) * 1.5, 0.3),
+    "луп ракеты: рёв — замедленная запись ветра + низкий гул + треск, 3 с", FS + " + " + SY, loop=True)
+creaks = [k("creak1"), k("creak2"), k("creak3")]
+add("stretch", loopify(lp(granular(creaks, L, 14, glen=(0.15, 0.35), pitch=(0.8, 1.0)), 3500), 0.3),
+    "луп натяжения рогатки: скрип натягиваемой резины/дерева (грануляция записей скрипа), 3 с (тон растёт с натяжением)", KE, loop=True)
+add("car", o("VEHCar_CarEngineSlow_LOOP_01", dur=None, fade=0.001, trim_db=-90),
+    "луп мотора машины (3D): запись двигателя на холостых, 4.2 с", OC, loop=True)
+add("train", loopify(o("TRNElec_TrainPassby_OS_01_cut", dur=9.0, fade=0.001), 0.6),
+    "луп поезда (3D): ровный участок записи проезда электрички — гул и стыки, 8.4 с", OC, loop=True)
+
+UI_MAX = {"click": 0.2, "open": 0.5, "deny": 0.5, "buy": 0.5}
 
 
 # ------------------------------------------------------------------ сборка атласа
-def normalize(x, peak_db=PEAK_DB):
+def normalize(x, loop, rms=None):
     x = x - np.mean(x)
-    return x / (np.abs(x).max() + 1e-12) * 10 ** (peak_db / 20)
+    target = rms if rms is not None else (RMS_LOOP if loop else RMS_SHOT)
+    a, b = (0, len(x)) if loop else active(x, -30)
+    g = 10 ** (target / 20) / (np.sqrt(np.mean(x[a:b] ** 2)) + 1e-12)
+    peak_cap = 10 ** ((-3.0 if loop else PEAK_DB) / 20) / (np.abs(x).max() + 1e-12)
+    return x * min(g, peak_cap)
 
 
 def build():
     OUT.mkdir(parents=True, exist_ok=True)
     chunks, regions, pos = [], {}, GAP
     chunks.append(np.zeros(int(GAP * SR)))
-    for name, (x, loop, desc) in S.items():
+    for name, (x, loop, desc, src, rms) in S.items():
         if not loop:
             x = fade_out(x.copy(), 0.008)
-        x = normalize(x, -3.0 if loop else PEAK_DB)  # лупы чуть тише: их громкость ведёт код
+        x = normalize(x, loop, rms)
         dur = len(x) / SR
-        if name in UI_NAMES:
-            assert dur <= 0.25 + 1e-6, f"{name}: UI-звук {dur:.3f} с > 0.25 с"
-        regions[name] = {"start": round(pos, 4), "len": round(dur, 4), "loop": loop, "desc": desc}
+        if name in UI_MAX:
+            assert dur <= UI_MAX[name] + 1e-6, f"{name}: UI-звук {dur:.3f} с > {UI_MAX[name]} с"
+        regions[name] = {"start": round(pos, 4), "len": round(dur, 4), "loop": loop, "src": src, "desc": desc}
         chunks.append(x)
         chunks.append(np.zeros(int(GAP * SR)))
         pos += dur + GAP
@@ -386,7 +465,9 @@ def build():
     dec = decode(ATLAS)
     for name, r in regions.items():
         a, b = int(r["start"] * SR), int((r["start"] + r["len"]) * SR)
-        r["peak_db"] = round(20 * np.log10(np.abs(dec[a:b]).max() + 1e-12), 2)
+        seg = dec[a:b]
+        r["peak_db"] = round(20 * np.log10(np.abs(seg).max() + 1e-12), 2)
+        r["rms_db"] = round(20 * np.log10(np.sqrt(np.mean(seg ** 2)) + 1e-12), 1)
         if not r["loop"]:
             assert r["peak_db"] <= -1.0, f"{name}: пик после Vorbis {r['peak_db']} dBFS > −1"
     MAP.write_text(json.dumps({"file": ATLAS.name, "sr": SR, "length": round(len(full) / SR, 3), "regions": regions},
@@ -394,12 +475,6 @@ def build():
     write_luau(regions)
     print(f"Атлас: {ATLAS.relative_to(ROOT)} — {len(regions)} звуков, {len(full) / SR:.1f} с, {ATLAS.stat().st_size // 1024} КБ")
     return regions, dec
-
-
-def decode(path):
-    raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(path), "-f", "s16le", "-ac", "1", "-ar", str(SR), "-"],
-                         check=True, capture_output=True).stdout
-    return np.frombuffer(raw, dtype="<i2").astype(np.float64) / 32768
 
 
 def preview(regions, dec):
@@ -421,7 +496,7 @@ def preview(regions, dec):
         aw.axhline(-(10 ** (-1 / 20)), color="#e53e3e", lw=0.5, ls="--")
         aw.set_ylim(-1, 1)
         aw.set_xlim(0, max(tt[-1], 0.01))
-        aw.set_title(f"{name}  {r['len']:.2f} с  пик {r['peak_db']} dB" + ("  [луп]" if r["loop"] else ""), fontsize=8)
+        aw.set_title(f"{name}  {r['len']:.2f} с  пик {r['peak_db']}  rms {r['rms_db']}" + ("  [луп]" if r["loop"] else ""), fontsize=8)
         aw.tick_params(labelsize=6)
         asp.specgram(x + 1e-9, NFFT=512, Fs=SR, noverlap=384, cmap="magma", vmin=-120)
         asp.set_ylim(0, 12000)
@@ -429,7 +504,7 @@ def preview(regions, dec):
     for j in range(len(names), rows * cols):
         axes[(j // cols) * 2][j % cols].axis("off")
         axes[(j // cols) * 2 + 1][j % cols].axis("off")
-    fig.suptitle("Синтезированные звуки (sfx_atlas.ogg, после Vorbis): волна (красное — −1 dBFS) и спектрограмма 0–12 кГц", fontsize=11)
+    fig.suptitle("Звуки v2 (sfx_atlas_v2.ogg, после Vorbis): волна (красное — −1 dBFS) и спектрограмма 0–12 кГц", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.985))
     png = OUT / "preview.png"
     fig.savefig(png, dpi=80)

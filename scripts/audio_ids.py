@@ -9,7 +9,7 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "assets" / "audio"
-ATLAS = OUT / "sfx_atlas.ogg"
+ATLAS = OUT / "sfx_atlas_v2.ogg"  # v2 (#52): записи; v1 (синтез) — ID 85020498524123 в audio.json
 MAP = OUT / "atlas.json"  # куски атласа (пишет scripts/gen_audio.py)
 DB = OUT / "audio.json"  # id загруженного атласа (пишет scripts/upload_audio.py)
 LUAU = ROOT / "src" / "shared" / "AudioIds.luau"
@@ -25,11 +25,11 @@ def write_luau(regions=None):
     db = json.loads(DB.read_text()) if DB.exists() else {}
     rec = db.get(ATLAS.stem) or {}
     aid = rec.get("id", 0) if rec.get("sha") == file_sha(ATLAS) else 0  # другой файл — старый id не подходит
-    lines = ["-- Сгенерировано scripts/gen_audio.py / upload_audio.py: атлас звуков (assets/audio/sfx_atlas.ogg).",
+    lines = ["-- Сгенерировано scripts/gen_audio.py / upload_audio.py: атлас звуков (assets/audio/sfx_atlas_v2.ogg).",
              "-- atlas = ID аудио-ассета (0 — ещё не загружен: играют встроенные rbxasset-звуки, см. client/Sounds).",
-             "-- regions: имя → { начало, длина (с), луп } — Sound.PlaybackRegion / LoopRegion.",
+             "-- regions: имя → { начало, длина (с), луп, источник } — Sound.PlaybackRegion / LoopRegion.",
              "return {", f"\tatlas = {aid},", "\tregions = {"]
     for k, r in regions.items():
-        lines.append(f"\t\t{k} = {{ {r['start']}, {r['len']}, {'true' if r['loop'] else 'false'} }},")
+        lines.append(f"\t\t{k} = {{ {r['start']}, {r['len']}, {'true' if r['loop'] else 'false'}, \"{r.get('src', '')}\" }},")
     lines += ["\t},", "}"]
     LUAU.write_text("\n".join(lines) + "\n")
