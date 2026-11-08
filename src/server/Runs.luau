@@ -108,7 +108,9 @@ local function respawn(player: Player)
 	end
 end
 
-local function endRun(player: Player, reason: string)
+-- leaving = игрок выходит из игры (PlayerRemoving/BindToClose, #21): начисление и аналитика как
+-- обычно, но без окна итогов и без паузы — санки/трасса/слот убираются сразу, персонаж не пересоздаётся.
+local function endRun(player: Player, reason: string, leaving: boolean?)
 	local run = runs[player]
 	if not run or run.ended then
 		return
@@ -123,7 +125,8 @@ local function endRun(player: Player, reason: string)
 	local finished = reason == "finish"
 	local dist = math.min(run.distance, L)
 	local pct = math.floor(dist / L * 100)
-	local quiet = reason == "back" or reason == "restart"
+	-- без итогов и без засчитанного заезда: BACK, ⟳ и «idle» (простоял у рогатки без выстрела, #20)
+	local quiet = reason == "back" or reason == "restart" or reason == "idle"
 	local cheat = reason == "cheat" -- античит: заезд не засчитан, наград нет
 	local clean = not run.crashedOnTrack and reason ~= "fell" -- заезд без аварии
 	local mult, earned = 1, 0
@@ -154,7 +157,7 @@ local function endRun(player: Player, reason: string)
 				d.LevelBest = 0
 				gems += Config.GEMS_FINISH
 				postLevel(player, d.Level)
-			elseif pct > d.LevelBest and reason ~= "restart" and reason ~= "back" then
+			elseif pct > d.LevelBest and not quiet then
 				d.LevelBest = pct
 				newBest = true
 				gems += Config.GEMS_NEW_BEST
@@ -163,14 +166,21 @@ local function endRun(player: Player, reason: string)
 			d.Gems += gems
 			-- аналитика: экономика и воронка (docs/METRICS.md)
 			d.Stats = d.Stats or {}
-			if reason ~= "back" and reason ~= "restart" then
+			if not quiet then
 				d.Stats.Runs = (d.Stats.Runs or 0) + 1
 				local w = Config.worldOf(level)
 				Analytics.economy(player, "Source", "Coins", earned, d.Coins, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
 				Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
 				Analytics.custom(player, "RunDistance", math.floor(dist))
 				Analytics.custom(player, "RunPercent", pct)
-				Analytics.custom(player, if finished then "RunFinished" elseif reason == "crash" then "RunCrashed" else "RunStopped")
+				Analytics.custom(
+					player,
+					if leaving and reason == "left" then "RunLeft" -- вышел из игры посреди заезда (#21)
+						elseif finished then "RunFinished"
+						elseif reason == "crash" then "RunCrashed"
+						else "RunStopped",
+					if leaving and reason == "left" then pct else nil
+				)
 				if d.Stats.Runs == 1 then
 					Analytics.onboarding(player, d, 2)
 				elseif d.Stats.Runs == 3 then
@@ -185,7 +195,7 @@ local function endRun(player: Player, reason: string)
 				end
 			end
 			local done = Rewards.onRun(player, {
-				runs = if reason == "back" or reason == "restart" then 0 else 1,
+				runs = if quiet then 0 else 1,
 				coins = earned,
 				distance = math.floor(dist),
 				air = math.floor(run.airTotal or 0),
@@ -214,8 +224,10 @@ local function endRun(player: Player, reason: string)
 				rareRuns = if not quiet and (d.SledRarity or 1) >= 2 then 1 else 0,
 			})
 			syncPlayer(player)
-			for _, text in done do
-				TaskDone:FireClient(player, text)
+			if not leaving then
+				for _, text in done do
+					TaskDone:FireClient(player, text)
+				end
 			end
 		end
 	end)
@@ -234,9 +246,26 @@ local function endRun(player: Player, reason: string)
 		})
 		else nil
 
+	-- вышел, ещё не выстрелив (у рогатки): наград нет, но выход виден в воронке
+	if leaving and reason == "back" then
+		Analytics.custom(player, "RunLeft", 0)
+	end
+
 	player:SetAttribute("InRun", false)
 	player:SetAttribute("Launched", false)
-	if not quiet then
+	if leaving then
+		run.sled:Destroy()
+		run.track:destroy()
+		if slots[run.slot] == player then
+			slots[run.slot] = nil
+		end
+		ending[player] = nil
+		return
+	end
+	if reason == "idle" then
+		Analytics.custom(player, "RunIdle") -- сел и не понял, как стрелять? (воронка, #20)
+		RunEnded:FireClient(player, { reason = "idle", timeout = Config.IDLE_LAUNCH_TIMEOUT })
+	elseif not quiet then
 		RunEnded:FireClient(player, {
 			reason = reason,
 			percent = if finished then 100 else pct,
@@ -557,9 +586,17 @@ function Runs.startLoop()
 				continue
 			end
 			player:SetAttribute("RunDistance", math.floor(math.min(run.distance, track.length)))
-			run.maxSpeed = math.max(run.maxSpeed or 0, sled.AssemblyLinearVelocity.Magnitude * 1.1) -- км/ч, как на спидометре
+			run.maxSpeed = math.max(run.maxSpeed or 0, sled.AssemblyLinearVelocity.Magnitude * Config.KMH_PER_STUD) -- км/ч, как на спидометре
 
-			if not run.launched or run.crashed then
+			if not run.launched then
+				-- AFK у рогатки (#20): иначе трасса (ensureAround), слот и санки держатся бесконечно
+				local idle = Config.IDLE_LAUNCH_TIMEOUT
+				if not run.crashed and idle > 0 and os.clock() - run.startTime > idle then
+					endRun(player, "idle")
+				end
+				continue
+			end
+			if run.crashed then
 				continue
 			end
 			if run.distance >= track.length and not run.finishedAt then
@@ -591,16 +628,43 @@ function Runs.startLoop()
 	end)
 end
 
--- Игрок вышел: убрать его заезд (санки, трасса, слот)
-function Runs.onLeave(player: Player)
+-- Игрок выходит из игры посреди заезда (#21): общий путь endRun — начисляется честно заработанное
+-- (дистанция + собранные монеты/гемы + прогресс заданий и рекорда %, без финиш-бонуса), аналитика
+-- RunLeft и экономика; санки/трасса/слот убираются сразу. Финишная арка уже пройдена — это финиш.
+-- Не выстрелил — "back" (наград нет). Вызывать ДО Data.release (расчёт в endRun синхронный).
+local function leaveRun(player: Player)
 	local run = runs[player]
+	if run and not run.ended then
+		local reason = if run.finishedAt then "finish" elseif run.launched and not run.crashed then "left"
+			elseif run.crashed then "crash"
+			else "back"
+		local ok, err = pcall(endRun, player, reason, true)
+		if not ok then
+			warn("[Runs] endRun при выходе " .. player.Name .. ": " .. tostring(err))
+		end
+	end
+	-- страховка: если endRun упал — всё равно убрать санки/трассу/слот
+	run = runs[player]
 	if run then
 		runs[player] = nil
-		run.sled:Destroy()
-		run.track:destroy()
+		pcall(function()
+			run.sled:Destroy()
+			run.track:destroy()
+		end)
 		slots[run.slot] = nil
 	end
 	ending[player] = nil
+end
+
+function Runs.onLeave(player: Player)
+	leaveRun(player)
+end
+
+-- Сервер закрывается (BindToClose): закончить все заезды до сохранения профилей
+function Runs.endAll()
+	for player in runs do
+		leaveRun(player)
+	end
 end
 
 return Runs

@@ -17,6 +17,7 @@ Config.KEEP_BEHIND = 150 -- и держим столько позади
 
 -- СОХРАНЕНИЯ (DataService; не баланс — не в TUNABLES)
 Config.DATA_AUTOSAVE = 120 -- секунд между автосейвами
+Config.INVOKE_TIMEOUT = 12 -- сек: клиент ждёт ответа RemoteFunction (UI.invoke), потом «сервер не отвечает» (#19)
 Config.DATA_LOCK_WAIT = 30 -- сколько ждать, пока другой сервер снимет блокировку сейва
 Config.DATA_LOCK_STALE = 2 * Config.DATA_AUTOSAVE + 30 -- блокировка старше этого (сервер упал) — забираем сразу
 
@@ -45,6 +46,9 @@ Config.FELL_DEPTH = 60
 -- Персонаж не сидит в санках заезда (пропал, пересоздан, соскочил) дольше этого — заезд окончен
 -- («left»), санки убираются, персонаж пересоздаётся в лобби
 Config.RUN_UNSEATED_MAX = 2
+-- Сел в санки у рогатки и не стреляет столько секунд (#20) — заезд отменяется («idle»): трасса, слот и
+-- санки освобождаются, игрок в лобби с сообщением. 0 — без таймаута.
+Config.IDLE_LAUNCH_TIMEOUT = 60
 
 -- Лобби: витринная трасса своего мира строится у каждого игрока локально (client/LobbyScene)
 Config.LOBBY_PREVIEW_SEGMENTS = 4 -- сколько первых кусков трассы показывать за мостиком (декорация)
@@ -324,9 +328,14 @@ end
 function Config.streakSavePrice(count: number): number
 	return Config.STREAK_SAVE_GEMS + Config.STREAK_SAVE_STEP * (Config.streakDay(count) - 1)
 end
--- Ежедневные задания: 3 в день из пула (выбор детерминирован по номеру дня)
 -- Задания дня. max = true — считается лучший результат одного заезда, а не сумма.
--- icon — имя 3D-иконки (UI.icon). Каждый день выбирается TASKS_PER_DAY разных заданий.
+-- icon — имя 3D-иконки (UI.icon). Каждый день выбирается TASKS_PER_DAY разных заданий
+-- (shared/DailyTasks: базовый набор дня + замена невыполнимых для игрока, #32).
+-- Доступность (Config.taskAvailable): needWorld = N — игрок дошёл до мира N (есть пройденный мир);
+-- needLevel = N — уровень ≥ N; needRare = true — есть сани редкости Gold или выше; needSpeed = true —
+-- цель (км/ч) не выше потолка скорости его «Саней»; need = function(d, target) — своё условие.
+Config.TASK_BUYSLED_LEVEL = 3 -- «Купи N редкостей саней» — с этого уровня (новичку монеты нужнее на апгрейды)
+Config.KMH_PER_STUD = 1.1 -- км/ч на спидометре = studs/с × 1.1
 Config.TASK_POOL = {
 	-- заезды и дистанция
 	{ id = "runs", text = "Сделай %d %s", forms = { "заезд", "заезда", "заездов" }, targets = { 5, 10 }, gems = 3, icon = "sled" },
@@ -334,18 +343,18 @@ Config.TASK_POOL = {
 	{ id = "distanceRun", text = "Проедь %d м за один заезд", targets = { 500, 1200 }, gems = 5, icon = "flag", max = true },
 	{ id = "finish", text = "Доедь до финиша %d раз", targets = { 1, 3 }, gems = 6, icon = "flag" },
 	{ id = "best", text = "Побей свой рекорд %d раз", targets = { 1, 2 }, gems = 5, icon = "trophy" },
-	{ id = "farm", text = "Сделай %d %s в пройденном мире", forms = { "заезд", "заезда", "заездов" }, targets = { 2, 4 }, gems = 4, icon = "tree" },
+	{ id = "farm", text = "Сделай %d %s в пройденном мире", forms = { "заезд", "заезда", "заездов" }, targets = { 2, 4 }, gems = 4, icon = "tree", needWorld = 2 },
 	-- монеты и награды
 	{ id = "coins", text = "Собери %d %s", forms = { "монету", "монеты", "монет" }, targets = { 300, 900 }, gems = 4, icon = "coin" },
 	{ id = "coinsRun", text = "Заработай %d %s за один заезд", forms = { "монету", "монеты", "монет" }, targets = { 150, 400 }, gems = 5, icon = "moneybag", max = true },
-	{ id = "combo", text = "Собери комбо x%d", targets = { 8, 20 }, gems = 5, icon = "star", max = true },
+	{ id = "combo", text = "Собери комбо x%d", targets = { 5, 15 }, gems = 5, icon = "star", max = true },
 	{ id = "gems", text = "Подбери %d %s на трассе", forms = { "гем", "гема", "гемов" }, targets = { 3, 8 }, gems = 5, icon = "gem" },
 	{ id = "crystal", text = "Разбей %d %s", forms = { "ледяной кристалл", "ледяных кристалла", "ледяных кристаллов" }, targets = { 1, 3 }, gems = 5, icon = "ice" },
 	-- трюки и скорость
 	{ id = "air", text = "Пробудь в воздухе %d с", targets = { 15, 45 }, gems = 5, icon = "parachute" },
 	{ id = "airRun", text = "Пробудь в воздухе %d с за один заезд", targets = { 6, 15 }, gems = 5, icon = "parachute", max = true },
 	{ id = "flips", text = "Сделай %d сальто", targets = { 3, 10 }, gems = 5, icon = "flip" },
-	{ id = "speed", text = "Разгонись до %d км/ч", targets = { 100, 160 }, gems = 5, icon = "stopwatch", max = true }, -- км/ч = studs/с × 1.1; без ракеты терминал 70–113, 200 требовал Сани ≥ 34 ур.
+	{ id = "speed", text = "Разгонись до %d км/ч", targets = { 100, 160 }, gems = 5, icon = "stopwatch", max = true, needSpeed = true }, -- км/ч = studs/с × 1.1; без ракеты терминал 70–113, 200 требовал Сани ≥ 34 ур.
 	{ id = "smash", text = "Разбей %d %s", forms = { "препятствие", "препятствия", "препятствий" }, targets = { 5, 15 }, gems = 4, icon = "smash" },
 	{ id = "boosts", text = "Проедь по %d %s", forms = { "ускорителю", "ускорителям", "ускорителям" }, targets = { 4, 12 }, gems = 4, icon = "bolt" },
 	-- бонусы на трассе
@@ -362,10 +371,43 @@ Config.TASK_POOL = {
 	{ id = "cleanFinish", text = "Доедь до финиша без аварии %d %s", forms = { "раз", "раза", "раз" }, targets = { 1, 3 }, gems = 7, icon = "check" },
 	{ id = "cleanRun", text = "Проедь %d м за один заезд без аварии", targets = { 400, 1000 }, gems = 5, icon = "ringbuoy", max = true },
 	{ id = "magnetCoins", text = "Притяни магнитом %d %s", forms = { "монету", "монеты", "монет" }, targets = { 20, 60 }, gems = 4, icon = "magnet" },
-	{ id = "rareRuns", text = "Сделай %d %s на санях Gold или редче", forms = { "заезд", "заезда", "заездов" }, targets = { 3, 7 }, gems = 5, icon = "sparkles" },
-	{ id = "buySled", text = "Купи %d %s саней", forms = { "редкость", "редкости", "редкостей" }, targets = { 1, 3 }, gems = 5, icon = "saucer" },
+	{ id = "rareRuns", text = "Сделай %d %s на санях Gold или редче", forms = { "заезд", "заезда", "заездов" }, targets = { 3, 7 }, gems = 5, icon = "sparkles", needRare = true },
+	{ id = "buySled", text = "Купи %d %s саней", forms = { "редкость", "редкости", "редкостей" }, targets = { 1, 3 }, gems = 5, icon = "saucer", need = function(d)
+		return (d.Level or 1) >= Config.TASK_BUYSLED_LEVEL -- читается на лету (TUNABLES)
+	end },
 }
 Config.TASKS_PER_DAY = 6
+
+-- Выполнимо ли задание t с целью target для профиля d (#32). Без условий — всегда.
+function Config.taskAvailable(t, d, target: number): boolean
+	local level = d.Level or 1
+	if t.needWorld and Config.worldOf(level) < t.needWorld then
+		return false
+	end
+	if t.needLevel and level < t.needLevel then
+		return false
+	end
+	if t.needRare then
+		local rare = (d.SledRarity or 1) >= 2
+		for key in d.OwnedSleds or {} do
+			local r = tonumber(string.match(key, ":(%d+)$"))
+			if r and r >= 2 then
+				rare = true
+				break
+			end
+		end
+		if not rare then
+			return false
+		end
+	end
+	if t.needSpeed and target > Config.maxSpeed(d.SledLevel or 0) * Config.KMH_PER_STUD then
+		return false
+	end
+	if t.need and not t.need(d, target) then
+		return false
+	end
+	return true
+end
 
 -- Число + слово в нужной форме: 1 заезд, 3 заезда, 5 заездов
 function Config.plural(n: number, forms: { string }): string
@@ -909,6 +951,7 @@ Config.TUNABLES = {
 	{ "POWERUPS.rings.coins", "Кольца: монет за кольцо", "Бонусы", 0, 200, 1 },
 
 	{ "TASKS_PER_DAY", "Заданий в день", "Награды", 1, 12, 1 },
+	{ "TASK_BUYSLED_LEVEL", "Задание «купи редкость»: с уровня", "Награды", 1, 50, 1 },
 	{ "TASK_CHEST_COINS", "Сундук заданий: монет", "Награды", 0, 10000, 50 },
 	{ "TASK_CHEST_GEMS", "Сундук заданий: гемов", "Награды", 0, 200, 1 },
 	{ "CHEST_COINS", "Сундук в лобби: монет", "Награды", 0, 10000, 25 },
@@ -934,6 +977,7 @@ Config.TUNABLES = {
 	{ "TUTORIAL.GAP", "Обучение: пауза между подсказками, с", "Обучение", 0, 10, 0.5 },
 
 	{ "OBSTACLE_ROWS", "Рядов препятствий на кусок", "Трасса", 0, 6, 1 },
+	{ "IDLE_LAUNCH_TIMEOUT", "Без выстрела у рогатки → в лобби, с (0 — нет)", "Трасса", 0, 600, 10 },
 	{ "SAFE_START", "Без препятствий первые, studs", "Трасса", 0, 1000, 10 },
 	{ "COIN_LINE_CHANCE", "Шанс линии монет", "Трасса", 0, 1, 0.05 },
 	{ "SAFE_LINE_REACTION", "Безопасная линия: реакция, с", "Трасса", 0, 1, 0.05 },

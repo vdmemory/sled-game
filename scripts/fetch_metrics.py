@@ -41,8 +41,7 @@ DEVEX, FEE = 0.0038, 0.7
 COLUMNS = ["date", "period", "visits", "dau", "ccu_peak", "new_users", "d1", "d7", "d30", "session_min",
            "likes_pct", "robux_earned", "robux_creator_rewards", "payers", "conversion", "arpdau_usd",
            "premium_playtime_score", "source", "note"]
-# колонка CSV → метрика API (granularity OneDay). Доли ретеншна API отдаёт в процентах или долях —
-# нормализуем в доли (см. norm()).
+# колонка CSV → метрика API (granularity OneDay). В CSV доли (0.008 = 0.8 %), см. norm().
 METRICS = {
     "visits": "Visits",
     "dau": "DailyActiveUsers",
@@ -57,14 +56,45 @@ METRICS = {
 }
 
 
-def http(method, url, body=None):
-    req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, method=method,
-                                 headers={"x-api-key": KEY, "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, json.loads(r.read().decode() or "{}")
-    except urllib.error.HTTPError as e:
-        return e.code, {"error": e.read().decode(errors="replace")[:300]}
+# Метрики-доли: в каком виде их отдаёт API. Документация (create.roblox.com/docs/cloud/guides/analytics/metrics)
+# формат не указывает, Creator Hub показывает проценты → по умолчанию "percent" (0.8 → 0.008).
+# Угадывать по величине нельзя: D30 = 0.8 % в процентах неотличим от доли 0.8 = 80 %.
+# Переопределить: analytics/config.json → "rate_format": "fraction" или env ANALYTICS_RATE_FORMAT.
+RATE_COLS = ("d1", "d7", "d30", "conversion")
+
+
+def _rate_format() -> str:
+    v = os.environ.get("ANALYTICS_RATE_FORMAT", "")
+    if not v:
+        try:
+            v = json.loads((ROOT / "analytics" / "config.json").read_text()).get("rate_format", "")
+        except (OSError, ValueError):
+            v = ""
+    return v if v in ("percent", "fraction") else "percent"
+
+
+RATE_FORMAT = _rate_format()
+
+
+def http(method, url, body=None, attempts=4):
+    """(код, json). Сеть/таймаут → (0, {"error": ...}); 0/429/5xx повторяются с паузой 2, 4, 8 с."""
+    code, j = 0, {}
+    for i in range(attempts):
+        req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, method=method,
+                                     headers={"x-api-key": KEY, "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.status, json.loads(r.read().decode() or "{}")
+        except urllib.error.HTTPError as e:
+            code, j = e.code, {"error": e.read().decode(errors="replace")[:300]}
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            code, j = 0, {"error": f"{type(e).__name__}: {e}"}
+        except ValueError as e:  # не JSON
+            code, j = 0, {"error": f"ответ не JSON: {e}"}
+        if code not in (0, 429, 500, 502, 503, 504) or i == attempts - 1:
+            break
+        time.sleep(2 ** (i + 1))
+    return code, j
 
 
 def query(metric, start, end):
@@ -72,7 +102,7 @@ def query(metric, start, end):
                                  "startTime": start.strftime("%Y-%m-%dT00:00:00Z"),
                                  "endTime": end.strftime("%Y-%m-%dT00:00:00Z")})
     if code not in (200, 202):
-        raise RuntimeError(f"{metric}: HTTP {code} {j.get('error', j)}")
+        raise RuntimeError(f"{metric}: HTTP {code}{' (сеть/таймаут)' if code == 0 else ''} {j.get('error', j)}")
     for _ in range(30):
         if j.get("done") or "response" in j:  # маленькие запросы приходят сразу, иногда без done
             break
@@ -93,12 +123,22 @@ def query(metric, start, end):
     return out
 
 
-def norm(col, v):
+def norm(col, v, fmt=None):
+    """Значение API → значение CSV: доли — по объявленному формату (RATE_FORMAT), не по величине."""
     if v is None:
         return None
-    if col in ("d1", "d7", "d30", "conversion") and v > 1:  # проценты → доли
-        return round(v / 100, 4)
+    if col in RATE_COLS and (fmt or RATE_FORMAT) == "percent":
+        return round(v / 100, 6)
     return v
+
+
+def check_rates(col, series):
+    """Проверка формата: доля > 1 невозможна — значит API отдаёт проценты, а настроено "fraction"."""
+    if col in RATE_COLS and RATE_FORMAT == "fraction" and any(v is not None and v > 1 for v in series.values()):
+        print(f"::warning::{col}: значения > 1 при rate_format=fraction — API отдаёт проценты; "
+              f"поставь \"rate_format\": \"percent\" в analytics/config.json. Колонка пропущена.")
+        return False
+    return True
 
 
 def main():
@@ -114,6 +154,8 @@ def main():
             series = query(metric, start, end)
         except Exception as e:  # noqa: BLE001 — любая ошибка метрики = пустая ячейка
             print(f"::warning::{e}")
+            continue
+        if not check_rates(col, series):
             continue
         for day, v in series.items():
             fresh.setdefault(day, {})[col] = norm(col, v)

@@ -98,22 +98,29 @@ def main():
                 break
         DB.write_text(json.dumps(db, indent=1, sort_keys=True) + "\n")
     audio_ids.write_luau()
+    missing = [p.stem for p in files if p.stem not in db or db[p.stem].get("sha") != sha(p)]
     print(f"Аудио с ID: {sum(1 for p in files if p.stem in db and db[p.stem].get('sha') == sha(p))} из {len(files)}")
     if KEY and db:
         for name, rec in sorted(db.items()):
             code, body = http("GET", f"https://apis.roblox.com/assets/v1/assets/{rec['id']}?readMask=moderationResult",
-                              headers={"x-api-key": KEY})
+                              headers={"x-api-key": KEY}, attempts=1)  # справочно, без повторов
             st = (json.loads(body).get("moderationResult", {}).get("moderationState", f"HTTP {code}")
                   if code == 200 else f"HTTP {code}: {body[:120]}")
             print(f"Модерация аудио {name} ({rec['id']}): {st}")
+    if missing:
+        print(f"::warning::Не загружено аудио: {', '.join(missing)} — в игре встроенные звуки")
+        return 3
+    return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # код 3 — не всё загружено (publish.sh предупреждает, деплой идёт)
     try:
-        main()
+        sys.exit(main())
     except SystemExit as e:
+        if isinstance(e.code, int):
+            raise
         print(f"::warning::{e}")
-        sys.exit(0)
+        sys.exit(3)
     except Exception as e:  # деплой не роняем: без аудио играют встроенные звуки
         print(f"::warning::загрузка аудио: {type(e).__name__}: {e}")
-        sys.exit(0)
+        sys.exit(3)

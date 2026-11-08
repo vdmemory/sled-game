@@ -109,27 +109,34 @@ def main():
                 break  # остальные упадут так же
         DB.write_text(json.dumps(db, indent=1, sort_keys=True) + "\n")
     write_luau(db)
+    missing = [p.stem for p in files if p.stem not in db or db[p.stem].get("sha") != sha(p)]
     print(f"Мешей с ID: {len(db)} из {len(files)}")
     if KEY and db:
         states = {}
         for name, rec in sorted(db.items()):
             code, body = http("GET", f"https://apis.roblox.com/assets/v1/assets/{rec['id']}?readMask=moderationResult",
-                              headers={"x-api-key": KEY})
+                              headers={"x-api-key": KEY}, attempts=1)  # справочно, без повторов
             st = (json.loads(body).get("moderationResult", {}).get("moderationState", f"HTTP {code}")
                   if code == 200 else f"HTTP {code}: {body[:120]}")
             states.setdefault(st, []).append(name)
         for st, names in states.items():
             print(f"Модерация мешей {st}: {len(names)} — {', '.join(names)}")
+    if missing:
+        print(f"::warning::Не загружены меши ({len(missing)}): {', '.join(missing)} — в игре декор из Part")
+        return 3
+    return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # код 3 — не всё загружено (publish.sh предупреждает, деплой идёт)
     try:
-        main()
+        sys.exit(main())
     except SystemExit as e:
+        if isinstance(e.code, int):
+            raise
         print(f"::warning::{e}")
         if not OUT.exists():
             write_luau({})
-        sys.exit(0)
+        sys.exit(3)
     except Exception as e:  # деплой не роняем: без мешей игра строит декор из Part
         print(f"::warning::загрузка мешей: {type(e).__name__}: {e}")
-        sys.exit(0)
+        sys.exit(3)

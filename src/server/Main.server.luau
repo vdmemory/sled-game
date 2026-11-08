@@ -55,7 +55,7 @@ for _, p in Players:GetPlayers() do
 end
 
 Players.PlayerRemoving:Connect(function(player)
-	Runs.onLeave(player)
+	Runs.onLeave(player) -- заезд в процессе → endRun(..., leaving): начисление до Data.release (#21)
 	Rewards.onLeave(player)
 	Weekly.onLeave(player)
 	Tuning.unloadPlayer(player)
@@ -79,6 +79,7 @@ end)
 
 -- Сохраняем всех параллельно и ждём (лимит BindToClose — 30 с; последовательные ретраи не влезали)
 game:BindToClose(function()
+	Runs.endAll() -- заезды в процессе: начислить заработанное и отправить аналитику до сохранения (#21)
 	Weekly.flushAll() -- параллельно с сейвами: очередь лидерборда недели
 	Data.saveAllAndWait(25)
 end)

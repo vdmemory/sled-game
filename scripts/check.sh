@@ -35,7 +35,7 @@ unzip_to() { # архив каталог
 fetch_zip() { # url → распаковать в $BIN
   local url="$1" tmp
   tmp="$(mktemp -d)"
-  if curl -sSfL --retry 2 -o "$tmp/a.zip" "$url" && unzip_to "$tmp/a.zip" "$tmp/x"; then
+  if curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors -o "$tmp/a.zip" "$url" && unzip_to "$tmp/a.zip" "$tmp/x"; then
     find "$tmp/x" -type f -exec chmod +x {} \; -exec mv -f {} "$BIN/" \;
     rm -rf "$tmp"
     return 0
@@ -60,7 +60,7 @@ need() { # имя → 0, если инструмент есть (или удал
 DEFS="$TOOLS/globalTypes-$LUAU_LSP_VERSION.d.luau"
 need_defs() {
   [ -s "$DEFS" ] && return 0
-  curl -sSfL --retry 2 -o "$DEFS.part" \
+  curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors -o "$DEFS.part" \
     "https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/$LUAU_LSP_VERSION/scripts/globalTypes.None.d.luau" &&
     mv "$DEFS.part" "$DEFS"
 }

@@ -8,7 +8,8 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | Что | Где |
 | --- | --- |
 | Сборка | `rojo build default.project.json -o game.rbxl` (Rojo 7.4.4, `rokit.toml`) |
-| Публикация | `scripts/publish.sh` → `POST apis.roblox.com/universes/v1/{universe}/places/{place}/versions?versionType=Published`, ретраи на 409/429/5xx |
+| Публикация | `scripts/publish.sh` → `POST apis.roblox.com/universes/v1/{universe}/places/{place}/versions?versionType=Published`, ретраи на 409/429/5xx. Нет `game.rbxl` — собирает сам (rojo из PATH / `.tools/bin`, ставит `check.sh` с `curl --retry`) |
+| Ассеты при деплое (#22) | `upload_ui_assets.py` → `upload_meshes.py` → `upload_audio.py`: код 3 = загружено не всё → аннотация `warning` + строка в Summary (в игре фолбэк). Новые ID → пересборка; пересборка не удалась → публикация **отменяется** (`ALLOW_STALE_BUILD=1` — публиковать старую). Новые ID не закоммичены (`git status` по `assets/**/*.json`, `src/shared/*Ids.luau`) → JSON в лог и Summary, job **красный после публикации** (иначе следующий деплой загрузит их заново; аудио — 10/мес; `ASSET_IDS_UNCOMMITTED_OK=1` — только warning). HTTP-повторы (`upload_ui_assets.http`): GET — при 0/429/5xx, POST создания ассета — только 429/503 (повтор после таймаута мог бы создать дубликат) |
 | Workflow | `.github/workflows/deploy.yml` (правится только через веб GitHub — у сессии нет scope `workflow`) |
 | staging | любой push в `main` → тестовый плейс «Игра на санях [ТЕСТ]» |
 | production | тег `v*` → боевой плейс |
@@ -40,7 +41,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `server/Environment` | 48 | Lighting, облака, цветокоррекция, bloom |
 | `server/Sleds` | 145 | `makeSled` (сиденье, модель/редкость/тиры, след, ракеты, крепления), `ragdoll`, `setRider` |
 | `server/PlayerState` | 158 | `sync` (профиль → атрибуты), `onPlayerAdded`, `postLevel` (OrderedDataStore `BestLevel_v1`), `TutorialStep`, `SetSetting` |
-| `server/Runs` | 606 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, финиш, остановка, вылет), `onLeave` |
+| `server/Runs` | 606 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, финиш, остановка, вылет), таймаут без выстрела `IDLE_LAUNCH_TIMEOUT` → `endRun("idle")` (#20), `onLeave`/`endAll` (выход/закрытие сервера посреди заезда → `endRun(..., leaving)` до `Data.release`/сохранения, #21) |
 | `server/RunEvents` | 215 | `Launch`, `Air`, `Crash`, `Smash`, `Trick` |
 | `server/Pickups` | 188 | монеты (касание, магнит `CoinGrab`, комбо), `PowerUp` (x2, кольца, канистра, ускорители), гемы, кристалл |
 | `server/Podium` | 304 | пьедестал топ-3 недели (#48): аватары `CreateHumanoidModelFromUserIdAsync` (pcall, манекен при ошибке, кэш `PODIUM.CACHE`), поза/анимации на серверном `Animator`, таблички, «?» пустых ступеней; по смене `ReplicatedStorage.WeeklyBoard` |
@@ -54,6 +55,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `client/Sled/Tricks` | 345 | ручные и авто-трюки, `Tricks.land` (итог полёта), `Tricks.air` (кадр в воздухе), кнопки прыжка/ракеты |
 | `client/Sled/Contacts` | 386 | касания (авария, разбивание, щит, бонусы, гемы, кристалл, ускорители), `Contacts.scan` (монеты по отрезку пути, магнит) |
 | `shared/Track/init` | 574 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `rescueCFrame`, `destroy` |
+| `shared/DailyTasks` | 150 | задания дня игрока (#32): `baseSet(day)` (общий набор дня), `forPlayer(day, d)`, `revalidate(set, day, d, keep)` — замена невыполнимого (`Config.taskAvailable`), `describe`. Чистые функции; проверка — `scripts/stand/daily_tasks.luau` |
 | `shared/Track/Profile` | 244 | `buildProfile` — цепочка кусков уровня (тип `Segment`) |
 | `shared/Track/Sections` | 167 | профили сечений, цвета снега, `sidePoint`, поперечное сечение куска |
 | `shared/Track/Dress` | 231 | оформление миров вдоль трассы и разметка на ней |
@@ -194,6 +196,12 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 монеты только рядом со своими санями в заезде (за 2000 studs от лобби).
 
 ## Ремоуты (`ReplicatedStorage.Remotes`)
+
+RemoteFunction клиент вызывает **только** через `UI.invoke(remote, ...)` (`shared/UIKit`, #19): `pcall` +
+таймаут `Config.INVOKE_TIMEOUT` (12 с); ошибка сервера → `false, "Ошибка сервера, попробуй ещё раз"`,
+нет ответа → `false, "Сервер не отвечает…"` (+ `warn`), поздний ответ отбрасывается. Обработчики
+отвечают `(ok, сообщение | данные)` — клиент показывает сообщение тостом, флаги кнопок сбрасываются.
+`RunEnded` с `reason = "idle"` (#20) — без карточки итогов, только сообщение.
 
 | Имя | Тип | Направление / смысл |
 | --- | --- | --- |
@@ -372,7 +380,7 @@ Open Cloud publish не принимает Union/EditableMesh, а MeshId у Mesh
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LaunchLevel`, `SledLevel`, `IncomeLevel`, `RocketLevel`,
 `Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings` (`Sfx`, `Snow`, `Shadows`,
-`Music`), `Daily` (задания дня; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `Streak` (`day` — последний засчитанный UTC-день, `count` — серия, `claimedDay` — день последней награды, `save` — серия, которую можно спасти сегодня; пересчёт в `Rewards.ensure`, недостающие ключи у старых сейвов дополняет `migrate`), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
+`Music`), `Daily` (задания дня: `day`, `set` — набор игрока `{ {id, target} }`, фиксируется в начале дня и перепроверяется при входе (#32; у сейвов без `set` — общий набор дня + замена невыполнимого), `progress` по id, `claimed` по номеру слота, `chest`; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `Streak` (`day` — последний засчитанный UTC-день, `count` — серия, `claimedDay` — день последней награды, `save` — серия, которую можно спасти сегодня; пересчёт в `Rewards.ensure`, недостающие ключи у старых сейвов дополняет `migrate`), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
 Onboard, Purchases, Playtime — для аналитики), `Tutorial` (биты пройденных шагов `Config.TUTORIAL.STEPS`, порядок не менять; при входе с `Stats.Runs ≥ 3` — все биты). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
 Новые поля — в `DEFAULT`, миграции — `migrate()` в `DataService`.
 
