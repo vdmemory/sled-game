@@ -35,11 +35,11 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | Модуль | Строк | Что внутри |
 | --- | --- | --- |
 | `server/Main.server` | 81 | порядок запуска: `Tuning.init` → ремоуты в `ReplicatedStorage` → `Sleds.setup` (группа `Riders`, `workspace.Sleds`) → `Environment.setup` (свет) → `Track.buildLobby` → `Weekly.start` → `*.start()` обработчиков → `Runs.startLoop` (Heartbeat) → игроки, автосейв, `BindToClose` |
-| `server/Remotes` | 37 | все ремоуты (папка `Remotes`); `Remotes.folder` кладёт в `ReplicatedStorage` Main |
+| `server/Remotes` | 38 | все ремоуты (папка `Remotes`); `Remotes.folder` кладёт в `ReplicatedStorage` Main |
 | `server/Environment` | 48 | Lighting, облака, цветокоррекция, bloom |
 | `server/Sleds` | 145 | `makeSled` (сиденье, модель/редкость/тиры, след, ракеты, крепления), `ragdoll`, `setRider` |
 | `server/PlayerState` | 158 | `sync` (профиль → атрибуты), `onPlayerAdded`, `postLevel` (OrderedDataStore `BestLevel_v1`), `TutorialStep`, `SetSetting` |
-| `server/Runs` | 532 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`), зона посадки `LaunchPad`, `Restart`/`Back`, Heartbeat (прогресс, античит, финиш, остановка), `onLeave` |
+| `server/Runs` | 606 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, финиш, остановка, вылет), `onLeave` |
 | `server/RunEvents` | 215 | `Launch`, `Air`, `Crash`, `Smash`, `Trick` |
 | `server/Pickups` | 188 | монеты (касание, магнит `CoinGrab`, комбо), `PowerUp` (x2, кольца, канистра, ускорители), гемы, кристалл |
 | `server/Shop` | 185 | `SledAction`, `TrailAction`, `RewardAction`, `BuyUpgrade`, `WorldAction` |
@@ -51,7 +51,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `client/Sled/Launch` | 117 | рогатка: натяжение, выстрел `Launch(power)` |
 | `client/Sled/Tricks` | 345 | ручные и авто-трюки, `Tricks.land` (итог полёта), `Tricks.air` (кадр в воздухе), кнопки прыжка/ракеты |
 | `client/Sled/Contacts` | 386 | касания (авария, разбивание, щит, бонусы, гемы, кристалл, ускорители), `Contacts.scan` (монеты по отрезку пути, магнит) |
-| `shared/Track/init` | 558 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `destroy` |
+| `shared/Track/init` | 574 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `rescueCFrame`, `destroy` |
 | `shared/Track/Profile` | 244 | `buildProfile` — цепочка кусков уровня (тип `Segment`) |
 | `shared/Track/Sections` | 167 | профили сечений, цвета снега, `sidePoint`, поперечное сечение куска |
 | `shared/Track/Dress` | 231 | оформление миров вдоль трассы и разметка на ней |
@@ -94,9 +94,15 @@ GitHub Actions публикует его в Roblox через Open Cloud.
    ловит клиент и сообщает серверу.
 5. Сервер раз в 0.2 с считает прогресс (`Track:progressOf`) и пропускает его через
    `AntiCheat.tick` (ниже), строит трассу впереди (`ensureAround`), ловит финиш (дальше скольжение
-   по ледяному озеру), вылет, остановку.
-6. `endRun` начисляет монеты/гемы, прогресс заданий, шлёт `RunEnded`, через паузу пересоздаёт
-   персонажа в лобби.
+   по ледяному озеру), вылет, остановку. Сторож: персонаж заезда удалён/пересоздан или не сидит
+   в санках дольше `RUN_UNSEATED_MAX` → `endRun("left")`. Страховка `rescueCheck`: ниже дна куска
+   на `RESCUE_DEPTH`, за барьером или дольше `RESCUE_OUT_TIME` снаружи борта → `Rescue` клиенту
+   с точкой `Track:rescueCFrame(pos)` (nil над пропастью/островками/озером → там `fell`).
+6. `endRun` начисляет монеты/гемы, прогресс заданий, шлёт `RunEnded`, через паузу убирает санки и
+   трассу и пересоздаёт персонажа в лобби (`respawn`: `LoadCharacterAsync` в pcall, до 3 попыток).
+   `ending[player]` снимается только после пересоздания — иначе `StartRun`/зона посадки во время
+   загрузки сажали в новые санки старого персонажа (#50: «на старте без персонажа, только сани»).
+   Пока игрок в `ending`, проверка «упал с лобби» его не переносит (PivotTo унёс бы и сани).
 
 ### Античит (`server/AntiCheat`)
 Клиенту отдана физика саней, поэтому всё, что он сообщает, сервер сверяет с правдоподобным.
@@ -195,6 +201,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `Restart`, `Back` | Event | клиент → заново / в лобби с рогатки |
 | `RunEnded` | Event | сервер → итог заезда |
 | `TaskDone` | Event | сервер → задание выполнено |
+| `Rescue` | Event | сервер → мягкий возврат: `(CFrame на дне куска, доля скорости)`; клиент переставляет свои санки, сбрасывает полёт и трюки (#50) |
 | `SetSetting` | Event | клиент → настройка (Sfx/Music/Snow/Shadows) |
 | `PowerUp` | Event | клиент → подобрал бонус (x2, кольцо, магнит, щит, канистра, ускоритель) |
 | `BuyUpgrade`, `SledAction`, `TrailAction` | Function | покупки/экипировка |

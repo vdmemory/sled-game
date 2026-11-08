@@ -188,10 +188,38 @@ end)
 for _, s in sledsFolder:GetChildren() do
 	task.spawn(onSledAdded, s)
 end
-player.CharacterAdded:Connect(function()
-	if st.sled and not st.sled.Parent then
+player.CharacterAdded:Connect(function(character)
+	-- санки убраны или персонаж пересоздан во время заезда (сервер закончит заезд сам) — камера
+	-- не должна остаться на рогатке старой трассы
+	if st.sled and (not st.sled.Parent or (st.humanoid and st.humanoid.Parent ~= character)) then
 		stopRiding()
 	end
+end)
+
+-- Мягкий возврат на трассу (server/Runs, Config.RESCUE_*): сервер прислал точку на дне куска —
+-- переставляем свои санки (физика у нас), скорость × keep вдоль трассы, полёт и трюки сбрасываем
+-- (падение — не «полёт» с монетами)
+Remotes:WaitForChild("Rescue").OnClientEvent:Connect(function(cf: CFrame, keep: number)
+	local s = st.sled
+	if not s or not s.Parent or s.Anchored or st.crashed or typeof(cf) ~= "CFrame" then
+		return
+	end
+	local k = if typeof(keep) == "number" then math.clamp(keep, 0, 1) else 0.7
+	st.speed *= k
+	st.lateral = 0
+	local look = cf.LookVector
+	local flat = Vector3.new(look.X, 0, look.Z)
+	if flat.Magnitude > 0.1 then
+		st.fwd = flat.Unit
+	end
+	s.CFrame = cf
+	s.AssemblyLinearVelocity = look * st.speed
+	s.AssemblyAngularVelocity = Vector3.zero
+	st.airborne, st.jumping, st.jumpQueued = false, false, false
+	airborneValue.Value = false
+	st.airTime = 0
+	clearAirTricks()
+	trickPopup:Fire("↩ Назад на трассу")
 end)
 
 ------------------------------------------------------------------ кадр физики

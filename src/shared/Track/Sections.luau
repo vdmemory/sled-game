@@ -80,10 +80,16 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 	-- землю держит первый кусок перехода
 	local fillet = seg ~= nil and seg.kind == "fillet"
 	local bankLen = if fillet then len else visLen
+	-- Дорога/переезд: снаружи невидимого борта — невидимый сугроб того же профиля, что у снежных
+	-- кусков, и барьер там же, где у них. Сани, выехавшие за борт с ледяного жёлоба (у жёлоба
+	-- бортов нет), катятся по сугробу снаружи борта; раньше у дороги сугроб обрывался и они
+	-- падали за карту (баг «вылет у дороги»). Видимая дорога и машины не меняются.
+	local road = prof == ROAD_PROFILE
+	local guard = if road then SNOW_PROFILE else prof
 	for _, side in { -1, 1 } do
 		local x, y = floorW / 2, 0
 		if bankLen > 0 then
-			for k, b in prof.banks do
+			for k, b in guard.banks do
 				local a = math.rad(b.angle)
 				part("Part", {
 					Name = "Bank",
@@ -92,6 +98,8 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 					Material = if chute then Enum.Material.Glacier else Enum.Material.Snow,
 					Color = if chute then ICE_WALL:Lerp(Color3.new(1, 1, 1), (k - 1) * 0.12) else snowBank,
 					Reflectance = if chute then 0.1 else 0,
+					Transparency = if road then 1 else 0,
+					CastShadow = not road,
 				}, m)
 				x += b.width * math.cos(a)
 				y += b.width * math.sin(a)
@@ -117,7 +125,7 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 			part("Part", {
 				Name = "Barrier",
 				Size = Vector3.new(2, 40, visLen + overlap),
-				CFrame = cf * CFrame.new(side * (prof.out + 2), prof.top + 10, -visLen / 2),
+				CFrame = cf * CFrame.new(side * (guard.out + 2), guard.top + 10, -visLen / 2),
 				Transparency = 1,
 				CanQuery = false,
 			}, m)
@@ -127,6 +135,20 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 		-- В жёлобе бортами служат сами ледяные пояса. На приземлении после обрыва борт вдвое выше:
 		-- санки прилетают сверху и не должны перелететь его. CanQuery=false — луч санок вниз и
 		-- GetPartBoundsInBox его не видят; наклон наружу — скатываешься, а не прилипаешь.
+		if lake then
+			-- Озеро шире трассы: его край за барьером прошлого куска закрыт поперечным барьером
+			-- (иначе на озере за бортом — карман, который сзади обрывается в пустоту)
+			local x0 = BANK_OUT + 1
+			local bw = prof.out + 3 - x0
+			part("Part", {
+				Name = "Barrier",
+				Size = Vector3.new(bw, 40, 2),
+				CFrame = floorCF * CFrame.new(side * (x0 + bw / 2), 10, 1),
+				Transparency = 1,
+				CanQuery = false,
+				CastShadow = false,
+			}, m)
+		end
 		local wallH = Config.WALL_HEIGHT * (if landing then 2 else 1)
 		if not chute and wallH > 0 then
 			local tilt = math.rad(Config.WALL_TILT)

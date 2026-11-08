@@ -32,6 +32,7 @@ local Remotes = {
 	DevAction = remote("RemoteFunction", "DevAction") :: RemoteFunction, -- панель разработчика (только владелец)
 	WorldAction = remote("RemoteFunction", "WorldAction") :: RemoteFunction, -- фарм пройденного мира / пропуск мира за Robux
 	TutorialStep = remote("RemoteEvent", "TutorialStep") :: RemoteEvent, -- обучение: шаг i пройден (0 — пропустить всё)
+	Rescue = remote("RemoteEvent", "Rescue") :: RemoteEvent, -- сервер → клиент: вернуть сани на трассу (CFrame, доля скорости)
 }
 
 return Remotes
