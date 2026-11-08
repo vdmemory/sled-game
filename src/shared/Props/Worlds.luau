@@ -4,6 +4,7 @@
 local Base = require(script.Parent.Base)
 
 local Props = Base.Props
+local Meshes = Base.Meshes
 local part, deco, pick = Base.part, Base.deco, Base.pick
 local SNOW, BLACK = Base.SNOW, Base.BLACK
 
@@ -26,25 +27,47 @@ function Props.stalagmite(rng: Random, base: CFrame, parent: Instance, collide: 
 		maker({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(h / 4 + 0.2, w, w), CFrame = base * CFrame.new(0, h / 8 + k * h / 4, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Ice, Color = ICE:Lerp(ICE_DEEP, k * 0.2) }, parent)
 	end
 end
--- Друза кристаллов: светящиеся остроконечные призмы
+-- Друза кристаллов: светящиеся остроконечные призмы. Меш (#45): шестигранная друза одним MeshPart
+-- (1 деталь вместо 8–14). Random-вызовы — как у модели из Part.
 function Props.crystalCluster(rng: Random, base: CFrame, parent: Instance)
 	local col = pick(rng, { Color3.fromRGB(120, 220, 255), Color3.fromRGB(190, 140, 255), Color3.fromRGB(140, 255, 220) })
-	for _ = 1, rng:NextInteger(4, 7) do
+	local list = {}
+	for k = 1, rng:NextInteger(4, 7) do
 		local h = rng:NextNumber(4, 11)
-		local c = base * CFrame.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3)) * CFrame.Angles(rng:NextNumber(-0.5, 0.5), rng:NextNumber(0, 6), rng:NextNumber(-0.5, 0.5))
-		deco({ Size = Vector3.new(1.4, h, 1.4), CFrame = c * CFrame.new(0, h / 2, 0), Material = Enum.Material.Neon, Color = col, Transparency = 0.15 }, parent)
-		deco({ Size = Vector3.new(1, 1, 1), CFrame = c * CFrame.new(0, h, 0) * CFrame.Angles(math.rad(45), 0, math.rad(45)), Material = Enum.Material.Neon, Color = col, Transparency = 0.15 }, parent)
+		local x, z = rng:NextNumber(-3, 3), rng:NextNumber(-3, 3)
+		list[k] = { h = h, x = x, z = z, a = rng:NextNumber(-0.5, 0.5), b = rng:NextNumber(0, 6), c = rng:NextNumber(-0.5, 0.5) }
+	end
+	if Meshes.has("ice_crystal") then
+		local s = 4 + list[1].h * 0.5
+		Meshes.place("ice_crystal", base * CFrame.Angles(0, list[1].b, 0), Vector3.new(s, s * 1.15, s), { Material = Enum.Material.Neon, Color = Meshes.vary(col, base.Position, 0.08), Transparency = 0.15 }, parent)
+		return
+	end
+	for _, k in list do
+		local c = base * CFrame.new(k.x, 0, k.z) * CFrame.Angles(k.a, k.b, k.c)
+		deco({ Size = Vector3.new(1.4, k.h, 1.4), CFrame = c * CFrame.new(0, k.h / 2, 0), Material = Enum.Material.Neon, Color = col, Transparency = 0.15 }, parent)
+		deco({ Size = Vector3.new(1, 1, 1), CFrame = c * CFrame.new(0, k.h, 0) * CFrame.Angles(math.rad(45), 0, math.rad(45)), Material = Enum.Material.Neon, Color = col, Transparency = 0.15 }, parent)
 	end
 end
--- Ледяная скала-стена вдоль трассы с сосульками
+-- Ледяная скала-стена вдоль трассы с сосульками. Меш (#45): утёс со слоями из ледника (1 деталь
+-- вместо 6); Random-вызовы — как у модели из Part.
 function Props.iceCliff(rng: Random, base: CFrame, side: number, parent: Instance)
 	local h = rng:NextNumber(18, 34)
 	local w = rng:NextNumber(16, 26)
-	deco({ Size = Vector3.new(14, h, w), CFrame = base * CFrame.new(side * 7, h / 2, 0) * CFrame.Angles(0, rng:NextNumber(-0.2, 0.2), 0), Material = Enum.Material.Glacier, Color = ICE }, parent)
-	deco({ Size = Vector3.new(15, 2, w + 1), CFrame = base * CFrame.new(side * 7, h + 0.5, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+	local turn = rng:NextNumber(-0.2, 0.2)
+	local icicles = {}
 	for k = 1, 4 do
+		icicles[k] = rng:NextNumber(2, 5)
+	end
+	local ice = Meshes.vary(ICE, base.Position, 0.06)
+	if Meshes.has("crag") then
+		local c = base * CFrame.new(side * 7, -1, 0) * CFrame.Angles(0, math.pi / 2 + turn, 0)
+		Meshes.place("crag", c, Vector3.new(w / 1.6, (h + 2) / 3.46, 14 / 1.3), { Material = Enum.Material.Glacier, Color = ice, CastShadow = true }, parent)
+		return
+	end
+	deco({ Size = Vector3.new(14, h, w), CFrame = base * CFrame.new(side * 7, h / 2, 0) * CFrame.Angles(0, turn, 0), Material = Enum.Material.Glacier, Color = ice }, parent)
+	deco({ Size = Vector3.new(15, 2, w + 1), CFrame = base * CFrame.new(side * 7, h + 0.5, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+	for k, ih in icicles do
 		local z = (k - 2.5) * w / 4
-		local ih = rng:NextNumber(2, 5)
 		deco({ Size = Vector3.new(0.8, ih, 0.8), CFrame = base * CFrame.new(side * 0.6, h * 0.6 - ih / 2, z), Material = Enum.Material.Ice, Color = ICE }, parent)
 	end
 end

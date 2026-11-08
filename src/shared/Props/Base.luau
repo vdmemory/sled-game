@@ -1,6 +1,8 @@
 -- Общие помощники моделей (часть shared/Props, см. Props/init): part/deco, цвета, pick, надпись
 -- на грани, колёса. Таблица Props здесь создаётся, модули категорий дописывают в неё модели.
 
+local Meshes = require(script.Parent.Parent.Meshes)
+
 local Props = {}
 
 ------------------------------------------------------------------ helpers
@@ -89,6 +91,7 @@ end
 
 return {
 	Props = Props,
+	Meshes = Meshes, -- свои меши декора (#45): has/place/vary, фолбэк — модели из Part
 	part = part,
 	deco = deco,
 	pick = pick,

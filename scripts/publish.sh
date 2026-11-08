@@ -23,15 +23,32 @@ fi
 # Иконки интерфейса: новые PNG из assets/ui загружаются в Roblox (нужны права ключа на
 # Assets API). Если появились новые ID — пересобираем место, чтобы они попали в игру.
 # ID печатаются в лог деплоя; их сохраняют в репозиторий (assets/ui/decals.json).
+REBUILD=""
 if [ -f scripts/upload_ui_assets.py ] && [ -z "${SKIP_UI_ASSETS:-}" ]; then
   BEFORE=$(cat src/shared/UIDecals.luau 2>/dev/null || true)
   python3 scripts/upload_ui_assets.py || echo "::warning::загрузка иконок не удалась"
   if [ "$BEFORE" != "$(cat src/shared/UIDecals.luau 2>/dev/null || true)" ]; then
-    ROJO="$(find "${RUNNER_TEMP:-/tmp}" -type f -name rojo 2>/dev/null | head -n 1)"
-    if [ -n "$ROJO" ]; then
-      "$ROJO" build default.project.json -o "$FILE" && echo "Пересобрано с новыми иконками"
-    fi
+    REBUILD=1
     echo "UI_DECALS_JSON_BEGIN"; cat assets/ui/decals.json; echo "UI_DECALS_JSON_END"
+  fi
+fi
+
+# Меши декора (#45): assets/meshes/*.glb → ассеты Model (Assets API, права те же: asset:read+write).
+# Новые ID → src/shared/MeshIds.luau → пересборка; в лог MESH_IDS_JSON_BEGIN/END — их коммитят в
+# assets/meshes/meshes.json и MeshIds.luau. Без прав/ошибка — warning, игра строит декор из Part.
+if [ -f scripts/upload_meshes.py ] && [ -z "${SKIP_MESHES:-}" ]; then
+  BEFORE=$(cat src/shared/MeshIds.luau 2>/dev/null || true)
+  python3 scripts/upload_meshes.py || echo "::warning::загрузка мешей не удалась"
+  if [ "$BEFORE" != "$(cat src/shared/MeshIds.luau 2>/dev/null || true)" ]; then
+    REBUILD=1
+    echo "MESH_IDS_JSON_BEGIN"; cat assets/meshes/meshes.json; echo "MESH_IDS_JSON_END"
+  fi
+fi
+
+if [ -n "$REBUILD" ]; then
+  ROJO="$(find "${RUNNER_TEMP:-/tmp}" -type f -name rojo 2>/dev/null | head -n 1)"
+  if [ -n "$ROJO" ]; then
+    "$ROJO" build default.project.json -o "$FILE" && echo "Пересобрано с новыми ассетами (иконки/меши)"
   fi
 fi
 
