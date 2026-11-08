@@ -18,6 +18,7 @@ Rojo → GitHub Actions → Open Cloud. Push в `main` = деплой на stagi
 | Средства передвижения детально: геометрия, посадка, точки крепления, обвес по тирам, ракеты/моторы, рогатка/катапульта, новый транспорт | `vehicle-engineer` | `shared/SledModels/`, `scripts/gen_sled_meshes.py`, `Config.SLEDS/TIERS`, `server/Sleds.makeSled` |
 | Внешний вид: стиль и цвета моделей, пропсы, UI/UX (окна, HUD, кнопки, иконки), эффекты, свет, пейзаж, анимации, звук | `art-director` | `shared/Props/` (вид), `shared/Lobby.luau` (вид лобби), `shared/UIKit.luau`, `client/HUD`, `client/LobbyMenus`, `client/Effects`, `client/Reveal`, `client/Sounds`, `assets/ui` |
 | Идеи: «что дальше», «чего не хватает», «что у конкурентов», новые механики/миры/события, анализ игроков и отзывов, тренды Roblox | `idea-scout` | интернет, Creator Hub Analytics (цифры присылает владелец), `docs/IDEAS.md` |
+| Звук: эффекты, музыка, микс, громкость, звук на телефоне, загрузка аудио | `sound-designer` | `client/Sounds`, `assets/audio`, `Config.MUSIC_*` |
 | Проверить, протестировать, пройти трассу, найти баги, оценить сложность/скорость/плотность препятствий, «почему не работает», FPS на телефоне | `qa-tester` | играет на staging через компьютер владельца; `docs/TESTING.md` |
 | Код-ревью, архитектура, структура модулей, деплой, CI, DataStore/ремоуты/безопасность, производительность, «сделай правильно» | `code-reviewer` | всё `src/`, `scripts/`, `default.project.json`, `docs/ARCHITECTURE.md` |
 
