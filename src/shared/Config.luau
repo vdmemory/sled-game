@@ -179,7 +179,7 @@ Config.MESH_DECOR = 1
 -- Меши транспорта (сани, обвес тиров, ракеты — shared/SledModels): 1 — меши, если шаблоны загружены;
 -- 0 — всё из Part. MESH_SLED_FLIP = 1 — развернуть меши на 180° (если импорт перевернул нос).
 Config.MESH_SLEDS = 1
-Config.MESH_SLED_FLIP = 0
+Config.MESH_SLED_FLIP = 1 -- импорт glb в Roblox зеркалит ось Z (проверено в игре 2026-11-08: ракеты задом наперёд)
 -- Фары (тир «Саней» 1, #33): пятно света на снегу впереди (SpotLight) и луч (Beam), видно с камеры
 Config.HEADLIGHT_RANGE = 34
 Config.HEADLIGHT_BRIGHTNESS = 3
