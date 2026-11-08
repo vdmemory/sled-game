@@ -2,7 +2,7 @@
 -- atlas = ID аудио-ассета (0 — ещё не загружен: играют встроенные rbxasset-звуки, см. client/Sounds).
 -- regions: имя → { начало, длина (с), луп } — Sound.PlaybackRegion / LoopRegion.
 return {
-	atlas = 0,
+	atlas = 85020498524123,
 	regions = {
 		click = { 0.12, 0.05, false },
 		open = { 0.29, 0.22, false },
