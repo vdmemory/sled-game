@@ -29,7 +29,7 @@ local st = require(script.Parent:WaitForChild("Sled"):WaitForChild("State")) :: 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
-local AudioIds = require(Shared:WaitForChild("AudioIds")) :: any
+local AudioIds = require(Shared:WaitForChild("AudioSet")) :: any
 local UI = require(Shared:WaitForChild("UIKit")) :: any
 
 local SND = Config.SOUND

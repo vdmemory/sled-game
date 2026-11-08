@@ -553,6 +553,7 @@ Config.MUSIC_IDS = { 125871106395463, 132489602913551, 140520386514181 }
 Config.MUSIC_VOLUME = 0.16 -- громкость трека (≤ 0.2: музыка не спорит с эффектами)
 Config.MUSIC_RUN_MULT = 0.6 -- в заезде музыка тише (ветер и скольжение важнее)
 Config.MUSIC_FADE = 1.5 -- сек кроссфейда лобби ↔ заезд
+Config.SOUND_SET = 1 -- 0 встроенные · 1 v1 (синтез) · 2 v2 (записи); см. shared/AudioSet
 Config.SOUND = {
 	-- громкость каналов SoundGroup (выключатели ⚙ «Звуки»/«Музыка» глушат каналы целиком)
 	groups = { Music = 1, SFX = 0.9, UI = 0.55, Ambience = 0.8 },
@@ -568,16 +569,16 @@ Config.SOUND = {
 	-- у one-shot, −22 у лупов), поэтому числа ниже — и есть микс: UI тише, удары и награды заметны,
 	-- скольжение — фоном. Правятся в DEV → «Звуки» (−/+ и «Сохранить») = TUNABLES «Звук: события».
 	sfx = {
-		click = { 0.4, "UI", 2 }, open = { 0.4, "UI", 2 }, deny = { 0.5, "UI", 2 }, buy = { 0.9, "UI", 2 },
-		claim = { 0.5, "UI", 2 }, chest = { 0.8, "UI", 1 }, ready = { 0.6, "UI", 1 }, task = { 0.6, "UI", 1 },
-		reveal = { 0.7, "UI", 1 }, tierup = { 0.7, "UI", 1 },
-		coin = { 0.7, "SFX", 4 }, gem = { 0.7, "SFX", 2 }, crystal = { 0.9, "SFX", 2 },
-		shield = { 0.6, "SFX", 1 }, shieldhit = { 0.8, "SFX", 1 }, x2 = { 0.6, "SFX", 1 }, magnet = { 0.55, "SFX", 1 },
-		fuel = { 0.65, "SFX", 1 }, ring = { 0.6, "SFX", 2 }, boost = { 0.6, "SFX", 2 }, spring = { 0.65, "SFX", 1 },
-		launch = { 0.8, "SFX", 1 }, jump = { 0.5, "SFX", 2 }, land = { 0.75, "SFX", 2 }, spin = { 0.45, "SFX", 2 },
-		flip = { 0.6, "SFX", 2 }, wipe = { 0.85, "SFX", 1 }, smash = { 0.85, "SFX", 3 }, crash = { 1, "SFX", 1 },
-		fall = { 0.7, "SFX", 1 }, rocket_on = { 0.6, "SFX", 1 }, rocket_off = { 0.6, "SFX", 1 },
-		finish = { 0.75, "SFX", 1 }, record = { 0.7, "SFX", 1 }, horn = { 0.6, "Ambience", 2 },
+		click = { 0.5, "UI", 2 }, open = { 0.5, "UI", 2 }, deny = { 0.6, "UI", 2 }, buy = { 0.7, "UI", 2 },
+		claim = { 0.55, "UI", 2 }, chest = { 0.8, "UI", 1 }, ready = { 0.7, "UI", 1 }, task = { 0.7, "UI", 1 },
+		reveal = { 0.8, "UI", 1 }, tierup = { 0.9, "UI", 1 },
+		coin = { 0.45, "SFX", 4 }, gem = { 0.6, "SFX", 2 }, crystal = { 0.8, "SFX", 2 },
+		shield = { 0.7, "SFX", 1 }, shieldhit = { 0.8, "SFX", 1 }, x2 = { 0.7, "SFX", 1 }, magnet = { 0.65, "SFX", 1 },
+		fuel = { 0.7, "SFX", 1 }, ring = { 0.6, "SFX", 2 }, boost = { 0.7, "SFX", 2 }, spring = { 0.75, "SFX", 1 },
+		launch = { 0.9, "SFX", 1 }, jump = { 0.6, "SFX", 2 }, land = { 0.7, "SFX", 2 }, spin = { 0.5, "SFX", 2 },
+		flip = { 0.65, "SFX", 2 }, wipe = { 0.8, "SFX", 1 }, smash = { 0.8, "SFX", 3 }, crash = { 1, "SFX", 1 },
+		fall = { 0.8, "SFX", 1 }, rocket_on = { 0.7, "SFX", 1 }, rocket_off = { 0.6, "SFX", 1 },
+		finish = { 0.85, "SFX", 1 }, record = { 0.8, "SFX", 1 }, horn = { 0.9, "Ambience", 2 },
 		-- лупы: громкость в полную силу (скорость ≥ loopFullSpeed). Скольжение тихо, фоном (жалоба владельца
 		-- на v1: «шум санок сильно громкий»): снег 0.22 атласа v2 ≈ на 9 дБ тише v1 при 0.5 (≈ уровень
 		-- временного 0.15 у v1), ветер 0.45 ≈ v1 при 0.25.
@@ -1035,6 +1036,7 @@ Config.TUNABLES = {
 	{ "GRAPHICS.VIGNETTE_MAX", "Виньетка скорости: макс.", "Графика", 0, 0.9, 0.05 },
 	{ "GRAPHICS.VIGNETTE_FROM", "Виньетка: со скорости", "Графика", 0, 300, 5 },
 	{ "GRAPHICS.VIGNETTE_FULL", "Виньетка: полная на скорости", "Графика", 10, 400, 5 },
+	{ "SOUND_SET", "Звук: набор (0 встроенные, 1 v1, 2 v2; перезайти)", "Звук", 0, 2, 1 },
 	{ "MUSIC_VOLUME", "Музыка: громкость", "Звук", 0, 0.3, 0.01 },
 	{ "SOUND.groups.SFX", "Эффекты: громкость канала", "Звук", 0, 1, 0.05 },
 	{ "SOUND.groups.UI", "Интерфейс: громкость канала", "Звук", 0, 1, 0.05 },

@@ -765,7 +765,7 @@ end
 -- громкость из Config.SOUND, что в игре. −/+ меняют громкость сразу (локально), «Сохранить для всех» пишет
 -- их в TUNABLES «Звук: события» (как вкладка «Настройка»).
 local SoundService = game:GetService("SoundService")
-local AudioIds = require(Shared:WaitForChild("AudioIds")) :: any
+local AudioIds = require(Shared:WaitForChild("AudioSet")) :: any
 local SOUND_GROUPS = {
 	{ "Интерфейс", { "click", "open", "deny", "buy" } },
 	{ "Награды", { "claim", "chest", "ready", "task", "reveal", "tierup", "finish", "record" } },
@@ -804,7 +804,7 @@ local function soundSource(name: string): string
 	if SoundService:GetAttribute("SoundSource") == "atlas" then
 		return "атлас v2 · " .. tostring(r[4] or "")
 	end
-	return (if (AudioIds.atlas or 0) == 0 then "встроенный (атлас v2 не загружен) · " else "встроенный (атлас грузится) · ") .. tostring(r[4] or "")
+	return (if (AudioIds.atlas or 0) == 0 then "встроенный (атлас не загружен) · " else "встроенный (атлас грузится) · ") .. tostring(r[4] or "")
 end
 
 tabs["Звуки"] = function()
