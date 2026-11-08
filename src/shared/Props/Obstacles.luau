@@ -5,6 +5,7 @@
 local Base = require(script.Parent.Base)
 
 local Props = Base.Props
+local Meshes = Base.Meshes
 local part, deco, pick, label, wheels = Base.part, Base.deco, Base.pick, Base.label, Base.wheels
 local SNOW, BLACK, GLASS = Base.SNOW, Base.BLACK, Base.GLASS
 
@@ -79,20 +80,39 @@ function Props.snowman(rng: Random, base: CFrame, parent: Instance)
 	end
 end
 
--- Низкополигональный валун: 2–3 повёрнутых блока разных оттенков
+-- Низкополигональный валун: 2–3 повёрнутых блока разных оттенков. Декор (collide == false) с мешами
+-- (#45) — скала-меш + снежная шапка (2 детали вместо 4); препятствие — всегда Part (точная коллизия).
 function Props.boulder(rng: Random, base: CFrame, parent: Instance, sandy: boolean?, scale: number?, collide: boolean?)
 	local s = (scale or 1) * rng:NextNumber(4.5, 6.5)
 	local baseColor = if sandy then Color3.fromRGB(205, 140, 95) else Color3.fromRGB(125, 130, 145)
+	local rocks = {}
+	for k = 1, 3 do -- все Random-вызовы до выбора пути (раскладка куска не зависит от мешей)
+		local ox, oz = rng:NextNumber(-1, 1), rng:NextNumber(-1, 1)
+		rocks[k] = { ox = ox, oz = oz, ax = rng:NextNumber(-0.4, 0.4), ay = rng:NextNumber(0, math.pi), az = rng:NextNumber(-0.4, 0.4) }
+	end
+	local mat = if sandy then Enum.Material.Sandstone else Enum.Material.Slate
+	if collide == false and Meshes.has("rock_a", "rock_b") then
+		local r = rocks[1]
+		local c = base * CFrame.Angles(0, r.ay * 2, 0)
+		local name = if r.ax > 0 then "rock_a" else "rock_b"
+		local sc = Vector3.one * s * (if name == "rock_a" then 0.6 else 0.75)
+		local rock = Meshes.place(name, c * CFrame.new(0, -s * 0.08, 0), sc, { Material = mat, Color = Meshes.vary(baseColor, base.Position, 0.1), CastShadow = true }, parent)
+		if not sandy and rock then
+			deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(s * 1.0, s * 0.28, s * 0.8), CFrame = c * CFrame.new(0, rock.Size.Y - s * 0.12, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+		end
+		return
+	end
 	local maker = if collide == false then deco else function(props, p)
 		return part("Part", props, p)
 	end
 	for k = 1, 3 do
 		local sz = s * (1 - (k - 1) * 0.22)
+		local r = rocks[k]
 		maker({
 			Size = Vector3.new(sz * 1.2, sz * 0.9, sz),
-			CFrame = base * CFrame.new(rng:NextNumber(-1, 1) * s * 0.3, sz * 0.35 + (k - 1) * s * 0.18, rng:NextNumber(-1, 1) * s * 0.3)
-				* CFrame.Angles(rng:NextNumber(-0.4, 0.4), rng:NextNumber(0, math.pi), rng:NextNumber(-0.4, 0.4)),
-			Material = if sandy then Enum.Material.Sandstone else Enum.Material.Slate,
+			CFrame = base * CFrame.new(r.ox * s * 0.3, sz * 0.35 + (k - 1) * s * 0.18, r.oz * s * 0.3)
+				* CFrame.Angles(r.ax, r.ay, r.az),
+			Material = mat,
 			Color = baseColor:Lerp(Color3.new(1, 1, 1), (k - 1) * 0.08),
 			CastShadow = true,
 		}, parent)

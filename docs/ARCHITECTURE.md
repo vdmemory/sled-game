@@ -63,6 +63,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Props/Decor` | 271 | деревья, постройки, горы, трамплин, шар |
 | `shared/Props/Worlds` | 234 | модели миров 4–7 |
 | `shared/Props/LobbyDecor` | 103 | костёр, флагшток, гирлянда |
+| `shared/Meshes` | 85 | меши декора (#45): `has(...)` (все шаблоны есть и `MESH_DECOR` = 1), `place(имя, основание, масштаб, свойства, родитель)`, `vary` (разброс оттенка по позиции) |
+| `shared/MeshSpecs`, `shared/MeshIds` | — | генерируются: габариты мешей (`scripts/gen_meshes.py`), имя → ID ассета Model (деплой) |
+| `server/MeshAssets.server` | 45 | `InsertService:LoadAsset(MeshIds)` → шаблоны MeshPart в `ReplicatedStorage.MeshTemplates` |
 
 Зависимости сервера без циклов: `Remotes`, `Sleds` ← `PlayerState` ← `Runs` ← `RunEvents`,
 `Pickups`, `Shop`, `Purchases`, `DevTools` ← `Main`. Клиент: `State` ← `Input`, `Launch` ←
@@ -250,6 +253,27 @@ overrides)` пишет нужный ключ (пустой персональн�
 только этот ключ (персональный — если игрок у них онлайн). `DevAction("tuneGet", target)` отдаёт
 панели персональный слой игрока (онлайн — из памяти, офлайн — из DataStore). Параметры, которых
 нет в переопределениях, равны значениям из кода.
+
+## Меши декора (#45)
+
+Open Cloud publish не принимает Union/EditableMesh, а MeshId у MeshPart из скрипта не ставится —
+поэтому меши загружаются отдельными ассетами и клонируются из шаблонов.
+
+| Шаг | Где | Что |
+| --- | --- | --- |
+| 1. Форма | `scripts/gen_meshes.py` (numpy + trimesh, локально) | 14 мешей → `assets/meshes/*.glb` (Y вверх, начало — центр основания; нормали плоские у камня/льда/хвои, гладкие у снега; UV коробочной проекцией — для текстур материалов; белый материал без картинки — цвет даёт `MeshPart.Color`), `specs.json`, `src/shared/MeshSpecs.luau` (size, offset). Детерминирован |
+| 2. Превью | `scripts/preview_meshes.py` | `assets/meshes/preview.png` — смотреть глазами после каждой правки формы |
+| 3. Загрузка | `scripts/upload_meshes.py` из `publish.sh` | `POST assets/v1/assets`, `assetType: "Model"`, `.glb` (`model/gltf-binary`) → операция → `assetId`; новые и изменённые (sha) → `assets/meshes/meshes.json` (`{ имя: { id, sha } }`) и `MeshIds.luau`, пересборка места, в лог `MESH_IDS_JSON_BEGIN/END` (закоммитить оба файла), статус модерации. 401/403 — warning с инструкцией по правам ключа, деплой идёт дальше. `SKIP_MESHES=1` — пропустить |
+| 4. Шаблоны | `server/MeshAssets.server` | `LoadAsset(id)` (3 попытки) → первый `MeshPart` → `ReplicatedStorage.MeshTemplates/<имя>` (без коллизий/лучей/касаний); ошибка — `warn` + атрибут `_err` у папки |
+| 5. Постройка | `shared/Meshes.place` из `Props` и `Track/Dress` | `Clone` шаблона, `Size = size·масштаб`, `CFrame = основание·offset·масштаб` — части одного объекта (хвоя + снег) совпадают при любом масштабе |
+
+Фолбэк: `Meshes.has` → false, пока нет хоть одного шаблона объекта (или `MESH_DECOR` = 0), — `Props`
+строит прежнюю модель из Part. Сервер (трасса) и клиент (витрина, декор лобби) решают сами по
+`MeshTemplates`; куски, построенные до загрузки шаблонов, остаются из Part. Все `Random`-вызовы
+моделей делаются до выбора пути, слои кадра берут свой `Random` от позиции куска — раскладка
+препятствий, монет и бонусов от мешей не зависит (стенд luau: отпечаток всего, кроме чистого декора,
+совпадает 1:1 с мешами и без на 70 уровнях; ни один меш не заходит в коридор трассы, кроме арки
+над ней). Меши — только декор; ходовая часть и препятствия — Part (точная коллизия).
 
 ## Иконки интерфейса
 

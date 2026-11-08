@@ -4,19 +4,32 @@
 local Base = require(script.Parent.Base)
 
 local Props = Base.Props
+local Meshes = Base.Meshes
 local part, deco, pick = Base.part, Base.deco, Base.pick
 local SNOW, BLACK, GLASS = Base.SNOW, Base.BLACK, Base.GLASS
 
 ------------------------------------------------------------------ декор: деревья и постройки
+-- Ёлка. Меш (#45): ярусы хвои с «лапами» + снег на ярусах, ствол — Part (3 детали вместо 7).
+-- Все Random-вызовы — до выбора пути: раскладка куска (препятствия, монеты) не зависит от мешей.
 function Props.pine(rng: Random, base: CFrame, parent: Instance)
 	local h = rng:NextNumber(14, 28)
-	deco({ Size = Vector3.new(2, h * 0.4, 2), CFrame = base * CFrame.new(0, h * 0.2, 0), Material = Enum.Material.Wood, Color = Color3.fromRGB(95, 65, 40) }, parent)
 	local green = Color3.fromRGB(40, 100 + rng:NextInteger(0, 30), 65)
+	local turns = { rng:NextNumber(0, 90), rng:NextNumber(0, 90), rng:NextNumber(0, 90) }
+	local trunk = Meshes.vary(Color3.fromRGB(95, 65, 40), base.Position, 0.1)
+	if Meshes.has("pine_foliage", "pine_snow") then
+		local c = base * CFrame.Angles(0, math.rad(turns[1] * 4), 0)
+		local s = Vector3.new(h * 0.62, h, h * 0.62)
+		deco({ Size = Vector3.new(1.6, h * 0.3, 1.6), CFrame = c * CFrame.new(0, h * 0.15, 0), Material = Enum.Material.Wood, Color = trunk }, parent)
+		Meshes.place("pine_foliage", c, s, { Color = Meshes.vary(green, base.Position, 0.12), CastShadow = true }, parent)
+		Meshes.place("pine_snow", c, s, { Material = Enum.Material.Snow, Color = SNOW }, parent)
+		return
+	end
+	deco({ Size = Vector3.new(2, h * 0.4, 2), CFrame = base * CFrame.new(0, h * 0.2, 0), Material = Enum.Material.Wood, Color = trunk }, parent)
 	for tier = 0, 2 do
 		local w = h * (0.6 - tier * 0.17)
 		deco({
 			Size = Vector3.new(w, h * 0.22, w),
-			CFrame = base * CFrame.new(0, h * (0.45 + tier * 0.2), 0) * CFrame.Angles(0, math.rad(tier * 30 + rng:NextNumber(0, 90)), 0),
+			CFrame = base * CFrame.new(0, h * (0.45 + tier * 0.2), 0) * CFrame.Angles(0, math.rad(tier * 30 + turns[tier + 1]), 0),
 			Color = green,
 			CastShadow = true,
 		}, parent)
@@ -194,14 +207,26 @@ function Props.waterTower(base: CFrame, parent: Instance)
 end
 
 ------------------------------------------------------------------ горы на горизонте
+-- Гора на горизонте. Меш (#45): три вершины с хребтами и рваной снежной шапкой (2 детали, как было,
+-- но силуэт горы вместо повёрнутого куба). sandy — каньон: песчаник, снег тот же.
 function Props.mountain(rng: Random, base: CFrame, sandy: boolean, parent: Instance, tint: Color3?)
 	local s = rng:NextNumber(90, 170)
-	local rot = CFrame.Angles(0, rng:NextNumber(0, math.pi), 0) * CFrame.Angles(math.rad(45), 0, math.rad(45))
+	local yaw = rng:NextNumber(0, math.pi)
+	local rockMat = if sandy then Enum.Material.Sandstone else Enum.Material.Slate
+	local rockCol = Meshes.vary(tint or (if sandy then Color3.fromRGB(205, 145, 100) else Color3.fromRGB(125, 140, 165)), base.Position, 0.08)
+	if Meshes.has("mountain_rock", "mountain_snow") then
+		local c = base * CFrame.new(0, -s * 0.06, 0) * CFrame.Angles(0, yaw * 2, 0)
+		local sc = Vector3.new(s * 0.85, s * 0.8, s * 0.85)
+		Meshes.place("mountain_rock", c, sc, { Material = rockMat, Color = rockCol }, parent)
+		Meshes.place("mountain_snow", c, sc, { Material = Enum.Material.Snow, Color = SNOW }, parent)
+		return
+	end
+	local rot = CFrame.Angles(0, yaw, 0) * CFrame.Angles(math.rad(45), 0, math.rad(45))
 	deco({
 		Size = Vector3.one * s,
 		CFrame = base * CFrame.new(0, -s * 0.15, 0) * rot,
-		Material = if sandy then Enum.Material.Sandstone else Enum.Material.Slate,
-		Color = tint or (if sandy then Color3.fromRGB(205, 145, 100) else Color3.fromRGB(125, 140, 165)),
+		Material = rockMat,
+		Color = rockCol,
 	}, parent)
 	local peak = s * 0.866 - s * 0.15
 	local cs = s * 0.32
@@ -213,25 +238,38 @@ function Props.mountain(rng: Random, base: CFrame, sandy: boolean, parent: Insta
 	}, parent)
 end
 
--- Слоистая столовая гора каньона
+-- Слоистая столовая гора каньона. Меш (#45): 4 неровных слоя с оврагами и полками (1 деталь
+-- вместо 3–8). Random-вызовы слоёв делаются и в пути меша — раскладка куска та же.
 function Props.mesa(rng: Random, base: CFrame, side: number, parent: Instance)
 	local h = rng:NextNumber(40, 110)
-	local y, layer = 0, 0
+	local layers = {}
+	local y = 0
 	while y < h do
 		local lh = rng:NextNumber(12, 24)
-		local shade = 0.85 + (layer % 2) * 0.12
-		local w = rng:NextNumber(26, 40) - layer * 2
+		local w = rng:NextNumber(26, 40) - #layers * 2
+		local d = rng:NextNumber(24, 36)
+		local turn = rng:NextNumber(-0.15, 0.15)
+		table.insert(layers, { y = y, lh = lh, w = w, d = d, turn = turn })
+		y += lh
+	end
+	local sand = Meshes.vary(Color3.fromRGB(225, 160, 110), base.Position, 0.07)
+	if Meshes.has("mesa") then
+		local w0 = layers[1].w
+		local c = base * CFrame.new(side * (w0 / 2 + 2), -1, 0) * CFrame.Angles(0, math.pi / 2 + layers[1].turn * 3, 0)
+		Meshes.place("mesa", c, Vector3.new(w0 * 0.55, y, layers[1].d * 0.6), { Material = Enum.Material.Sandstone, Color = sand, CastShadow = true }, parent)
+		return
+	end
+	for k, l in layers do
+		local shade = 0.85 + ((k - 1) % 2) * 0.12
 		deco({
-			Size = Vector3.new(w, lh, rng:NextNumber(24, 36)),
-			CFrame = base * CFrame.new(side * (w / 2 + layer * 1.5), y + lh / 2, 0) * CFrame.Angles(0, rng:NextNumber(-0.15, 0.15), 0),
+			Size = Vector3.new(l.w, l.lh, l.d),
+			CFrame = base * CFrame.new(side * (l.w / 2 + (k - 1) * 1.5), l.y + l.lh / 2, 0) * CFrame.Angles(0, l.turn, 0),
 			Material = Enum.Material.Sandstone,
-			Color = Color3.fromRGB(math.floor(225 * shade), math.floor(160 * shade), math.floor(110 * shade)),
+			Color = Color3.new(sand.R * shade, sand.G * shade, sand.B * shade),
 			CastShadow = true,
 		}, parent)
-		y += lh
-		layer += 1
 	end
-	deco({ Size = Vector3.new(22, 1.2, 26), CFrame = base * CFrame.new(side * (11 + layer * 1.5), y + 0.6, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+	deco({ Size = Vector3.new(22, 1.2, 26), CFrame = base * CFrame.new(side * (11 + #layers * 1.5), y + 0.6, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
 end
 
 ------------------------------------------------------------------ трамплин: жёлтый с чёрными шевронами

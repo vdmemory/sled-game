@@ -9,10 +9,12 @@ local Islands = require(ReplicatedStorage.Shared.Islands)
 local Sections = require(script.Parent.Sections)
 
 local deco = Props.deco
+local Meshes = require(ReplicatedStorage.Shared.Meshes)
 local W, SNOW_PROFILE, BANK_OUT, BANK_TOP = Sections.W, Sections.SNOW_PROFILE, Sections.BANK_OUT, Sections.BANK_TOP
 local sidePoint = Sections.sidePoint
 
 local Dress = {}
+local dressLayers: (theme: number, cf: CFrame, len: number, prof: any, m: Instance) -> ()
 
 ------------------------------------------------------------------ оформление миров
 local function dressSegment(theme: number, rng: Random, cf: CFrame, len: number, m: Instance, prof)
@@ -174,6 +176,91 @@ local function dressSegment(theme: number, rng: Random, cf: CFrame, len: number,
 			Props.mountain(rng, at(rng:NextNumber(140, 200), zr(0)), theme == 3, m, tint)
 		end
 	end
+	dressLayers(theme, cf, len, prof, m)
+end
+
+------------------------------------------------------------------ слои кадра из мешей (#45)
+-- Поверх обочин мира, только мешами (без шаблонов слоёв нет — вид и число инстансов как до #45):
+--   ближний план — сугробы/дюны у внешнего края бортов (мягкий переход трасса → мир);
+--   средний — скалы/утёсы в 55–95 studs; дальний — второй ряд гор в 240–320 studs;
+--   «вау» — парящий островок с ёлкой (снежные миры, конфетная гора) или каменная арка (каньон,
+--   вулкан) в поле зрения камеры. Свой Random от позиции куска — общий Random куска (препятствия,
+--   монеты, бонусы) не сдвигается. Декор спокойнее препятствий: приглушённые цвета, без Neon.
+local DRIFT = { -- мир → цвет, материал сугроба/дюны (город — без: там дома и машины)
+	[1] = { Color3.fromRGB(245, 249, 255), Enum.Material.Snow },
+	[3] = { Color3.fromRGB(222, 170, 120), Enum.Material.Sand },
+	[4] = { Color3.fromRGB(225, 240, 252), Enum.Material.Snow },
+	[5] = { Color3.fromRGB(215, 225, 245), Enum.Material.Snow },
+	[6] = { Color3.fromRGB(200, 196, 200), Enum.Material.Snow },
+	[7] = { Color3.fromRGB(255, 225, 240), Enum.Material.SmoothPlastic },
+}
+local CRAG = { -- мир → цвет, материал скал среднего плана
+	[1] = { Color3.fromRGB(120, 130, 150), Enum.Material.Slate },
+	[3] = { Color3.fromRGB(196, 120, 80), Enum.Material.Sandstone },
+	[4] = { Color3.fromRGB(160, 210, 240), Enum.Material.Glacier },
+	[5] = { Color3.fromRGB(80, 92, 125), Enum.Material.Slate },
+	[6] = { Color3.fromRGB(58, 54, 60), Enum.Material.Basalt },
+	[7] = { Color3.fromRGB(230, 170, 215), Enum.Material.SmoothPlastic },
+}
+local MTN_TINT = { [4] = Color3.fromRGB(150, 200, 235), [5] = Color3.fromRGB(70, 85, 120), [6] = Color3.fromRGB(60, 56, 62), [7] = Color3.fromRGB(235, 160, 210) }
+
+function dressLayers(theme: number, cf: CFrame, len: number, prof, m: Instance)
+	if theme == 2 or not Meshes.has("snowdrift") then
+		return
+	end
+	local p0 = cf.Position
+	local lr = Random.new((math.floor(p0.X * 7.13 + p0.Y * 3.71 + p0.Z * 11.37) % 2147483647) + theme)
+	local density = len / 110
+	local out, top = prof.out, prof.top
+	for _, side in { -1, 1 } do
+		local function at(offset: number, z: number): CFrame
+			return sidePoint(cf, side * (out + offset), z, top)
+		end
+		local function zr(): number
+			return lr:NextNumber(0, len)
+		end
+		-- ближний план: сугробы вдоль борта, длинной стороной вдоль трассы
+		local drift = DRIFT[theme]
+		for z = lr:NextNumber(4, 20), len, 36 do
+			if lr:NextNumber() < Config.DECOR_DRIFT_CHANCE * 0.6 then
+				local l = lr:NextNumber(9, 18)
+				local c = at(lr:NextNumber(1, 6), z) * CFrame.Angles(0, math.pi / 2 + lr:NextNumber(-0.25, 0.25), 0)
+				Meshes.place("snowdrift", c * CFrame.new(0, -0.6, 0), Vector3.new(l / 3.17, lr:NextNumber(3, 5.5) / 0.72, l * 0.32), { Material = drift[2], Color = Meshes.vary(drift[1], c.Position, 0.04) }, m)
+			end
+		end
+		-- средний план: утёс + валун у подножия
+		local crag = CRAG[theme]
+		if crag and Meshes.has("crag", "rock_b") and lr:NextNumber() < Config.DECOR_MID_CHANCE * density then
+			local c = at(lr:NextNumber(55, 95), zr()) * CFrame.Angles(0, lr:NextNumber(0, math.pi * 2), 0)
+			local h = lr:NextNumber(24, 48)
+			local col = Meshes.vary(crag[1], c.Position, 0.1)
+			Meshes.place("crag", c * CFrame.new(0, -1.5, 0), Vector3.new(h * 0.32, h / 3.46, h * 0.3), { Material = crag[2], Color = col, CastShadow = true }, m)
+			local r = lr:NextNumber(5, 9)
+			Meshes.place("rock_b", c * CFrame.new(h * 0.35, -0.8, h * 0.1), Vector3.one * r, { Material = crag[2], Color = Meshes.vary(col, c.Position + Vector3.one, 0.1), CastShadow = true }, m)
+		end
+		-- дальний план: второй ряд гор
+		if Meshes.has("mountain_rock", "mountain_snow") and lr:NextNumber() < Config.DECOR_FAR_CHANCE * density then
+			Props.mountain(lr, at(lr:NextNumber(240, 320), zr()) * CFrame.new(0, -10, 0), theme == 3, m, MTN_TINT[theme])
+		end
+		-- «вау»: парящий островок с ёлкой или каменная арка
+		if lr:NextNumber() < Config.DECOR_WOW_CHANCE * density then
+			if (theme == 3 or theme == 6) and Meshes.has("arch") then
+				local c = at(lr:NextNumber(60, 110), zr()) * CFrame.Angles(0, lr:NextNumber(-0.6, 0.6), 0)
+				local s = lr:NextNumber(26, 40)
+				Meshes.place("arch", c * CFrame.new(0, -2, 0), Vector3.new(s, s * 0.9, s * 0.45), { Material = crag[2], Color = Meshes.vary(crag[1], c.Position, 0.06), CastShadow = true }, m)
+			elseif Meshes.has("isle_rock", "isle_cap") and theme ~= 3 and theme ~= 6 then
+				local c = at(lr:NextNumber(70, 130), zr()) * CFrame.new(0, lr:NextNumber(40, 75), 0) * CFrame.Angles(0, lr:NextNumber(0, math.pi * 2), 0)
+				local s = lr:NextNumber(12, 20)
+				local sc = Vector3.new(s, s * 1.1, s)
+				local capCol = if theme == 7 then Color3.fromRGB(255, 215, 235) else Color3.fromRGB(250, 252, 255)
+				Meshes.place("isle_rock", c, sc, { Material = crag[2], Color = Meshes.vary(crag[1], c.Position, 0.08), CastShadow = true }, m)
+				Meshes.place("isle_cap", c, sc, { Material = if theme == 7 then Enum.Material.SmoothPlastic else Enum.Material.Snow, Color = capCol }, m)
+				if theme ~= 7 then
+					Props.pine(lr, c * CFrame.new(-0.35 * s, 0.4 * s, 0.2 * s), m)
+				end
+			end
+		end
+	end
 end
 
 ------------------------------------------------------------------ разметка и «вау» на трассе (#40, art)
@@ -207,10 +294,16 @@ local function dressTrack(theme: number, rng: Random, seg, m: Instance)
 		end
 	end
 	if kind == "gentle" and seg.hStart > Config.SAFE_START and rng:NextNumber() < Config.ARCH_CHANCE then
-		-- большая арка: ледяные блоки полукругом над всей шириной (декор, сквозь неё едем)
+		-- большая арка: ледяной свод над всей шириной (декор, сквозь неё едем). Меш (#45) — 1 деталь
+		-- вместо 13 блоков; без шаблона — блоки полукругом, как раньше.
 		local r = BANK_OUT + 4
 		local z = len * rng:NextNumber(0.35, 0.65)
 		local iceCol = if theme == 7 then Color3.fromRGB(255, 190, 225) elseif theme == 3 then Color3.fromRGB(230, 170, 120) else Color3.fromRGB(150, 205, 245)
+		if Meshes.has("arch") then
+			local span = r * 2 / 2.1 -- ноги арки в x ≈ ±1.05 кадра меша
+			Meshes.place("arch", cf * CFrame.new(0, BANK_TOP * 0.3 - 4, -z), Vector3.new(span, (r * 0.6 + 7) / 1.03, 7 / 1.27), { Material = Enum.Material.Ice, Color = Meshes.vary(iceCol, cf.Position, 0.05), Transparency = 0.05, CastShadow = true }, m)
+			return
+		end
 		for j = 0, 12 do
 			local a = math.pi * j / 12
 			deco({
