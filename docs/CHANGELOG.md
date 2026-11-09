@@ -1,5 +1,11 @@
 # Журнал изменений
 
+## Понедельничный обзор 2026-11-09: синхронизация `ARCHITECTURE.md` с кодом (code-reviewer)
+- Убраны задвоенные строки таблиц (`src/shared`, `server/Main.server`, `server/Remotes`), счётчики строк карты
+  модулей обновлены по факту (`Runs` 670 — выше порога 600, список кандидатов на разбиение — в шапке карты),
+  описаны `shared/AudioSet`/`AudioSetV1`, `Week`, `DailyTasks`, `Meshes`, `server/Weekly`/`Podium`/`MeshAssets`,
+  `client/WeeklyBoard`, custom-события `RunIdle`/`RunLeft` в `Runs`. Код не менялся.
+
 ## Звук: откат на v1 (владелец 2026-11-08: «v2 ужасны, раньше было лучше»)
 - Новый `shared/AudioSet`: набор по `Config.SOUND_SET` — 0 встроенные Roblox, 1 v1 (синтез, атлас 85020498524123),
   2 v2 (записи). По умолчанию 1. Громкость one-shot — как в v1; скольжение/ветер — тише (по жалобе).
