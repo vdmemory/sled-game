@@ -4,3 +4,8 @@ date,period,visits,dau,ccu_peak,new_users,d1,d7,d30,session_min,likes_pct,robux_
 2026-10-31,day,3,1,,,0,,,6.40556,,0,,0,0,0.00000,,open-cloud-analytics,
 2026-11-01,day,18,1,,,0,,,7.46944,,0,,0,0,0.00000,,open-cloud-analytics,
 2026-11-02,day,1,1,,,0,,,5.16667,,0,,0,0,0.00000,,open-cloud-analytics,
+2026-11-03,day,,,,,0,,,,,,,,,,,open-cloud-analytics,
+2026-11-04,day,18,1,,,0,,,,,0,,0,0,0.00000,,open-cloud-analytics,
+2026-11-05,day,2,1,,,0,,,,,0,,0,0,0.00000,,open-cloud-analytics,
+2026-11-06,day,,,,,0,,,,,,,,,,,open-cloud-analytics,
+2026-11-07,day,2,1,,,,,,,,0,,0,0,0.00000,,open-cloud-analytics,
