@@ -32,11 +32,86 @@ export type Segment = {
 -- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
 local BREAK_AFTER = { kicker = true, isleIn = true, isle = true, gap = true }
 
+-- Тоннели (#65, владелец 2026-11-12: «как минимум 20% длины трассы»). После постройки профиля
+-- выбираются непрерывные участки «наземных» кусков (повороты, пологие, крутые, скругления — без
+-- трамплинов, приземлений, островков, волн, дорог, озера: там сани в воздухе или своя сцена) и
+-- помечаются seg.tunnel = "in" / "mid" / "out", пока под сводом не окажется TUNNEL_SHARE пути.
+-- Сначала длинные участки (каждый — не длиннее TUNNEL_MAX_LEN, середина участка), короче
+-- TUNNEL_MIN_LEN не берутся. Случайные числа не тратятся — раскладка уровня не меняется.
+local TUNNEL_KINDS = { curve = true, gentle = true, steep = true, fillet = true }
+local function markTunnels(segs: { Segment })
+	local total = 0
+	for _, s in segs do
+		if s.kind ~= "lake" then
+			total += s.hLen
+		end
+	end
+	local share = Config.TUNNEL_SHARE or 0
+	if share <= 0 or total <= 0 then
+		return
+	end
+	-- непрерывные участки допустимых кусков после TUNNEL_FROM_H
+	local runs = {}
+	local i = 1
+	while i <= #segs do
+		if TUNNEL_KINDS[segs[i].kind] and segs[i].hStart >= Config.TUNNEL_FROM_H then
+			local j, len = i, 0
+			while j <= #segs and TUNNEL_KINDS[segs[j].kind] do
+				len += segs[j].hLen
+				j += 1
+			end
+			table.insert(runs, { a = i, b = j - 1, len = len })
+			i = j
+		else
+			i += 1
+		end
+	end
+	table.sort(runs, function(x, y)
+		return if x.len == y.len then x.a < y.a else x.len > y.len
+	end)
+	local covered = 0
+	for _, run in runs do
+		if covered >= total * share or run.len < Config.TUNNEL_MIN_LEN then
+			break
+		end
+		-- середина участка длиной не больше TUNNEL_MAX_LEN (и не больше недостающего, но ≥ MIN)
+		local want = math.min(run.len, Config.TUNNEL_MAX_LEN, math.max(Config.TUNNEL_MIN_LEN, total * share - covered + 40))
+		local skip = (run.len - want) / 2
+		local acc, first, last = 0, nil :: number?, nil :: number?
+		for k = run.a, run.b do
+			local s = segs[k]
+			if acc + s.hLen > skip and acc < skip + want then
+				first = first or k
+				last = k
+				covered += s.hLen
+			end
+			acc += s.hLen
+		end
+		if first and last then
+			-- первый и последний куски с видимой частью — порталы
+			local vfirst, vlast = nil :: number?, nil :: number?
+			for k = first, last do
+				local v = segs[k].vis
+				if v == nil or v > 0 then
+					vfirst = vfirst or k
+					vlast = k
+				end
+				segs[k].tunnel = "mid"
+			end
+			if vfirst then
+				segs[vfirst].tunnel = "in"
+			end
+			if vlast and vlast ~= vfirst then
+				segs[vlast].tunnel = "out"
+			end
+		end
+	end
+end
+
 local function buildProfile(origin: CFrame, level: number): ({ Segment }, number)
 	local rng = Random.new(level * 7919 + 17)
 	local isleRng = Random.new(level * 3571 + 7)
 	local curveIndex = 0
-	local curveNo = 0 -- номер поворота уровня (тоннель — каждый TUNNEL_EVERY-й, #65)
 	local lastIsle: number? = nil
 	local L = Config.levelLength(level)
 	local segs: { Segment } = {}
@@ -125,11 +200,6 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		-- Пол куска поворота — из CURVE_SUBSTEPS частей, каждая довёрнута на шаг / n: ступенька
 		-- на краю дна x·sin(шаг/n)·tg(уклон) ≤ 0.2 stud. Борта и декор строит первая часть на весь кусок.
 		local sub = math.max(1, Config.CURVE_SUBSTEPS)
-		-- Тоннель (#65): весь поворот под сводом. Только пометка куска — случайные числа уровня не
-		-- тратятся, раскладка (препятствия, монеты, гемы) не меняется.
-		curveNo += 1
-		local every = math.floor(Config.TUNNEL_EVERY or 0)
-		local tunnel = every > 0 and curveNo % every == 0 and h >= (Config.TUNNEL_FROM_H or 0)
 		for piece = 1, pieces do
 			local turn = math.abs(yaw + step) <= maxYaw
 			curveIndex += 1
@@ -139,10 +209,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 				if turn and not (piece == 1 and k == 1) then
 					yaw += step / sub
 				end
-				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex } :: { [string]: any }
-				if tunnel and k == 1 then
-					extra.tunnel = if piece == 1 then "in" elseif piece == pieces then "out" else "mid"
-				end
+				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex }
 				if k == 1 then
 					add("curve", pitch, Config.CURVE_PIECE / sub, true, extra)
 				else
@@ -246,6 +313,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		add("landing", 18, 90)
 	end
 	add("lake", 0.5, 300) -- ледяное озеро: после финиша катимся до остановки
+	markTunnels(segs)
 	return segs, L
 end
 

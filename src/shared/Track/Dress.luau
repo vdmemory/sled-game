@@ -293,7 +293,7 @@ local function dressTrack(theme: number, rng: Random, seg, m: Instance)
 			end
 		end
 	end
-	if kind == "gentle" and seg.hStart > Config.SAFE_START and rng:NextNumber() < Config.ARCH_CHANCE then
+	if kind == "gentle" and seg.hStart > Config.SAFE_START and rng:NextNumber() < Config.ARCH_CHANCE and not seg.tunnel then -- в тоннеле арка ушла бы в свод
 		-- большая арка: ледяной свод над всей шириной (декор, сквозь неё едем). Меш (#45) — 1 деталь
 		-- вместо 13 блоков; без шаблона — блоки полукругом, как раньше.
 		local r = BANK_OUT + 4

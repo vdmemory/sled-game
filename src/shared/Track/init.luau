@@ -213,9 +213,9 @@ function Track:buildSegment(i: number)
 		end
 	end
 
-	-- Тоннель (#65): весь поворот под сводом — вид по миру, порталы на входе и выходе (Track/Tunnel)
+	-- Тоннель (#65): участки под сводом (≥ TUNNEL_SHARE пути) — вид по миру, порталы (Track/Tunnel)
 	if seg.tunnel and visLen > 0 then
-		Tunnel.build(self.theme, seg, cf, visLen, prof, m)
+		Tunnel.build(self.theme, seg, cf, visLen, prof, m, i)
 	end
 
 	-- Флаг рекорда: где игрок остановился в лучшей попытке

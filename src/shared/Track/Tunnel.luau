@@ -10,6 +10,8 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Props = require(ReplicatedStorage.Shared.Props)
 local Meshes = require(ReplicatedStorage.Shared.Meshes)
 
+local Sections = require(script.Parent.Sections)
+
 local deco = Props.deco
 
 local Tunnel = {}
@@ -63,49 +65,55 @@ local function icicleParts(base: CFrame, r: number, h: number, depth: number, rn
 	end
 end
 
--- Свод над куском поворота. cf — начало куска (центр дна, −Z вниз по трассе), visLen — длина
--- видимой части, prof — сечение жёлоба (out — край полки, top — высота кромки).
-function Tunnel.build(theme: number, seg, cf: CFrame, visLen: number, prof, parent: Instance)
+-- Свод над куском трассы. cf — начало куска (центр дна, −Z вниз по трассе), visLen — длина видимой
+-- части, prof — сечение (out — край полки, top — высота кромки), index — номер куска (свет).
+-- Верх свода на одной высоте над дном для любого сечения (жёлоб поворота и снежные прямые): ноги
+-- стоят на кромке своего сечения, подъём = кромка жёлоба + TUNNEL_HEIGHT − своя кромка. Длинный кусок
+-- (прямая 90–120 studs) делится на кольца не длиннее TUNNEL_RING_LEN — сосульки меша не растягиваются.
+function Tunnel.build(theme: number, seg, cf: CFrame, visLen: number, prof, parent: Instance, index: number)
 	local look = LOOKS[theme] or LOOKS[1]
-	local r = prof.out + Config.TUNNEL_SIDE -- ноги свода — на полке за кромкой жёлоба
-	local h = Config.TUNNEL_HEIGHT -- подъём свода над кромкой
-	-- кусок длиной visLen, соседний довёрнут на CURVE_STEP: с внешней стороны поворота у ног щель
-	-- r·tg(шаг) — кольцо длиннее куска, внутренняя сторона просто перекрывается
-	local depth = visLen + r * math.tan(math.rad(Config.CURVE_STEP)) + 2
-	local base = cf * CFrame.new(0, prof.top, -visLen / 2)
+	local r = prof.out + Config.TUNNEL_SIDE
+	local h = math.max(12, Sections.CHUTE_PROFILE.top + Config.TUNNEL_HEIGHT - prof.top)
+	local n = math.max(1, math.ceil(visLen / Config.TUNNEL_RING_LEN))
+	local step = visLen / n
+	-- соседний кусок может быть довёрнут (повороты — на CURVE_STEP): с внешней стороны у ног щель
+	-- r·tg(шаг) — кольцо длиннее своего шага, внутренняя сторона просто перекрывается
+	local depth = step + r * math.tan(math.rad(Config.CURVE_STEP)) + 2
 	local rng = Random.new(math.floor(cf.Position.X * 7 + cf.Position.Z * 13) % 100000) -- свой: раскладка уровня не сдвигается
-	local useMesh = Meshes.has("tunnel_vault")
-	local ring: BasePart? = nil
-	if useMesh then
-		ring = Meshes.place("tunnel_vault", base, Vector3.new(r, h, depth), {
-			Material = look.mat,
-			Color = Meshes.vary(look.col, cf.Position, 0.05),
-			Transparency = look.transp or 0,
-		}, parent)
-	end
-	if not ring then
-		ringParts(base, r, h, depth, look, parent)
-		if look.icicles then
-			icicleParts(base, r, h, depth, rng, parent)
-		end
-	end
-	-- лавовые прожилки по своду (вулкан): тонкие Neon-полосы поперёк, видны снизу
-	if look.lava then
-		for _, a in { 0.32, 0.5, 0.68 } do
-			local ang = math.pi * a
-			local x, y = -math.cos(ang) * r * 0.93, math.sin(ang) * h * 0.93 - Config.TUNNEL_THICK / 2
-			deco({
-				Size = Vector3.new(0.5, 0.5, depth * 0.8),
-				CFrame = base * CFrame.new(x, y, 0) * CFrame.Angles(0, 0, ang),
-				Material = Enum.Material.Neon,
-				Color = Color3.fromRGB(255, 110, 30),
+	for k = 1, n do
+		local base = cf * CFrame.new(0, prof.top, -step * (k - 0.5))
+		local ring: BasePart? = nil
+		if Meshes.has("tunnel_vault") then
+			ring = Meshes.place("tunnel_vault", base, Vector3.new(r, h, depth), {
+				Material = look.mat,
+				Color = Meshes.vary(look.col, base.Position, 0.05),
+				Transparency = look.transp or 0,
 			}, parent)
+		end
+		if not ring then
+			ringParts(base, r, h, depth, look, parent)
+			if look.icicles then
+				icicleParts(base, r, h, depth, rng, parent)
+			end
+		end
+		-- лавовые прожилки по своду (вулкан): тонкие Neon-полосы вдоль, видны снизу
+		if look.lava then
+			for _, a in { 0.32, 0.5, 0.68 } do
+				local ang = math.pi * a
+				local x, y = -math.cos(ang) * r * 0.93, math.sin(ang) * h * 0.93 - Config.TUNNEL_THICK / 2
+				deco({
+					Size = Vector3.new(0.5, 0.5, depth * 0.8),
+					CFrame = base * CFrame.new(x, y, 0) * CFrame.Angles(0, 0, ang),
+					Material = Enum.Material.Neon,
+					Color = Color3.fromRGB(255, 110, 30),
+				}, parent)
+			end
 		end
 	end
 	-- свет внутри: один источник на TUNNEL_LIGHT_EVERY кусков (бюджет телефона)
 	local every = math.max(1, math.floor(Config.TUNNEL_LIGHT_EVERY))
-	if look.light and ((seg.ci or 0) % every == 0) then
-		local holder = deco({ Size = Vector3.new(1, 1, 1), CFrame = base * CFrame.new(0, h * 0.55, 0), Transparency = 1 }, parent)
+	if look.light and index % every == 0 then
+		local holder = deco({ Size = Vector3.new(1, 1, 1), CFrame = cf * CFrame.new(0, prof.top + h * 0.55, -visLen / 2), Transparency = 1 }, parent)
 		local light = Instance.new("PointLight")
 		light.Color = look.light
 		light.Range = Config.TUNNEL_LIGHT_RANGE
@@ -115,9 +123,9 @@ function Tunnel.build(theme: number, seg, cf: CFrame, visLen: number, prof, pare
 	end
 	-- порталы: толстая арка на входе и выходе (видно издалека, что впереди тоннель)
 	if seg.tunnel == "in" or seg.tunnel == "out" then
-		local z = if seg.tunnel == "in" then visLen / 2 else -visLen / 2
+		local z = if seg.tunnel == "in" then 0 else -visLen
 		local pr, ph = r + 3, h + 5
-		local at = base * CFrame.new(0, -2, z)
+		local at = cf * CFrame.new(0, prof.top - 2, z)
 		local placed = Meshes.has("arch")
 			and Meshes.place("arch", at, Vector3.new(pr / 1.05, ph / 1.03, 9 / 1.27), {
 				Material = look.mat,
