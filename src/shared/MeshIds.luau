@@ -88,4 +88,5 @@ return {
 	trim_snowmobile = 84168913654559,
 	trim_toboggan = 123337532042858,
 	trim_tube = 125424761040411,
+	tunnel_vault = 104848188919206,
 }
