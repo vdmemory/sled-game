@@ -66,7 +66,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Props/Obstacles` | 357 | препятствия и `Props.obstacle(theme, …)` |
 | `shared/Props/Decor` | 309 | деревья, постройки, горы, трамплин, шар |
 | `shared/Props/Worlds` | 257 | модели миров 4–7 |
-| `shared/Props/LobbyDecor` | 186 | костёр, флагшток, гирлянда; меши лобби: `lampPost`, `podium`, `boardFrame`, `startGate` (фолбэк — Part) |
+| `shared/Props/LobbyDecor` | 320 | костёр, флагшток, гирлянда; меши лобби: `lampPost`, `podium`, `boardFrame`, `startGate` (фолбэк — Part); станции кольца (#69): `worldPortal`, `shopStall` (деталь `Zone` с атрибутом `Menu`), `tent`, `hangLamp`, `snowCap` |
 | `shared/UILayout` | 84 | места и размеры лобби-UI (`{ ax, ay, sx, ox, sy, oy, w, h }`), `DESIGN_W/H`, `MIN_TOUCH`/`MIN_PILL`/`MIN_TEXT` (+ для окон) |
 | `shared/Meshes` | 107 | меши декора (#45): `has(...)` (все шаблоны есть и `MESH_DECOR` = 1), `waitFor(имена, таймаут)` (ждать шаблоны с ID в `MeshIds`), `place(имя, основание, масштаб, свойства, родитель)`, `vary` (разброс оттенка по позиции) |
 | `shared/SledModels/init` | 73 | фасад транспорта (прежний API): `build` (корпус: меши `BodyMeshes`, если все шаблоны модели есть, иначе Part `Bodies`), `extras`, `rocket`, `slingshot`, `ROCKETS`, `MOUNTS`, `ROPE_*`, `MESHES` (все меши транспорта — витрина ждёт их) |
@@ -174,6 +174,11 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 ### Лобби и витрина
 
 Чертёж — `Lobby.PLAN` (координаты от `Config.LOBBY_POS`, схема сверху — в комментарии над ним).
+Станции стоят по эллипсу `PLAN.hub` (#69); `Lobby.STATIONS` — занятые зоны, `Lobby.free(x, z, r)` /
+`Lobby.pushOut` не дают декору мира (`Lobby.dress`) встать внутрь кольца или на станцию. Портал
+«Миры» и лавка «Сани» — модели `WorldPortal`/`SledStall` с деталью `Zone` (атрибут `Menu` =
+`worlds`/`sleds`); `client/LobbyMenus` раз в `LOBBY_ZONE_POLL` с проверяет вход персонажа в зону и
+открывает окно (только на входе, окна закрыты, не в заезде).
 Сервер строит в два шага. `Lobby.build` (через `Track.buildLobby`, сразу): земля, плита-хаб,
 дорожка с шевронами, мостик, маяк старта, спавн, Terrain (скальный массив под площадкой и гряда
 задника — `Rock`, только z ≥ −38). `Lobby.furnish` (в `task.spawn`, после

@@ -394,13 +394,14 @@ player:GetAttributeChangedSignal("FarmWorld"):Connect(function()
 		drawWorlds()
 	end
 end)
-worldsBtn.Activated:Connect(function()
+local function openWorlds()
 	drawWorlds()
 	-- прокрутка к текущему миру (карточка 200 + отступ 14)
 	local current = Config.worldOf(player:GetAttribute("Level") or 1)
 	worldsList.CanvasPosition = Vector2.new(math.max(0, (current - 2) * 214), 0)
 	open(worldsWin)
-end)
+end
+worldsBtn.Activated:Connect(openWorlds)
 
 ------------------------------------------------------------------ Задания дня
 local tasksWin, tasksBody = panel("ЗАДАНИЯ ДНЯ", 580, 560)
@@ -704,10 +705,11 @@ local function drawSleds()
 		UI.setText(c.status, text, icon)
 	end
 end
-sledsBtn.Activated:Connect(function()
+local function openSleds()
 	drawSleds()
 	open(sledWin)
-end)
+end
+sledsBtn.Activated:Connect(openSleds)
 
 ------------------------------------------------------------------ Следы
 local trailWin, trailBody = panel("СЛЕДЫ", 700, 500)
@@ -933,5 +935,53 @@ end)
 player:GetAttributeChangedSignal("InRun"):Connect(function()
 	if player:GetAttribute("InRun") then
 		closeAll()
+	end
+end)
+
+-- Станции лобби (#69): вошёл в зону перед порталом «Миры» / лавкой «Сани» — открылось окно.
+-- Зоны — детали "Zone" с атрибутом Menu в модели Lobby (Props.worldPortal / shopStall). Срабатывает
+-- на входе (не пока стоишь), только когда окна закрыты и не в заезде.
+local ZONE_OPEN: { [string]: () -> () } = { worlds = openWorlds, sleds = openSleds }
+task.spawn(function()
+	local lobbyModel = workspace:WaitForChild("Lobby", 120)
+	if not lobbyModel then
+		return
+	end
+	local inside: { [Instance]: boolean } = {}
+	local zones: { BasePart } = {}
+	local function track(z: Instance)
+		if z.Name == "Zone" and z:IsA("BasePart") and z:GetAttribute("Menu") then
+			table.insert(zones, z)
+		end
+	end
+	for _, z in lobbyModel:GetDescendants() do
+		track(z)
+	end
+	lobbyModel.DescendantAdded:Connect(track) -- станции ставит Lobby.furnish позже (ждёт меши)
+	while true do
+		task.wait(Config.LOBBY_ZONE_POLL)
+		local char = player.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root and not player:GetAttribute("InRun") then
+			for _, z in zones do
+				local menu = z:GetAttribute("Menu")
+				if menu and z.Parent then
+					local rel = z.CFrame:PointToObjectSpace(root.Position)
+					local size = z.Size
+					local isIn = math.abs(rel.X) < size.X / 2 and math.abs(rel.Z) < size.Z / 2 and math.abs(rel.Y) < size.Y
+					if isIn and not inside[z] then
+						local anyOpen = false
+						for _, pnl in panels do
+							anyOpen = anyOpen or pnl.Visible
+						end
+						local fn = ZONE_OPEN[menu]
+						if fn and not anyOpen then
+							fn()
+						end
+					end
+					inside[z] = isIn
+				end
+			end
+		end
 	end
 end)

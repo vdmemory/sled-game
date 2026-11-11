@@ -20,50 +20,96 @@ local Lobby = {}
 -- макет-рендер scripts/ui_layout_preview.py: проецирует путь, ворота, подиумы, табло камерой спавна
 -- (Config.LOBBY_CAM_PITCH) поверх раскладки UI и проверяет, что их не закрывают плашки.
 --
---             задник: Terrain-скалы (Rock) z +56…+96 + утёсы-меши цвета мира (клиент)
---   z=+44  ·  ·  ·  ·  задний ряд декора мира (клиент)  ·  ·  ·  ·
---   z=+26        [флаг] x=−14                 x=+14 [флаг]
---   z=+16   КОСТЁР x=−20 (брёвна, зона)       x=+20 акцент мира (клиент)
---   z=+12        фонарь x=−12                 x=+12 фонарь
---   z=+2              ◎ ПЛИТА-ХАБ ⌀30, спавн z=0 лицом к −Z, неоновая стрелка к дорожке
---   z=−4    [флаг] x=−26                                       x=+26 [флаг]
---   z=−12…−38          ║ дорожка-плитка 10 wide, неоновые шевроны ║  фонари x ±7.5 z −8/−28
---   z=−16   ПОДИУМ x=−16 (витрина: что купить дальше)   ПОДИУМ x=+16 (витрина: «мечта»)
---   z=−38   ТАБЛО x=−27 «обновление»                    ТАБЛО x=+27 «неделя → чистые → всё время»
---   z=−35                                                      ПЬЕДЕСТАЛ ТОП-3 x=+40 (2-1-3, аватары)
---   z=−38.5   ╔══ ВОРОТА СТАРТА (меш) · вывеска «МИР ▼ СТАРТ» ══╗
---   z=−40   ─────── край площадки: Terrain-обрыв вниз ───────
---   z=−39…−61       ║ мостик 14 wide, перила, гирлянды, фонари x ±8.2 z −51 ║
---   z=−63            ◯ кольцо посадки (server/Runs: LaunchPad) + МАЯК — столб света 26 studs,
---                      «▼ САДИСЬ В САНИ ▼»: виден над головой игрока и между плашками UI
---   z=−70…          витринная трасса мира (клиент)
+-- Станции стоят ПО КРУГУ (#69, владелец 2026-11-12): эллипс hub — центр (0, 4), полуоси 54 × 36,
+-- угол от направления на старт (−Z), по часовой. Все лицом к спавну; между соседями ≥ 4 studs по
+-- краям зон, середина (плита-хаб ⌀30 и ~20 studs вокруг неё) свободна — игроку есть где бегать.
+-- Декор мира (Lobby.dress) ставится только снаружи кольца и не ближе 3 studs к станциям (Lobby.free).
 --
--- Камера спавна (client/LobbyScene): сзади-сверху, наклон LOBBY_CAM_PITCH и зум LOBBY_CAM_ZOOM
--- подобраны макетом: мостик, кольцо и маяк видны НАД головой игрока (камера сзади — аватар
--- закрывает центр кадра) и под полосой наград; подиумы и табло — по бокам, не под колонкой
--- плиток (x ≤ 134 логических) и не под карточками апгрейдов.
+--                              задник: Terrain-скалы z +56…+96, утёсы-меши мира
+--     180° акцент мира (0, 40)          ±170° флаги
+--   −155° КОСТЁР + палатка (−22.8, 36.6)          +155° ЛАВКА «САНИ» (22.8, 36.6) → окно саней
+--  −125° ПОРТАЛ «МИРЫ» (−44.2, 24.6) → окно миров       +125° ПЬЕДЕСТАЛ ТОП-3 (44.2, 24.6)
+--                      ◎ ПЛИТА-ХАБ ⌀30, спавн z=0 лицом к −Z
+--  −78° ТАБЛО «обновление» (−52.8, −3.5)                +78° ТАБЛО «неделя» (52.8, −3.5)
+--     −25° ПОДИУМ витрина (−22.8, −28.6)   ║ дорожка ║   +25° ПОДИУМ «мечта» (22.8, −28.6)
+--                     флаги (±14, −35) обрамляют ворота
+--   z=−38.5   ╔══ 0° ВОРОТА СТАРТА · вывеска «МИР ▼ СТАРТ» ══╗
+--   z=−40   ─────── край площадки: Terrain-обрыв вниз ───────
+--   z=−39…−61       ║ мостик 14 wide, перила, гирлянды ║ → ◯ кольцо посадки + МАЯК z=−63
+--   фонари-«виселицы» между станциями: ±58°, ±100°, ±140°; дорожка-кольцо (эллипс 42 × 25)
+--
+-- Камера спавна (client/LobbyScene): сзади-сверху, наклон LOBBY_CAM_PITCH и зум LOBBY_CAM_ZOOM.
 -- Записи: пары/тройки чисел; lamps/flags — плоские списки x, z.
 Lobby.PLAN = {
 	plaza = { 0, 2, 15 }, -- центр x, z, радиус плиты-хаба
+	hub = { 0, 4, 54, 36 }, -- эллипс станций: центр x, z, полуоси x, z
+	walk = { 42, 25, 4 }, -- дорожка-кольцо: полуоси x, z, ширина (центр — как у hub)
 	path = { 0, -12, -38, 5 }, -- дорожка: x, z от, z до, полуширина
 	gate = { 0, -38.5, 7.6 }, -- ворота: x, z, высота центра вывески
 	pier = { 0, -39, -61, 7 }, -- мостик: x, z от, z до, полуширина
 	ring = { 0, -63, 6 }, -- кольцо посадки (как LaunchRing в server/Runs)
 	beacon = { 0, -63, 26 }, -- маяк старта: столб света над кольцом, x, z, высота
-	podiumL = { -16, -16, 6.5 }, -- x, z, радиус
-	podiumR = { 16, -16, 6.5 },
-	boardL = { -27, -38 },
-	boardR = { 27, -38 },
-	-- пьедестал топ-3 недели (#48): центр x, z, ширина ступени, масштаб аватаров. Правее табло лидеров
-	-- у края обрыва — со спавна виден в правой половине кадра, где нет плашек UI (макет: 0–3% под UI)
-	top3 = { 40, -35, 5.6, 1.25 },
+	podiumL = { -22.8, -28.6, 6.5 }, -- x, z, радиус (±25° кольца: в кадре спавна, не под плитками UI)
+	podiumR = { 22.8, -28.6, 6.5 },
+	boardL = { -52.8, -3.5 },
+	boardR = { 52.8, -3.5 },
+	-- пьедестал топ-3 недели (#48): центр x, z, ширина ступени, масштаб аватаров
+	top3 = { 44.2, 24.6, 5.6, 1.25 },
 	top3H = { 4, 2.8, 1.8 }, -- высота ступеней 1, 2, 3 места (2 — слева, 1 — центр, 3 — справа)
-	fire = { -20, 16 },
-	accent = { 20, 16 },
-	flags = { -26, -4, 26, -4, -14, 26, 14, 26 },
-	lamps = { -7.5, -8, 7.5, -8, -7.5, -28, 7.5, -28, -8.2, -51, 8.2, -51, -12, 12, 12, 12 },
+	portal = { -44.2, 24.6 }, -- портал «Миры» (#69)
+	stall = { 22.8, 36.6 }, -- лавка «Сани» (#69)
+	fire = { -22.8, 36.6 },
+	tent = { -29, 42 }, -- палатка за костром
+	accent = { 0, 40 },
+	flags = { -14, -35, 14, -35, -9.4, 39.5, 9.4, 39.5 },
+	lamps = { -7.5, -8, 7.5, -8, -7.5, -28, 7.5, -28, -8.2, -51, 8.2, -51 },
+	ringLamps = { -45.8, -15.1, 45.8, -15.1, -53.2, 10.3, 53.2, 10.3, -34.7, 31.6, 34.7, 31.6 },
+}
+-- Занятые места (центр x, z, радиус зоны) — для Lobby.free: декор мира сюда не ставится
+Lobby.STATIONS = {
+	{ PLAN_KEY = "plaza", r = 15 },
+	{ PLAN_KEY = "podiumL", r = 9 },
+	{ PLAN_KEY = "podiumR", r = 9 },
+	{ PLAN_KEY = "boardL", r = 11 },
+	{ PLAN_KEY = "boardR", r = 11 },
+	{ PLAN_KEY = "top3", r = 10 },
+	{ PLAN_KEY = "portal", r = 9 },
+	{ PLAN_KEY = "stall", r = 8 },
+	{ PLAN_KEY = "fire", r = 9 },
+	{ PLAN_KEY = "tent", r = 6 },
+	{ PLAN_KEY = "accent", r = 6 },
+	{ PLAN_KEY = "gate", r = 12 },
 }
 local PLAN = Lobby.PLAN
+
+-- Свободна ли точка (x, z — studs от LOBBY_POS) для декора радиуса r: снаружи дорожки-кольца
+-- (всё внутри кольца — место игрока) и не ближе 3 studs к зонам станций
+function Lobby.free(x: number, z: number, r: number): boolean
+	local hx, hz = PLAN.hub[1], PLAN.hub[2]
+	local ex, ez = (x - hx) / (PLAN.walk[1] + PLAN.walk[3] + r), (z - hz) / (PLAN.walk[2] + PLAN.walk[3] + r)
+	if ex * ex + ez * ez < 1 then
+		return false
+	end
+	for _, st in Lobby.STATIONS do
+		local c = PLAN[st.PLAN_KEY]
+		local dx, dz = x - c[1], z - c[2]
+		if dx * dx + dz * dz < (st.r + r + 3) ^ 2 then
+			return false
+		end
+	end
+	return true
+end
+
+-- Точку внутри кольца или на станции отодвинуть наружу по лучу от центра кольца (для «крупного»
+-- декора мира с фиксированным местом: машина, ветряк, башня); дальние точки не трогает
+function Lobby.pushOut(x: number, z: number, r: number): (number, number)
+	local hx, hz = PLAN.hub[1], PLAN.hub[2]
+	local k = 1
+	while k < 3 and not Lobby.free(hx + (x - hx) * k, hz + (z - hz) * k, r) do
+		k += 0.05
+	end
+	return hx + (x - hx) * k, hz + (z - hz) * k
+end
 -- Меши архитектуры: сервер ждёт их загрузки (MeshAssets) перед Lobby.furnish, но не дольше
 Lobby.MESHES = { "lamp_post", "podium", "board_frame", "start_gate" }
 Lobby.MESH_WAIT = 15
@@ -130,10 +176,10 @@ local function board(name: string, at0: CFrame, title: string, parent: Instance,
 end
 
 -- Вывеска на воротах старта: текст меняет клиент (название мира игрока)
-local function gateSign(plate: BasePart, text: string): TextLabel
+local function gateSign(plate: BasePart, text: string, face: Enum.NormalId?): TextLabel
 	local sg = Instance.new("SurfaceGui")
 	sg.Name = "Sign"
-	sg.Face = Enum.NormalId.Back -- смотрит на спавн (+Z лобби)
+	sg.Face = face or Enum.NormalId.Back -- ворота: смотрит на спавн (+Z лобби); станции кольца — Front
 	sg.CanvasSize = Vector2.new(650, 120)
 	sg.LightInfluence = 0.2
 	sg.Parent = plate
@@ -307,7 +353,7 @@ function Lobby.furnish(lobby: Instance)
 		local rx = qx + sx * (qw + 0.4)
 		Props.garland((base * CFrame.new(rx, 7, q0 - 1)).Position, (base * CFrame.new(rx, 7, q1 - 1)).Position, furniture, rng)
 	end
-	-- Фонари: у хаба, вдоль дорожки и на мостике (ритм «ведущих линий» к воротам)
+	-- Фонари: вдоль дорожки и на мостике (ритм «ведущих линий» к воротам); у станций — PLAN.ringLamps
 	local lamps = PLAN.lamps
 	for i = 1, #lamps, 2 do
 		Props.lampPost(at(base, lamps, i), furniture)
@@ -351,6 +397,39 @@ function Lobby.furnish(lobby: Instance)
 	local fire = at(base, PLAN.fire)
 	zoneDisc(fire, 8, Color3.fromRGB(255, 140, 70), furniture)
 	Props.campfire(fire, furniture)
+	-- Станции по кругу (#69): лицом к спавну; палатка за костром, портал «Миры», лавка «Сани»
+	local function facingSpawn(xz: { number }): CFrame
+		local pos = (base * CFrame.new(xz[1], 0, xz[2])).Position
+		return CFrame.lookAt(pos, Vector3.new(p.X, pos.Y, p.Z))
+	end
+	Props.tent(facingSpawn(PLAN.tent) * CFrame.Angles(0, math.rad(90), 0), furniture)
+	local portalM = Instance.new("Model")
+	portalM.Name = "WorldPortal"
+	gateSign(Props.worldPortal(facingSpawn(PLAN.portal), portalM), "🌍 МИРЫ", Enum.NormalId.Front)
+	zoneDisc(facingSpawn(PLAN.portal) * CFrame.new(0, 0, -3), 6, Color3.fromRGB(255, 205, 60), portalM)
+	portalM.Parent = lobby
+	local stallM = Instance.new("Model")
+	stallM.Name = "SledStall"
+	gateSign(Props.shopStall(facingSpawn(PLAN.stall), stallM), "🛷 САНИ", Enum.NormalId.Front)
+	zoneDisc(facingSpawn(PLAN.stall) * CFrame.new(0, 0, -5.5), 5, Color3.fromRGB(120, 220, 255), stallM)
+	stallM.Parent = lobby
+	-- фонари-«виселицы» между станциями, фонарём к центру
+	local rl = PLAN.ringLamps
+	for i = 1, #rl, 2 do
+		Props.hangLamp(facingSpawn({ rl[i], rl[i + 1] }), furniture)
+	end
+	-- дорожка-кольцо: граница «места игрока» и путь от станции к станции
+	local wx, wz, ww = PLAN.walk[1], PLAN.walk[2], PLAN.walk[3]
+	local n = 56
+	for k = 0, n - 1 do
+		local a0, a1 = 2 * math.pi * k / n, 2 * math.pi * (k + 1) / n
+		local x0, z0 = PLAN.hub[1] + math.sin(a0) * wx, PLAN.hub[2] - math.cos(a0) * wz
+		local x1, z1 = PLAN.hub[1] + math.sin(a1) * wx, PLAN.hub[2] - math.cos(a1) * wz
+		local dx, dz = x1 - x0, z1 - z0
+		if math.abs((x0 + x1) / 2 - PLAN.path[1]) > PLAN.path[4] + 2 or (z0 + z1) / 2 > PLAN.path[2] then
+			deco({ Size = Vector3.new(ww, 0.3, math.sqrt(dx * dx + dz * dz) + 0.6), CFrame = base * CFrame.new((x0 + x1) / 2, 0.08, (z0 + z1) / 2) * CFrame.Angles(0, math.atan2(-dx, -dz), 0), Material = Enum.Material.Slate, Color = Color3.fromRGB(165, 172, 190) }, furniture)
+		end
+	end
 	local flagCols = { Color3.fromRGB(240, 80, 90), Color3.fromRGB(80, 180, 240), Color3.fromRGB(255, 205, 60), Color3.fromRGB(110, 210, 120) }
 	local flags = PLAN.flags
 	for i = 1, #flags, 2 do
@@ -420,8 +499,25 @@ function Lobby.dress(theme: number, parent: Instance): (Color3, Enum.Material)
 	end
 	-- Вторая линия — реже и ближе
 	local inner = { base * CFrame.new(-50, 0, 32), base * CFrame.new(50, 0, 32), base * CFrame.new(-54, 0, -36), base * CFrame.new(54, 0, -36), base * CFrame.new(-30, 0, 40), base * CFrame.new(30, 0, 40) }
-	local accent = base * CFrame.new(PLAN.accent[1], 0, PLAN.accent[2]) * CFrame.Angles(0, math.rad(-150), 0) -- напротив костра, лицом к спавну
+	-- станции стоят по кругу (#69): декор — только в свободных местах (Lobby.free)
+	local function keepFree(list: { CFrame }, r: number): { CFrame }
+		local out = {}
+		for _, c in list do
+			local rel = base:PointToObjectSpace(c.Position)
+			if Lobby.free(rel.X, rel.Z, r) then
+				table.insert(out, c)
+			end
+		end
+		return out
+	end
+	spots = keepFree(spots, 5)
+	inner = keepFree(inner, 6)
+	local accentPos = (base * CFrame.new(PLAN.accent[1], 0, PLAN.accent[2])).Position
+	local accent = CFrame.lookAt(accentPos, Vector3.new(base.X, accentPos.Y, base.Z)) -- 180° кольца, лицом к спавну
 	local function far(x: number, z: number): CFrame
+		if z < 60 then -- крупный декор у площадки — снаружи кольца станций
+			x, z = Lobby.pushOut(x, z, 8)
+		end
 		return base * CFrame.new(x, 0, z)
 	end
 
@@ -503,8 +599,8 @@ function Lobby.dress(theme: number, parent: Instance): (Color3, Enum.Material)
 				Props.charredTree(rng, s, parent)
 			end
 		end
-		Props.lavaPool(rng, far(-50, 34), parent)
-		Props.lavaPool(rng, far(52, -34), parent)
+		Props.lavaPool(rng, far(-62, 45), parent)
+		Props.lavaPool(rng, far(65, 46), parent)
 		Props.volcano(rng, far(40, 230), parent)
 		Props.lavaRock(rng, accent, parent)
 		groundColor, groundMat = themeCfg.ground, Enum.Material.Basalt

@@ -182,5 +182,116 @@ function Props.startGate(at: CFrame, parent: Instance): BasePart
 	return deco({ Name = "ArchBeam", Size = Vector3.new(13, 2.4, 0.5), CFrame = at * CFrame.new(0, 8.6, 0.3), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, parent)
 end
 
+------------------------------------------------------------------ Лобби: станции по кругу (#69)
+-- Референсы владельца 2026-11-11 (docs/ART_REFERENCES.md): мягкие скруглённые формы, тёплое дерево,
+-- снежные шапки с сосульками, свечение только смысловое (портал, фонарь, окно лавки).
+local SNOWC = Color3.fromRGB(250, 252, 255)
+
+-- Снежная шапка на горизонтальной кромке: плита + округлые наплывы + капли-сосульки
+local function snowCap(cf: CFrame, w: number, d: number, parent: Instance)
+	deco({ Size = Vector3.new(w + 0.4, 0.5, d + 0.4), CFrame = cf * CFrame.new(0, 0.25, 0), Material = Enum.Material.Snow, Color = SNOWC }, parent)
+	local n = math.max(2, math.floor(w / 3))
+	for k = 1, n do
+		local x = -w / 2 + (k - 0.5) * w / n
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(2.2, 1.1, d * 0.9), CFrame = cf * CFrame.new(x, 0.45, 0), Material = Enum.Material.Snow, Color = SNOWC }, parent)
+		if k % 2 == 1 then
+			deco({ Size = Vector3.new(0.35, 0.9, 0.35), CFrame = cf * CFrame.new(x + 0.6, -0.4, -d / 2 - 0.05), Material = Enum.Material.Ice, Color = Color3.fromRGB(205, 232, 252), Transparency = 0.1 }, parent)
+		end
+	end
+end
+Props.snowCap = snowCap
+
+-- Портал «Миры»: тёмная деревянная рама с крышей-шапкой, внутри — светящаяся жёлтая арка и
+-- мерцающая «плёнка»; подошёл — открылось окно миров (зона — деталь "Zone", атрибут Menu = "worlds",
+-- её читает client/LobbyMenus). at — основание, лицом к зрителю. Проём 10 × 13.
+function Props.worldPortal(at: CFrame, parent: Instance): BasePart
+	local frame = Color3.fromRGB(70, 50, 38)
+	for _, sx in { -1, 1 } do
+		deco({ Size = Vector3.new(2.2, 15, 2.2), CFrame = at * CFrame.new(sx * 6.6, 7.5, 0), Material = Enum.Material.Wood, Color = frame, CastShadow = true }, parent)
+		deco({ Size = Vector3.new(3.2, 1.2, 3.2), CFrame = at * CFrame.new(sx * 6.6, 0.6, 0), Material = Enum.Material.Slate, Color = Color3.fromRGB(120, 125, 135) }, parent)
+	end
+	deco({ Size = Vector3.new(16.6, 1.8, 3), CFrame = at * CFrame.new(0, 15.6, 0), Material = Enum.Material.Wood, Color = frame, CastShadow = true }, parent)
+	snowCap(at * CFrame.new(0, 16.5, 0), 16.6, 3, parent)
+	-- светящаяся арка: полукольцо из коротких Neon-брусков + прямые стойки
+	local n, r, cy = 9, 5, 9.6
+	for k = 0, n - 1 do
+		local a0, a1 = math.pi * k / n, math.pi * (k + 1) / n
+		local x0, y0, x1, y1 = math.cos(a0) * r, math.sin(a0) * r, math.cos(a1) * r, math.sin(a1) * r
+		local dx, dy = x1 - x0, y1 - y0
+		deco({ Size = Vector3.new(math.sqrt(dx * dx + dy * dy) + 0.3, 0.7, 0.7), CFrame = at * CFrame.new((x0 + x1) / 2, cy + (y0 + y1) / 2, 0) * CFrame.Angles(0, 0, math.atan2(dy, dx)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 205, 60) }, parent)
+	end
+	for _, sx in { -1, 1 } do
+		deco({ Size = Vector3.new(0.7, cy, 0.7), CFrame = at * CFrame.new(sx * r, cy / 2, 0), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 205, 60) }, parent)
+	end
+	local film = deco({ Name = "Film", Size = Vector3.new(r * 2 - 0.6, cy + r - 0.6, 0.2), CFrame = at * CFrame.new(0, (cy + r) / 2, 0), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 235, 150), Transparency = 0.6 }, parent)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 210, 110)
+	light.Range = 22
+	light.Brightness = 2
+	light.Parent = film
+	-- зона входа перед порталом (невидимая, без коллизий)
+	local zone = deco({ Name = "Zone", Size = Vector3.new(10, 6, 7), CFrame = at * CFrame.new(0, 3, -3), Transparency = 1 }, parent)
+	zone:SetAttribute("Menu", "worlds")
+	return deco({ Name = "Sign", Size = Vector3.new(9, 2.2, 0.4), CFrame = at * CFrame.new(0, 15.6, -1.7), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, parent)
+end
+
+-- Лавка «Сани»: прилавок, 4 столба, полосатый навес, вывеска, снег на крыше; зона перед прилавком
+-- (Menu = "sleds") открывает окно саней. at — основание, лицом (−Z) к зрителю. 12 × 7.
+function Props.shopStall(at: CFrame, parent: Instance): BasePart
+	local wood, cream = Color3.fromRGB(150, 98, 55), Color3.fromRGB(250, 236, 205)
+	deco({ Size = Vector3.new(11, 3.4, 3), CFrame = at * CFrame.new(0, 1.7, -1.5), Material = Enum.Material.WoodPlanks, Color = wood, CastShadow = true }, parent)
+	deco({ Size = Vector3.new(11.6, 0.4, 3.6), CFrame = at * CFrame.new(0, 3.6, -1.5), Material = Enum.Material.Wood, Color = Color3.fromRGB(120, 78, 42) }, parent)
+	deco({ Size = Vector3.new(11, 7, 0.6), CFrame = at * CFrame.new(0, 3.5, 3), Material = Enum.Material.WoodPlanks, Color = cream, CastShadow = true }, parent)
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			deco({ Size = Vector3.new(0.8, 8, 0.8), CFrame = at * CFrame.new(sx * 5.6, 4, sz * 3), Material = Enum.Material.Wood, Color = wood }, parent)
+		end
+	end
+	-- навес: полосы через одну, наклон к зрителю, «фестоны» по краю
+	local cols = { Color3.fromRGB(225, 70, 70), cream }
+	for k = 0, 5 do
+		local x = -5.5 + 11 / 6 * (k + 0.5)
+		deco({ Size = Vector3.new(11 / 6, 0.35, 7.6), CFrame = at * CFrame.new(x, 8.4, -0.4) * CFrame.Angles(math.rad(-14), 0, 0), Color = cols[k % 2 + 1] }, parent)
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(11 / 6, 1.2, 0.5), CFrame = at * CFrame.new(x, 7.3, -4.2), Color = cols[k % 2 + 1] }, parent)
+	end
+	snowCap(at * CFrame.new(0, 9.05, 0.6) * CFrame.Angles(math.rad(-14), 0, 0), 11, 5, parent)
+	local glow = deco({ Size = Vector3.new(9, 0.25, 0.25), CFrame = at * CFrame.new(0, 7.4, -3.4), Material = Enum.Material.Neon, Color = WARM }, parent)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 190, 110)
+	light.Range = 14
+	light.Brightness = 1.2
+	light.Parent = glow
+	local zone = deco({ Name = "Zone", Size = Vector3.new(11, 6, 5), CFrame = at * CFrame.new(0, 3, -5.5), Transparency = 1 }, parent)
+	zone:SetAttribute("Menu", "sleds")
+	return deco({ Name = "Sign", Size = Vector3.new(8, 2, 0.4), CFrame = at * CFrame.new(0, 10.6, -0.2), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(95, 60, 35) }, parent)
+end
+
+-- Палатка у костра (оранжевый тент, колышки, свёрнутый спальник)
+function Props.tent(at: CFrame, parent: Instance)
+	local tent = Color3.fromRGB(240, 140, 50)
+	for _, s in { -1, 1 } do
+		deco({ Size = Vector3.new(8, 6, 4), CFrame = at * CFrame.new(0, 3, s * 2) * CFrame.Angles(0, if s > 0 then 0 else math.pi, 0), Color = tent, CastShadow = true }, parent, "WedgePart")
+	end
+	deco({ Size = Vector3.new(0.3, 3.5, 2.4), CFrame = at * CFrame.new(-4.05, 1.75, 0), Color = tent:Lerp(Color3.new(0, 0, 0), 0.45) }, parent)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(2.6, 1.2, 1.2), CFrame = at * CFrame.new(-6, 0.6, 2.4), Color = Color3.fromRGB(80, 150, 210) }, parent)
+	snowCap(at * CFrame.new(0, 5.9, 0), 8, 1, parent)
+end
+
+-- Фонарь «виселица»: деревянный столб на каменной плите, кронштейн и висящий тёплый фонарь
+function Props.hangLamp(at: CFrame, parent: Instance)
+	deco({ Size = Vector3.new(2.4, 0.6, 2.4), CFrame = at * CFrame.new(0, 0.3, 0), Material = Enum.Material.Slate, Color = Color3.fromRGB(150, 155, 165) }, parent)
+	deco({ Size = Vector3.new(0.9, 10, 0.9), CFrame = at * CFrame.new(0, 5.3, 0), Material = Enum.Material.Wood, Color = WOOD, CastShadow = true }, parent)
+	deco({ Size = Vector3.new(0.7, 0.7, 3.2), CFrame = at * CFrame.new(0, 9.8, -1.4), Material = Enum.Material.Wood, Color = WOOD }, parent)
+	snowCap(at * CFrame.new(0, 10.25, -1.4), 0.9, 3.2, parent)
+	deco({ Size = Vector3.new(0.12, 1, 0.12), CFrame = at * CFrame.new(0, 9, -2.6), Color = Color3.fromRGB(200, 170, 110) }, parent)
+	deco({ Size = Vector3.new(1.3, 0.3, 1.3), CFrame = at * CFrame.new(0, 8.4, -2.6), Color = IRON }, parent)
+	local glow = deco({ Size = Vector3.new(1, 1.4, 1), CFrame = at * CFrame.new(0, 7.5, -2.6), Material = Enum.Material.Neon, Color = WARM }, parent)
+	deco({ Size = Vector3.new(1.1, 0.25, 1.1), CFrame = at * CFrame.new(0, 6.7, -2.6), Color = IRON }, parent)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 180, 90)
+	light.Range = 16
+	light.Brightness = 1.3
+	light.Parent = glow
+end
 
 return Props
