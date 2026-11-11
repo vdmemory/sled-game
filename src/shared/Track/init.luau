@@ -20,6 +20,7 @@ local Sections = require(script.Sections)
 local Dress = require(script.Dress)
 local Items = require(script.Items)
 local Tunnel = require(script.Tunnel)
+local Valley = require(script.Valley)
 
 local part, deco = Props.part, Props.deco
 local W = Sections.W
@@ -191,7 +192,17 @@ function Track:buildSegment(i: number)
 	end
 
 	if not special and seg.kind ~= "road" and seg.kind ~= "rail" and seg.kind ~= "fillet" and visLen > 0 then
-		dressSegment(self.theme, rng, cf, visLen, m, prof)
+		if seg.valley then
+			-- гребень над долиной: обочина со стороны обрыва без декора (Valley.prune), те же Random
+			local tmp = Instance.new("Folder")
+			dressSegment(self.theme, rng, cf, visLen, tmp, prof)
+			Valley.prune(seg, cf, prof, tmp, m)
+		else
+			dressSegment(self.theme, rng, cf, visLen, m, prof)
+		end
+	end
+	if seg.valley and not special and visLen > 0 then
+		Valley.build(self.theme, seg, cf, visLen, prof, m)
 	end
 
 	-- Канатная дорога над местом приземления: кабинки едут поперёк трассы

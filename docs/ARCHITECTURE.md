@@ -59,6 +59,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Track/Sections` | 189 | профили сечений, цвета снега, `sidePoint`, поперечное сечение куска |
 | `shared/Track/Dress` | 324 | оформление миров вдоль трассы и разметка на ней |
 | `shared/Track/Items` | 189 | монеты, гемы, магнит, бонусы, кристалл, `tagObstacle` |
+| `shared/Track/Valley` | 150 | гребень над долиной: `build` — обрыв, дно, островки по миру; `prune` — убрать декор обочины над обрывом; участки помечает `Profile` (`seg.valley`) |
 | `shared/Track/Tunnel` | 140 | тоннель над поворотом (#65): `build` — кольцо свода (меш `tunnel_vault` или блоки), порталы, свет, вид по миру; куски помечает `Profile` (`seg.tunnel`) |
 | `shared/Props/init` | 16 | фасад: подключает модули категорий, отдаёт таблицу `Props` |
 | `shared/Props/Base` | 103 | `part`, `deco`, `pick`, надписи, колёса, общие цвета |

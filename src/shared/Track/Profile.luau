@@ -26,7 +26,8 @@ export type Segment = {
 	ci: number?, -- номер «визуального» куска поворота (для арок и монет)
 	isle: any?, -- островки: план островка / зазора (shared/Islands)
 	crest: any?, -- волна: номер гребня (подъём) или false (спуск)
-	tunnel: string?, -- кусок поворота под сводом тоннеля (#65): "in" / "mid" / "out"
+	tunnel: string?, -- кусок под сводом тоннеля (#65): "in" / "mid" / "out"
+	valley: number?, -- трасса по гребню над долиной с островками: −1 слева, 1 справа, 2 с обеих сторон
 }
 
 -- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
@@ -104,6 +105,62 @@ local function markTunnels(segs: { Segment })
 			if vlast and vlast ~= vfirst then
 				segs[vlast].tunnel = "out"
 			end
+		end
+	end
+end
+
+-- Гребень над долиной (владелец 2026-11-12, видео референса 613–651 м): с одной стороны трассы
+-- (или с обеих) вместо ровной земли — обрыв вниз к долине с островками. Участки — как у тоннелей,
+-- но не под сводом: VALLEY_SHARE пути, стороны чередуются (каждый 3-й — с обеих). Случайные числа не
+-- тратятся.
+local VALLEY_KINDS = { curve = true, gentle = true, steep = true, fillet = true, landing = true }
+local function markValleys(segs: { Segment })
+	local share = Config.VALLEY_SHARE or 0
+	local total = 0
+	for _, s in segs do
+		if s.kind ~= "lake" then
+			total += s.hLen
+		end
+	end
+	if share <= 0 or total <= 0 then
+		return
+	end
+	local runs = {}
+	local i = 1
+	while i <= #segs do
+		local s = segs[i]
+		if VALLEY_KINDS[s.kind] and not s.tunnel and s.hStart >= Config.VALLEY_FROM_H then
+			local j, len = i, 0
+			while j <= #segs and VALLEY_KINDS[segs[j].kind] and not segs[j].tunnel do
+				len += segs[j].hLen
+				j += 1
+			end
+			table.insert(runs, { a = i, b = j - 1, len = len })
+			i = j
+		else
+			i += 1
+		end
+	end
+	table.sort(runs, function(x, y)
+		return if x.len == y.len then x.a < y.a else x.len > y.len
+	end)
+	local covered, n = 0, 0
+	for _, run in runs do
+		if covered >= total * share or run.len < Config.VALLEY_MIN_LEN then
+			break
+		end
+		n += 1
+		local side = if n % 3 == 0 then 2 elseif n % 2 == 1 then -1 else 1
+		local want = math.min(run.len, Config.VALLEY_MAX_LEN)
+		local skip = (run.len - want) / 2
+		local acc = 0
+		for k = run.a, run.b do
+			local s = segs[k]
+			if acc + s.hLen > skip and acc < skip + want then
+				s.valley = side
+				covered += s.hLen
+			end
+			acc += s.hLen
 		end
 	end
 end
@@ -314,6 +371,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	end
 	add("lake", 0.5, 300) -- ледяное озеро: после финиша катимся до остановки
 	markTunnels(segs)
+	markValleys(segs)
 	return segs, L
 end
 

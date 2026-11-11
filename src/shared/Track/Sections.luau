@@ -114,10 +114,13 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 				Material = Enum.Material.Snow,
 				Color = SNOW,
 			}, m)
+			-- над долиной (seg.valley) с этой стороны — только полка до обрыва (обрыв строит Track/Valley)
+			local valley = seg ~= nil and seg.valley ~= nil and (seg.valley == side or seg.valley == 2)
+			local gw = if valley then Config.VALLEY_SHOULDER + 2 else 150
 			part("Part", {
 				Name = "Ground",
-				Size = Vector3.new(150, 2, visLen + overlap),
-				CFrame = cf * CFrame.new(side * (prof.out + 75), prof.top - 1, -visLen / 2),
+				Size = Vector3.new(gw, 2, visLen + overlap),
+				CFrame = cf * CFrame.new(side * (prof.out + gw / 2), prof.top - 1, -visLen / 2),
 				Material = groundMat,
 				Color = if theme == 1 or theme == 2 then SNOW else themeCfg.ground,
 				CanCollide = false,
