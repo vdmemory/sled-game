@@ -90,4 +90,5 @@ return {
 	trim_snowmobile = { size = Vector3.new(2.1, 0.18, 3.43), offset = Vector3.new(0.0, 0.06, 1.315), tris = 384 },
 	trim_toboggan = { size = Vector3.new(2.86, 0.18, 6.4), offset = Vector3.new(0.0, -0.38, 0.15), tris = 384 },
 	trim_tube = { size = Vector3.new(8.0, 0.18, 8.0), offset = Vector3.new(0.0, 0.05, 0.0), tris = 640 },
+	tunnel_vault = { size = Vector3.new(2.25, 1.0735, 1.0), offset = Vector3.new(0.0, 0.5367, 0.0), tris = 828 },
 }

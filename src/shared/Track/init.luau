@@ -19,6 +19,7 @@ local Profile = require(script.Profile)
 local Sections = require(script.Sections)
 local Dress = require(script.Dress)
 local Items = require(script.Items)
+local Tunnel = require(script.Tunnel)
 
 local part, deco = Props.part, Props.deco
 local W = Sections.W
@@ -212,18 +213,9 @@ function Track:buildSegment(i: number)
 		end
 	end
 
-	-- Арка-тоннель над ледяным жёлобом (как в Roblox-референсе)
-	if seg.kind == "curve" and visLen > 0 and (seg.ci or 0) % 9 == 0 then
-		local r = prof.out + 3
-		for k = 0, 10 do
-			local a = math.pi * k / 10
-			deco({
-				Size = Vector3.new(5, 5, 4),
-				CFrame = cf * CFrame.new(math.cos(a) * r, prof.top * 0.3 + math.sin(a) * r * 0.75, -visLen / 2) * CFrame.Angles(0, 0, a),
-				Material = Enum.Material.Ice,
-				Color = Color3.fromRGB(120, 170, 225),
-			}, m)
-		end
+	-- Тоннель (#65): весь поворот под сводом — вид по миру, порталы на входе и выходе (Track/Tunnel)
+	if seg.tunnel and visLen > 0 then
+		Tunnel.build(self.theme, seg, cf, visLen, prof, m)
 	end
 
 	-- Флаг рекорда: где игрок остановился в лучшей попытке

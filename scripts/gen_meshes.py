@@ -364,6 +364,65 @@ def arch(seed):
     return mesh_of(v, f)
 
 
+def tunnel_vault(seed):
+    """Кольцо свода тоннеля (#65): полуэллипс от ног x = ±1 (y 0) до верха y = 1, глубина z ±0.5.
+    Кольца ставятся вплотную вдоль куска поворота (z растягивается на длину куска), поэтому сечение
+    почти прямоугольное (стыки без щелей), а шум — только по радиусу: внутренняя сторона неровная,
+    как стена ледяной пещеры. С внутренней стороны свисают сосульки (эллиптические конусы:
+    по z толще — при растяжке кольца вдоль трассы они остаются круглыми)."""
+    rg = np.random.default_rng(seed)
+    steps, sec = 30, 12
+    n = Noise(seed, octaves=4, freq=3.0)
+
+    def arc(t):
+        a = math.pi * t
+        return np.array([-math.cos(a), math.sin(a), 0.0]), a
+
+    def fn(i, j):
+        t = i / (steps - 1)
+        c, a = arc(t)
+        tangent = np.array([math.sin(a), math.cos(a), 0.0])
+        tangent /= np.linalg.norm(tangent)
+        normal = np.array([-tangent[1], tangent[0], 0.0])  # наружу от оси тоннеля
+        thick = 0.075 + 0.05 * (abs(t - 0.5) * 2) ** 2  # у ног толще
+        b = 2 * math.pi * j / sec
+        # «скруглённый прямоугольник»: по z почти плоско, по радиусу — толщина
+        cz, sr = math.cos(b), math.sin(b)
+        z = 0.5 * np.sign(sr) * min(1.0, abs(sr) * 1.6)
+        rad = cz * thick
+        bump = 0.05 * n(np.array([[c[0] * 1.3, c[1] * 1.3, z * 0.6]]))[0]
+        if cz < 0:  # внутренняя поверхность — неровная
+            rad += bump
+        p = c + normal * rad + np.array([0, 0, z])
+        return tuple(p)
+
+    v, f = grid_surface(steps, sec, fn)
+    v, f = cap(v, f, 0, sec, v[:sec].mean(axis=0), up=False)
+    last = (steps - 1) * sec
+    v, f = cap(v, f, last, sec, v[last:last + sec].mean(axis=0), up=True)
+    parts = [mesh_of(v, f)]
+    # сосульки по своду (без ног: там стены жёлоба)
+    for _ in range(9):
+        t = rg.uniform(0.18, 0.82)
+        c, a = arc(t)
+        base = c * (1 - 0.06)  # чуть внутрь от средней линии свода — корень в толще
+        z = rg.uniform(-0.38, 0.38)
+        length = rg.uniform(0.07, 0.16) * (0.6 + 0.4 * math.sin(a))
+        rx, rz = rg.uniform(0.018, 0.028), rg.uniform(0.08, 0.13)
+        k = 6
+        pts = [(base[0] + rx * math.cos(2 * math.pi * j / k), base[1], z + rz * math.sin(2 * math.pi * j / k)) for j in range(k)]
+        pts += [(base[0], base[1] - length, z), (base[0], base[1] + 0.01, z)]
+        ff = []
+        for j in range(k):
+            ff.append([j, (j + 1) % k, k])  # бок к острию
+            ff.append([(j + 1) % k, j, k + 1])  # крышка-корень
+        parts.append(mesh_of(np.array(pts), np.array(ff)))
+    m = combine(parts)
+    vv = m.vertices.copy()
+    vv[:, 1] = np.maximum(vv[:, 1], 0)
+    return mesh_of(vv, m.faces)
+
+
 # ---------------------------------------------------------------- гора
 MTN_RINGS, MTN_SEG = 15, 30
 MTN_PEAKS = [((0.10, -0.08), 1.25, 0.8), ((-0.45, 0.25), 0.8, 0.5), ((0.42, 0.38), 0.6, 0.42)]
@@ -573,6 +632,7 @@ MESHES = {
     "isle_rock": (lambda: isle_rock(4), True, "островок: скальный низ"),
     "isle_cap": (lambda: isle_cap(4), False, "островок: снежный верх"),
     "arch": (lambda: arch(9), True, "природная арка"),
+    "tunnel_vault": (lambda: tunnel_vault(13), True, "тоннель: кольцо свода с сосульками"),
     "mountain_rock": (lambda: mountain_rock(21), True, "гора: склоны"),
     "mountain_snow": (lambda: mountain_snow(21), False, "гора: снежная шапка"),
     "mesa": (lambda: mesa(31), True, "меза каньона"),

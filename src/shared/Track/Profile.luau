@@ -26,6 +26,7 @@ export type Segment = {
 	ci: number?, -- номер «визуального» куска поворота (для арок и монет)
 	isle: any?, -- островки: план островка / зазора (shared/Islands)
 	crest: any?, -- волна: номер гребня (подъём) или false (спуск)
+	tunnel: string?, -- кусок поворота под сводом тоннеля (#65): "in" / "mid" / "out"
 }
 
 -- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
@@ -35,6 +36,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	local rng = Random.new(level * 7919 + 17)
 	local isleRng = Random.new(level * 3571 + 7)
 	local curveIndex = 0
+	local curveNo = 0 -- номер поворота уровня (тоннель — каждый TUNNEL_EVERY-й, #65)
 	local lastIsle: number? = nil
 	local L = Config.levelLength(level)
 	local segs: { Segment } = {}
@@ -123,6 +125,11 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		-- Пол куска поворота — из CURVE_SUBSTEPS частей, каждая довёрнута на шаг / n: ступенька
 		-- на краю дна x·sin(шаг/n)·tg(уклон) ≤ 0.2 stud. Борта и декор строит первая часть на весь кусок.
 		local sub = math.max(1, Config.CURVE_SUBSTEPS)
+		-- Тоннель (#65): весь поворот под сводом. Только пометка куска — случайные числа уровня не
+		-- тратятся, раскладка (препятствия, монеты, гемы) не меняется.
+		curveNo += 1
+		local every = math.floor(Config.TUNNEL_EVERY or 0)
+		local tunnel = every > 0 and curveNo % every == 0 and h >= (Config.TUNNEL_FROM_H or 0)
 		for piece = 1, pieces do
 			local turn = math.abs(yaw + step) <= maxYaw
 			curveIndex += 1
@@ -132,7 +139,10 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 				if turn and not (piece == 1 and k == 1) then
 					yaw += step / sub
 				end
-				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex }
+				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex } :: { [string]: any }
+				if tunnel and k == 1 then
+					extra.tunnel = if piece == 1 then "in" elseif piece == pieces then "out" else "mid"
+				end
 				if k == 1 then
 					add("curve", pitch, Config.CURVE_PIECE / sub, true, extra)
 				else
