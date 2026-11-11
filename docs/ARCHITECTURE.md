@@ -127,7 +127,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
   `AC_AIR_HEIGHT` не задел свою трассу (`track.folder`); дольше `AC_MAX_AIR` — флаг.
 - **`Air`** — `min(клиент, серверный полёт с прошлого Air + AC_AIR_GRACE)`, сумма ≤ время с
   выстрела; полёта не было — флаг. **`Trick`** — обороты проверяются по серверному полёту с
-  прошлого Trick; полёта не было — флаг. **`Smash(model)`** — `Breakable` своей трассы, ближе
+  прошлого Trick; полёта не было — флаг. **`Smash(model)`** — `Breakable` (TNT ещё и `Explosive` — `Contacts.explode`, сервер начисляет `TNT_COINS`) своей трассы, ближе
   `AC_NEAR_RADIUS + скорость × AC_NEAR_LAG`, один раз на модель. **`PowerUp`** — деталь своей
   трассы, тот же радиус, `Kind` — строка, `Taken` один раз.
 - `≥ AC_FLAG_LIMIT` флагов или телепорт → `endRun(player, "cheat")`: наград, уровня, заданий нет,

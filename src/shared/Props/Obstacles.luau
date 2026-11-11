@@ -36,19 +36,25 @@ function Props.stopSign(base: CFrame, parent: Instance)
 	label(face, Enum.NormalId.Back, "STOP", Color3.new(1, 1, 1))
 end
 
--- Дорожный барьер в красно-белую полоску
+-- Дорожный барьер (референсы 2026-11-11, «мягкий» стиль): козлы из деревянных ног, две доски в
+-- оранжево-жёлтую косую полоску, на стойках — оранжевые шары-фонари; доски — коллизия
 function Props.barrier(base: CFrame, parent: Instance)
-	for _, x in { -3.6, 3.6 } do
-		part("Part", { Size = Vector3.new(0.4, 3.2, 1.6), CFrame = base * CFrame.new(x, 1.6, 0), Color = Color3.fromRGB(120, 120, 130) }, parent)
+	local wood, orange, yellow = Color3.fromRGB(150, 100, 60), Color3.fromRGB(235, 120, 45), Color3.fromRGB(250, 195, 80)
+	for _, x in { -3.4, 3.4 } do
+		for _, z in { -0.7, 0.7 } do
+			deco({ Size = Vector3.new(0.6, 3.6, 0.6), CFrame = base * CFrame.new(x, 1.7, z) * CFrame.Angles(math.rad(z > 0 and 12 or -12), 0, 0), Material = Enum.Material.Wood, Color = wood }, parent)
+		end
+		deco({ Size = Vector3.new(0.7, 0.5, 0.7), CFrame = base * CFrame.new(x, 3.95, 0), Color = Color3.fromRGB(130, 130, 140) }, parent)
+		local lamp = deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 1.1, CFrame = base * CFrame.new(x, 4.7, 0), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 160, 60) }, parent)
+		lamp.Name = "BarrierLamp"
 	end
-	for i = 0, 5 do
-		part("Part", {
-			Size = Vector3.new(1.4, 1.1, 0.4),
-			CFrame = base * CFrame.new(-3.5 + i * 1.4, 2.8, 0),
-			Color = if i % 2 == 0 then Color3.fromRGB(220, 40, 40) else Color3.new(1, 1, 1),
-		}, parent)
+	for _, y in { 2.0, 3.35 } do
+		part("Part", { Size = Vector3.new(8.4, 1.05, 0.5), CFrame = base * CFrame.new(0, y, 0), Color = orange }, parent)
+		for k = 0, 4 do -- косые полосы
+			deco({ Size = Vector3.new(0.7, 1.25, 0.56), CFrame = base * CFrame.new(-3.4 + k * 1.7, y, 0) * CFrame.Angles(0, 0, math.rad(-35)), Color = yellow }, parent)
+		end
 	end
-	deco({ Size = Vector3.new(8.4, 0.3, 0.6), CFrame = base * CFrame.new(0, 3.45, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+	deco({ Size = Vector3.new(8.6, 0.3, 0.7), CFrame = base * CFrame.new(0, 3.95, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
 end
 
 ------------------------------------------------------------------ природа
@@ -189,19 +195,24 @@ function Props.busStop(base: CFrame, parent: Instance)
 	deco({ Size = Vector3.new(11.2, 0.6, 4.2), CFrame = base * CFrame.new(0, 7.75, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
 end
 
--- Дорожные конусы (2–3 штуки)
+-- Дорожные конусы (2–3 штуки): квадратное основание со скруглением, гладкий конус из колец,
+-- две белые полосы (референсы 2026-11-11)
 function Props.cones(rng: Random, base: CFrame, parent: Instance)
+	local orange = Color3.fromRGB(245, 115, 35)
 	for k = 1, rng:NextInteger(2, 3) do
-		local c = base * CFrame.new((k - 2) * 2.6, 0, rng:NextNumber(-1, 1))
-		part("Part", { Size = Vector3.new(2.4, 0.4, 2.4), CFrame = c * CFrame.new(0, 0.2, 0), Color = Color3.fromRGB(240, 110, 30) }, parent)
-		for t = 0, 3 do
-			local w = 1.6 - t * 0.35
+		local c = base * CFrame.new((k - 2) * 2.8, 0, rng:NextNumber(-1, 1))
+		part("Part", { Size = Vector3.new(2.6, 0.45, 2.6), CFrame = c * CFrame.new(0, 0.22, 0), Color = orange }, parent)
+		local n = 7
+		for t = 0, n - 1 do
+			local d = 1.9 - t * 0.24
 			part("Part", {
-				Size = Vector3.new(w, 0.9, w),
-				CFrame = c * CFrame.new(0, 0.85 + t * 0.9, 0),
-				Color = if t == 1 then Color3.new(1, 1, 1) else Color3.fromRGB(245, 120, 35),
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.52, d, d),
+				CFrame = c * CFrame.new(0, 0.7 + t * 0.5, 0) * CFrame.Angles(0, 0, math.rad(90)),
+				Color = if t == 2 or t == 4 then Color3.fromRGB(250, 245, 235) else orange,
 			}, parent)
 		end
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.5, CFrame = c * CFrame.new(0, 4.1, 0), Color = orange }, parent)
 	end
 end
 
@@ -253,6 +264,31 @@ function Props.woodpile(base: CFrame, parent: Instance)
 	deco({ Size = Vector3.new(6, 0.5, 4.6), CFrame = base * CFrame.new(0, 4.4, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
 end
 
+-- Ящик TNT (#66, референсы 2026-11-11): деревянный ящик с наклейкой TNT, связка красных шашек с
+-- таймером и ручка-детонатор сверху. Взрывается от любого удара (client/Sled/Contacts → explode):
+-- не авария — сани подбрасывает, скорость падает (щит гасит потерю), монеты как за разбитое
+-- (Config.TNT_COINS). Атрибуты Breakable + Explosive ставит Props.obstacle.
+function Props.tnt(base: CFrame, parent: Instance)
+	local wood = Color3.fromRGB(200, 140, 80)
+	part("Part", { Size = Vector3.new(4, 3.4, 4), CFrame = base * CFrame.new(0, 1.7, 0), Material = Enum.Material.WoodPlanks, Color = wood }, parent)
+	for _, y in { 0.35, 3.05 } do -- обвязка досками
+		deco({ Size = Vector3.new(4.15, 0.5, 4.15), CFrame = base * CFrame.new(0, y, 0), Material = Enum.Material.Wood, Color = wood:Lerp(Color3.new(0, 0, 0), 0.25) }, parent)
+	end
+	for _, f in { { 0, -2.06, 0 }, { 0, 2.06, math.pi } } do
+		local face = deco({ Size = Vector3.new(2.6, 1.1, 0.06), CFrame = base * CFrame.new(f[1], 1.8, f[2]) * CFrame.Angles(0, f[3], 0), Color = Color3.fromRGB(240, 120, 140) }, parent)
+		label(face, Enum.NormalId.Front, "TNT", Color3.fromRGB(255, 255, 255))
+	end
+	-- шашки на крышке
+	for k = -1, 1 do
+		deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(2.6, 0.75, 0.75), CFrame = base * CFrame.new(k * 0.78, 3.8, 0) * CFrame.Angles(0, math.rad(90), 0), Color = Color3.fromRGB(215, 55, 60) }, parent)
+	end
+	deco({ Size = Vector3.new(1.2, 0.5, 0.2), CFrame = base * CFrame.new(0, 4.25, -0.6), Material = Enum.Material.Neon, Color = Color3.fromRGB(90, 255, 120) }, parent) -- таймер
+	-- детонатор: шток и рукоятка
+	deco({ Size = Vector3.new(0.3, 1.6, 0.3), CFrame = base * CFrame.new(1.3, 4.2, 1.2), Color = Color3.fromRGB(90, 90, 95) }, parent)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.8, 0.45, 0.45), CFrame = base * CFrame.new(1.3, 5, 1.2), Material = Enum.Material.Wood, Color = Color3.fromRGB(120, 75, 45) }, parent)
+	deco({ Size = Vector3.new(3.6, 0.35, 3.6), CFrame = base * CFrame.new(0, 3.42, 0), Material = Enum.Material.Snow, Color = SNOW, Transparency = 0.15 }, parent)
+end
+
 ------------------------------------------------------------------ препятствия по мирам
 -- Возвращает модель-препятствие (все детали потом получают тег Obstacle)
 function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instance): Model
@@ -286,6 +322,7 @@ function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instan
 			{ 12, function() Props.cones(rng, twisted, m) end , true },
 			{ 8, function() Props.barrier(twisted, m) end , true },
 			{ 10, function() Props.barrels(rng, twisted, m) end , true },
+			{ 8, function() Props.tnt(twisted, m) end , "tnt" },
 		}
 	elseif theme == 4 then
 		options = {
@@ -312,6 +349,7 @@ function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instan
 			{ 14, function() Props.log(rng, base, m) end , true },
 			{ 12, function() Props.barrels(rng, twisted, m) end , true },
 			{ 10, function() Props.crates(rng, twisted, m) end , true },
+			{ 8, function() Props.tnt(twisted, m) end , "tnt" },
 			{ 8, function() Props.jeep(rng, turned, m) end },
 		}
 	elseif theme == 7 then
@@ -331,6 +369,7 @@ function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instan
 			{ 12, function() Props.barrels(rng, twisted, m) end , true },
 			{ 10, function() Props.woodpile(twisted, m) end , true },
 			{ 8, function() Props.log(rng, base, m) end , true },
+			{ 8, function() Props.tnt(twisted, m) end , "tnt" },
 		}
 	end
 	local total = 0
@@ -345,6 +384,9 @@ function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instan
 			-- Лёгкое можно разбить ракетой или на ускорении (o[3] = true)
 			if o[3] then
 				m:SetAttribute("Breakable", true)
+			end
+			if o[3] == "tnt" then
+				m:SetAttribute("Explosive", true) -- взрывается от любого удара (Contacts.explode)
 			end
 			break
 		end

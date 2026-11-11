@@ -132,7 +132,7 @@ function RunEvents.start()
 		end
 		run.smashes = (run.smashes or 0) + 1
 		local add = Tuning.forPlayer(player, function()
-			return Config.SMASH_COINS
+			return if model:GetAttribute("Explosive") then Config.TNT_COINS else Config.SMASH_COINS
 		end)
 		run.bonusCoins += add
 		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)

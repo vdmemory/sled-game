@@ -88,7 +88,7 @@ local function breakableOf(hit: BasePart): Model?
 	end
 	return nil
 end
-local function smash(model: Model)
+local function smash(model: Model, popup: string?)
 	if smashed[model] then
 		return
 	end
@@ -118,9 +118,52 @@ local function smash(model: Model)
 		end
 	end
 	st.speed *= 0.92
-	trickPopup:Fire("💥 Удар!  +" .. Config.SMASH_COINS)
+	trickPopup:Fire(popup or ("💥 Удар!  +" .. Config.SMASH_COINS))
 	sfx:Fire("smash")
 	Remotes.Smash:FireServer(model) -- сервер проверит: Breakable своей трассы, рядом, один раз
+end
+
+-- Ящик TNT (#66): взрыв от любого удара. Не авария: обломки и монеты как у разбитого (сервер
+-- проверит Smash и начислит TNT_COINS), огненный шар (визуальный Explosion без урона), сани
+-- подбрасывает вверх (полёт — можно сделать трюк), скорость × TNT_SLOW (щит гасит потерю и
+-- остаётся), камера трясётся.
+local function shake(duration: number, power: number)
+	local hum = st.humanoid
+	if not hum then
+		return
+	end
+	local t0 = os.clock()
+	local conn: RBXScriptConnection
+	conn = game:GetService("RunService").RenderStepped:Connect(function()
+		local k = 1 - (os.clock() - t0) / duration
+		if k <= 0 or not hum.Parent then
+			hum.CameraOffset = Vector3.zero
+			conn:Disconnect()
+			return
+		end
+		hum.CameraOffset = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * power * k
+	end)
+end
+local function explode(model: Model)
+	local pos = model:GetPivot().Position
+	smash(model, "💥 БАБАХ! TNT  +" .. Config.TNT_COINS)
+	local e = Instance.new("Explosion")
+	e.Position = pos + Vector3.new(0, 2, 0)
+	e.BlastRadius = 0 -- только вид: без толчка и урона
+	e.BlastPressure = 0
+	e.DestroyJointRadiusPercent = 0
+	e.ExplosionType = Enum.ExplosionType.NoCraters
+	e.Parent = workspace
+	if not shieldOn.Value then
+		st.speed *= Config.TNT_SLOW / 0.92 -- smash уже снял 8%
+	end
+	local sled = st.sled
+	if sled then
+		local v = sled.AssemblyLinearVelocity
+		sled.AssemblyLinearVelocity = Vector3.new(v.X, math.max(v.Y, 0) + Config.TNT_POP, v.Z)
+	end
+	sfx:Fire("crash")
+	shake(Config.TNT_SHAKE_TIME, Config.TNT_SHAKE)
 end
 
 local nearCoins: { BasePart } = {}
@@ -241,6 +284,11 @@ local function onTouched(hit: BasePart)
 		local breakable = breakableOf(hit)
 		if breakable then
 			if smashed[breakable] then
+				return
+			end
+			if breakable:GetAttribute("Explosive") then
+				st.lastObstacle = now
+				explode(breakable)
 				return
 			end
 			if rocketOn.Value or now - st.lastBoost < 1.5 then

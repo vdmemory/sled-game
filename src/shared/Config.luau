@@ -124,6 +124,12 @@ Config.TRAIN_SPEED = 80
 Config.TRAIN_LOOP = 1400
 Config.GONDOLA_CHANCE = 0.6 -- канатка над приземлением после обрыва
 Config.SMASH_COINS = 5 -- за разбитое препятствие (ракетой или на ускорителе)
+-- Ящик TNT (#66): взрыв от любого удара — не авария (client/Sled/Contacts.explode)
+Config.TNT_COINS = 8 -- монет за взрыв (вместо SMASH_COINS)
+Config.TNT_SLOW = 0.7 -- скорость после взрыва (щит гасит потерю)
+Config.TNT_POP = 38 -- подброс вверх, studs/с
+Config.TNT_SHAKE = 1.2 -- сила тряски камеры, studs
+Config.TNT_SHAKE_TIME = 0.45 -- длительность тряски, с
 Config.FINISH_GLIDE_MAX = 8 -- сек: после финиша катимся по ледяному озеру до остановки
 Config.COINS_PER_LINE = 5
 
@@ -952,6 +958,9 @@ Config.TUNABLES = {
 	{ "GEMS_FARM_FINISH", "Гемов за финиш (фарм)", "Экономика", 0, 20, 1 },
 	{ "CRYSTAL_COINS", "Кристалл: монет", "Экономика", 0, 500, 5 },
 	{ "SMASH_COINS", "Разбил препятствие: монет", "Экономика", 0, 100, 1 },
+	{ "TNT_COINS", "TNT: монет за взрыв", "Бонусы", 0, 50, 1 },
+	{ "TNT_SLOW", "TNT: скорость после взрыва (доля)", "Бонусы", 0.3, 1, 0.05 },
+	{ "TNT_POP", "TNT: подброс вверх", "Бонусы", 0, 80, 2 },
 	{ "TRICKS.flip.coins", "Сальто: монет", "Экономика", 0, 200, 1 },
 	{ "TRICKS.frontflip.coins", "Переднее сальто: монет", "Экономика", 0, 200, 1 },
 	{ "TRICKS.roll.coins", "Бочка: монет", "Экономика", 0, 200, 1 },
