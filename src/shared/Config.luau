@@ -502,6 +502,28 @@ function Config.taskText(t, target: number): string
 end
 Config.TASK_CHEST_COINS = 500 -- сундук за все задания (× rewardCoins) + гемы
 Config.TASK_CHEST_GEMS = 15
+-- Задание недели (#56, shared/WeeklyQuest + server/Rewards): одна цель на неделю ISO (UTC, тот же ключ
+-- W<год>-<нед>, что у досок недели LB_W…), сброс в понедельник 00:00 UTC. Цель недели — POOL[n % #POOL + 1],
+-- след недели — TRAILS[n % #TRAILS + 1] (n — номер недели от 1970); цель и след фиксируются в сейве при
+-- первом входе в неделю (правка Настройки посреди недели их не двигает). stat — ключ статистики заезда
+-- из Rewards.onRun (как у заданий дня). Цели — ≈ 4 сессии по 15 мин у казуала и среднего игрока
+-- (scripts/sim_economy.py, docs/GAME_DESIGN.md → «Задание недели»): не зависят от уровня и миров.
+-- Награда — один раз за неделю, сразу по выполнении: эксклюзивный след (навсегда) + GEMS; след уже
+-- есть — вместо него OWNED_GEMS.
+Config.WEEKLY_QUEST = {
+	GEMS = 30,
+	OWNED_GEMS = 30, -- компенсация, если след недели уже получен раньше
+	STEPS = { 25, 50, 75 }, -- % этапов: тост «Задание недели: 50 %» и custom WeeklyQuestStep
+	POOL = {
+		{ id = "runs", stat = "runs", text = "Сделай %d %s", forms = { "заезд", "заезда", "заездов" }, target = 60, icon = "sled" },
+		{ id = "distance", stat = "distance", text = "Проедь %d м", target = 100000, icon = "mountain" },
+		{ id = "air", stat = "air", text = "Пробудь в воздухе %d с", target = 200, icon = "parachute" },
+		{ id = "smash", stat = "smash", text = "Разбей %d %s", forms = { "препятствие", "препятствия", "препятствий" }, target = 40, icon = "smash" },
+		{ id = "boosts", stat = "boosts", text = "Проедь по %d %s", forms = { "ускорителю", "ускорителям", "ускорителям" }, target = 35, icon = "bolt" },
+		{ id = "rings", stat = "rings", text = "Пролети через %d %s", forms = { "золотое кольцо", "золотых кольца", "золотых колец" }, target = 30, icon = "ring" },
+	},
+	TRAILS = { "aurora", "comet", "frost", "ember" }, -- эксклюзивные следы (Config.TRAILS, exclusive = true)
+}
 -- Подарки за время в игре (минуты с захода), как сетка «Подарки» в референсе
 Config.PLAYTIME_GIFTS = {
 	{ min = 1, gems = 2 }, -- 1-я минута — гемы: монеты тут дали бы лишнюю покупку до 2-го заезда (#31)
@@ -860,6 +882,13 @@ Config.TRAILS = {
 	{ id = "purple", name = "Аметист", color = Color3.fromRGB(170, 90, 255), bonus = 35, price = 16000 },
 	{ id = "pink", name = "Фламинго", color = Color3.fromRGB(255, 110, 190), bonus = 45, price = 30000 },
 	{ id = "rainbow", name = "Радуга", color = Color3.fromRGB(255, 80, 80), bonus = 60, price = 60000, rainbow = true },
+	-- эксклюзивные (#56): только наградой за задание недели (WEEKLY_QUEST.TRAILS), не продаются (Shop.trailAction
+	-- отказывает); color → color2 — градиент ленты. +20 % монет: между «Солнцем» (1500) и «Лаймом» (4000) —
+	-- ощутимо для новичка, не обгоняет купленные старшие следы (коллекция, а не сила).
+	{ id = "aurora", name = "Северное сияние", color = Color3.fromRGB(60, 230, 170), color2 = Color3.fromRGB(150, 90, 255), bonus = 20, price = 0, exclusive = true },
+	{ id = "comet", name = "Комета", color = Color3.fromRGB(255, 245, 200), color2 = Color3.fromRGB(80, 150, 255), bonus = 20, price = 0, exclusive = true },
+	{ id = "frost", name = "Иней", color = Color3.fromRGB(200, 245, 255), color2 = Color3.fromRGB(40, 120, 220), bonus = 20, price = 0, exclusive = true },
+	{ id = "ember", name = "Уголёк", color = Color3.fromRGB(255, 210, 60), color2 = Color3.fromRGB(230, 50, 30), bonus = 20, price = 0, exclusive = true },
 }
 -- Превью следа в окне «Следы» (client/LobbyMenus, #7): нарисованная лента из кружков за иконкой
 -- саней (объект Trail во ViewportFrame не рисуется). Только вид — не баланс, в TUNABLES не входит.
@@ -1110,6 +1139,14 @@ Config.TUNABLES = {
 	{ "TASK_BUYSLED_LEVEL", "Задание «купи редкость»: с уровня", "Награды", 1, 50, 1 },
 	{ "TASK_CHEST_COINS", "Сундук заданий: монет", "Награды", 0, 10000, 50 },
 	{ "TASK_CHEST_GEMS", "Сундук заданий: гемов", "Награды", 0, 200, 1 },
+	{ "WEEKLY_QUEST.GEMS", "Задание недели: гемов", "Награды", 0, 500, 1 },
+	{ "WEEKLY_QUEST.OWNED_GEMS", "Задание недели: гемов вместо следа (уже есть)", "Награды", 0, 500, 1 },
+	{ "WEEKLY_QUEST.POOL.1.target", "Задание недели: заездов", "Награды", 1, 1000, 1 },
+	{ "WEEKLY_QUEST.POOL.2.target", "Задание недели: метров", "Награды", 1000, 1000000, 1000 },
+	{ "WEEKLY_QUEST.POOL.3.target", "Задание недели: секунд в воздухе", "Награды", 10, 3000, 5 },
+	{ "WEEKLY_QUEST.POOL.4.target", "Задание недели: препятствий", "Награды", 1, 1000, 1 },
+	{ "WEEKLY_QUEST.POOL.5.target", "Задание недели: ускорителей", "Награды", 1, 1000, 1 },
+	{ "WEEKLY_QUEST.POOL.6.target", "Задание недели: колец", "Награды", 1, 1000, 1 },
 	{ "CHEST_COINS", "Сундук в лобби: монет", "Награды", 0, 10000, 25 },
 	{ "CHEST_GEMS", "Сундук в лобби: гемов", "Награды", 0, 100, 1 },
 	{ "PLAYTIME_GIFTS.5.min", "Большой подарок: минута", "Награды", 1, 60, 1 },

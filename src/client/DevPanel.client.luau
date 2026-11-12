@@ -561,6 +561,8 @@ tabs["Инструменты"] = function()
 		{ "blue", "+5 мин сессии", function() dev("sessionShift") end },
 		{ "blue", "Стрик: следующий день", function() dev("streakNext") end },
 		{ "blue", "Стрик: пропуск дня", function() dev("streakSkip") end },
+		{ "green", "Задание недели: +25 %", function() dev("weekQuestAdd") end },
+		{ "grey", "Задание недели: новая неделя", function() dev("weekQuestReset") end },
 		{ "grey", "Сбросить обучение (и счётчик заездов)", function() dev("resetTutorial") end },
 	})
 	heading("Лидерборд недели")

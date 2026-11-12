@@ -886,9 +886,12 @@ end
 for _, attr in { "RunDistance", "RunCoins", "RunGems", "Combo", "InRun" } do
 	player:GetAttributeChangedSignal(attr):Connect(updateRun)
 end
-Remotes.TaskDone.OnClientEvent:Connect(function(text)
-	task.delay(3.8, function() -- после карточки итога
-		notice("📋 ЗАДАНИЕ ВЫПОЛНЕНО! " .. text, 2.8)
+local taskToastAt = 0 -- очередь тостов заданий: несколько за один заезд показываются по очереди, а не затирают друг друга
+Remotes.TaskDone.OnClientEvent:Connect(function(text, head)
+	local at = math.max(os.clock() + 3.8, taskToastAt + 3)
+	taskToastAt = at
+	task.delay(at - os.clock(), function() -- после карточки итога; head — свой заголовок (задание недели, #56)
+		notice((if typeof(head) == "string" then head else "📋 ЗАДАНИЕ ВЫПОЛНЕНО!") .. " " .. text, 2.8)
 		controller.Sfx:Fire("task")
 	end)
 end)

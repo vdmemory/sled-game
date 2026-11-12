@@ -71,6 +71,9 @@ local function trailAction(player: Player, id: any): (boolean, string?)
 		return false, "Нет такого следа"
 	end
 	if not d.OwnedTrails[id] then
+		if t.exclusive then
+			return false, "Только наградой за задание недели" -- #56: не продаётся
+		end
 		if d.Coins < t.price then
 			return false, "Не хватает монет"
 		end

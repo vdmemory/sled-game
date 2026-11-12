@@ -403,11 +403,72 @@ local function openWorlds()
 end
 worldsBtn.Activated:Connect(openWorlds)
 
------------------------------------------------------------------- Задания дня
-local tasksWin, tasksBody = panel("ЗАДАНИЯ ДНЯ", 580, 560)
-UI.text({ Text = "ВЫПОЛНИ ВСЕ ЗАДАНИЯ,\nЧТОБЫ ПОЛУЧИТЬ СУНДУК!", Position = UDim2.fromOffset(10, 18), Size = UDim2.new(1, -100, 0, 54), ZIndex = 33, Parent = tasksBody })
-local _, setTasksBar = UI.progress(tasksBody, { Position = UDim2.fromOffset(12, 76), Size = UDim2.new(1, -100, 0, 26), ZIndex = 33 })
-local chestClaim = UI.new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 34), Size = UDim2.fromOffset(72, 72), BackgroundTransparency = 1, ZIndex = 34, Parent = tasksBody })
+------------------------------------------------------------------ Задания: неделя + день
+-- Сверху (y 0–118 тела окна) — карточка задания недели (#56): цель, прогресс, таймер до сброса (пн 00:00
+-- UTC), награда — лента эксклюзивного следа недели + гемы. Ниже (со сдвигом WEEK_H) — задания дня.
+local WEEK_H = 128
+local tasksWin, tasksBody = panel("ЗАДАНИЯ", 580, 560 + WEEK_H)
+local weekCard = UI.new("Frame", { Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 118), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = tasksBody })
+UI.corner(weekCard, 16)
+local weekStroke = UI.stroke(weekCard, 3, C.gold)
+local weekIconBox = UI.new("Frame", { Position = UDim2.fromOffset(8, 21), Size = UDim2.fromOffset(76, 76), BackgroundColor3 = C.white, BackgroundTransparency = 0.2, ZIndex = 34, Parent = weekCard })
+UI.corner(weekIconBox, 12)
+local weekIcon: GuiObject? = nil
+local weekIconName = ""
+UI.ink({ Text = "📅 ЗАДАНИЕ НЕДЕЛИ", TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(96, 6), Size = UDim2.new(1, -270, 0, 28), ZIndex = 34, Parent = weekCard })
+local weekTimer = UI.ink({ Text = "", TextXAlignment = Enum.TextXAlignment.Right, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -110, 0, 6), Size = UDim2.fromOffset(160, 28), ZIndex = 34, Parent = weekCard })
+local weekText = UI.ink({ Text = "", TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(96, 38), Size = UDim2.new(1, -206, 0, 28), ZIndex = 34, Parent = weekCard })
+local weekBar, setWeekBar = UI.progress(weekCard, { Position = UDim2.fromOffset(100, 76), Size = UDim2.new(1, -210, 0, 28), ZIndex = 34 })
+local weekDone = UI.text({ Text = "", Position = UDim2.fromOffset(96, 72), Size = UDim2.new(1, -206, 0, 34), Visible = false, ZIndex = 34, Parent = weekCard })
+-- награда справа: лента следа недели (цвета следа) и гемы
+local weekRibbon = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 12), Size = UDim2.fromOffset(90, 26), BackgroundColor3 = C.white, BackgroundTransparency = 0, ZIndex = 34, Parent = weekCard })
+UI.corner(weekRibbon, 1000)
+UI.stroke(weekRibbon, 2)
+local weekGrad = Instance.new("UIGradient")
+weekGrad.Parent = weekRibbon
+local weekTrailName = UI.ink({ Text = "", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -4, 0, 40), Size = UDim2.fromOffset(100, 24), ZIndex = 34, Parent = weekCard })
+local _, setWeekGems = UI.iconText({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 72), Size = UDim2.fromOffset(90, 34), ZIndex = 34, Parent = weekCard })
+-- «3д 04ч» — до сброса недели больше суток
+local function weekClock(sec: number): string
+	sec = math.max(0, math.floor(sec))
+	if sec >= 86400 then
+		return string.format("%dд %02dч", sec // 86400, (sec % 86400) // 3600)
+	end
+	return clock(sec)
+end
+local function drawWeek()
+	local w = rewards and rewards.week
+	weekCard.Visible = w ~= nil
+	if not w then
+		return
+	end
+	if weekIconName ~= w.icon then
+		if weekIcon then
+			weekIcon:Destroy()
+		end
+		weekIconName = w.icon
+		weekIcon = UI.icon(w.icon, { Position = UDim2.fromScale(0.1, 0.1), Size = UDim2.fromScale(0.8, 0.8), ZIndex = 35, Parent = weekIconBox })
+	end
+	weekText.Text = w.text
+	weekBar.Visible = not w.done
+	weekDone.Visible = w.done
+	if w.done then
+		weekDone.Text = "✔ ВЫПОЛНЕНО! ЖДИ НОВОЕ"
+	else
+		setWeekBar(w.progress / math.max(1, w.target), UI.money(w.progress) .. "/" .. UI.money(w.target))
+	end
+	weekStroke.Color = if w.done then Color3.fromRGB(90, 200, 90) else C.gold
+	local t = Config.trail(w.trail)
+	local c2 = t.color2 or t.color
+	weekGrad.Color = ColorSequence.new(t.color, c2)
+	weekTrailName.Text = if w.trailOwned and not w.done then "✔ " .. t.name else t.name
+	setWeekGems("+" .. w.gems, "gem")
+end
+
+local DAY_Y = WEEK_H -- задания дня ниже карточки недели
+UI.text({ Text = "ВЫПОЛНИ ВСЕ ЗАДАНИЯ ДНЯ,\nЧТОБЫ ПОЛУЧИТЬ СУНДУК!", Position = UDim2.fromOffset(10, DAY_Y + 18), Size = UDim2.new(1, -100, 0, 54), ZIndex = 33, Parent = tasksBody })
+local _, setTasksBar = UI.progress(tasksBody, { Position = UDim2.fromOffset(12, DAY_Y + 76), Size = UDim2.new(1, -100, 0, 26), ZIndex = 33 })
+local chestClaim = UI.new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, DAY_Y + 34), Size = UDim2.fromOffset(72, 72), BackgroundTransparency = 1, ZIndex = 34, Parent = tasksBody })
 local chestIcon = UI.chest(chestClaim, { Position = UDim2.fromOffset(2, 6), Size = UDim2.fromOffset(68, 60), ZIndex = 35 })
 local chestDone = UI.icon("check", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(32, 32), Visible = false, ZIndex = 45, Parent = chestClaim })
 UI.bounce(chestClaim)
@@ -425,8 +486,8 @@ chestClaim.Activated:Connect(function()
 	end
 end)
 -- список заданий прокручивается (их 6 в день)
-local taskRows = scroller(tasksBody, false, 108)
-taskRows.Size = UDim2.new(1, 0, 1, -146)
+local taskRows = scroller(tasksBody, false, DAY_Y + 108)
+taskRows.Size = UDim2.new(1, 0, 1, -(DAY_Y + 146))
 local taskPad = taskRows:FindFirstChildOfClass("UIPadding") :: UIPadding
 taskPad.PaddingTop = UDim.new(0, 6)
 local tl = Instance.new("UIListLayout")
@@ -442,6 +503,7 @@ local function drawTasks()
 			c:Destroy()
 		end
 	end
+	drawWeek()
 	if not rewards then
 		return
 	end
@@ -778,7 +840,7 @@ local function paintPreview()
 	pvName.Text = t.name
 	pvBonus.Text = if t.bonus > 0 then "+" .. t.bonus .. "% монет" else "без бонуса"
 	local cur = player:GetAttribute("Trail") or "white"
-	pvState.Text = if t.id == cur then "✔ надет" elseif csvSet("OwnedTrails")[t.id] then "куплен" else "цена " .. UI.money(t.price)
+	pvState.Text = if t.id == cur then "✔ надет" elseif csvSet("OwnedTrails")[t.id] then "куплен" elseif t.exclusive then "за задание недели" else "цена " .. UI.money(t.price)
 	UI.setIcon(pvSled, Config.sled(player:GetAttribute("Sled")).img)
 	for k, b in blobs do
 		b.BackgroundColor3 = if t.rainbow then rainbowAt((k - 1) / TP.SEGMENTS) else t.color
@@ -849,6 +911,11 @@ for i, t in Config.TRAILS do
 		local g = Instance.new("UIGradient")
 		g.Color = RAINBOW
 		g.Parent = ribbon
+	elseif t.color2 then -- эксклюзивный след недели (#56): градиент
+		ribbon.BackgroundColor3 = C.white
+		local g = Instance.new("UIGradient")
+		g.Color = ColorSequence.new(t.color, t.color2)
+		g.Parent = ribbon
 	end
 	UI.ink({ Text = t.name, Position = UDim2.fromOffset(8, 70), Size = UDim2.new(1, -16, 0, 28), ZIndex = 34, Parent = card })
 	UI.ink({ Text = if t.bonus > 0 then "+" .. t.bonus .. "% монет" else "без бонуса", Position = UDim2.fromOffset(8, 98), Size = UDim2.new(1, -16, 0, 24), TextColor3 = Color3.fromRGB(200, 140, 20), ZIndex = 34, Parent = card })
@@ -871,6 +938,9 @@ local function drawTrails()
 		elseif owned[t.id] then
 			UI.setKind(st, "blue")
 			UI.setText(st, "НАДЕТЬ")
+		elseif t.exclusive then -- не продаётся: награда задания недели (#56)
+			UI.setKind(st, "grey")
+			UI.setText(st, "📅 НЕДЕЛЯ")
 		else
 			UI.setKind(st, if coins >= t.price then "yellow" else "grey")
 			UI.setText(st, UI.money(t.price), "coin")
@@ -1048,6 +1118,9 @@ RunService.Heartbeat:Connect(function(dt)
 	local chestLeft = rewards.chestAt - now
 	chestText.Text = if chestLeft <= 0 then "ОТКРЫТЬ!" else clock(chestLeft)
 	resetLabel.Text = "Обновятся через " .. clock(rewards.resetAt - now)
+	if rewards.week then
+		weekTimer.Text = "⏳ " .. weekClock(rewards.week.resetAt - now)
+	end
 end)
 
 -- В заезде все окна закрываем

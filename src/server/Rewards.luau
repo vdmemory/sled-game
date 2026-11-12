@@ -1,4 +1,4 @@
--- Удержание: ежедневные задания, подарки за время в игре, сундук в лобби.
+-- Удержание: ежедневные задания, задание недели (#56), подарки за время в игре, сундук в лобби.
 -- Все таймеры серверные (os.time), состояние лежит в профиле игрока (DataService).
 -- Клиенту состояние уходит JSON-строкой в атрибут "Rewards" (меню в LobbyMenus).
 
@@ -7,6 +7,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local DailyTasks = require(ReplicatedStorage.Shared.DailyTasks)
+local Week = require(ReplicatedStorage.Shared.Week)
+local WeeklyQuest = require(ReplicatedStorage.Shared.WeeklyQuest)
+local Remotes = require(script.Parent.Remotes)
 local Data = require(script.Parent.DataService)
 local Analytics = require(script.Parent.Analytics)
 
@@ -72,7 +75,22 @@ local function recheck(d)
 	end
 end
 
+-- Задание недели (#56): новая неделя (или сейв до #56) — цель и след недели фиксируются, прогресс с нуля.
+-- Вызывается из ensure — на входе, при каждом заезде и действии с наградами; офлайн-игрок, вернувшийся
+-- в другой неделе, получает новую цель при входе. Невыданной награды прошлой недели не бывает: она
+-- выдаётся сразу по выполнении (weekOnRun).
+local function ensureWeek(d)
+	local w = d.WeekQuest
+	local key = Week.key(os.time())
+	if type(w) == "table" and w.key == key and WeeklyQuest.poolById(w.id) then
+		return
+	end
+	local e = WeeklyQuest.forWeek(os.time())
+	d.WeekQuest = { key = key, id = e.id, target = e.target, trail = e.trail, progress = 0, step = 0, done = false }
+end
+
 local function ensure(d)
+	ensureWeek(d)
 	d.Daily = d.Daily or {}
 	local day = today()
 	if d.Daily.day ~= day then
@@ -87,6 +105,25 @@ local function ensure(d)
 	end
 	d.ChestAt = d.ChestAt or 0
 	ensureStreak(d)
+end
+
+-- Состояние задания недели для окна «Задания» (client/LobbyMenus)
+local function weekState(d)
+	local w = d.WeekQuest
+	local q = WeeklyQuest.poolById(w.id)
+	local tr = Config.trail(w.trail)
+	return {
+		text = WeeklyQuest.text(w.id, w.target),
+		icon = q and q.icon or "tasks",
+		progress = math.min(w.progress, w.target),
+		target = w.target,
+		done = w.done,
+		trail = tr.id,
+		trailName = tr.name,
+		trailOwned = d.OwnedTrails[tr.id] == true,
+		gems = Config.WEEKLY_QUEST.GEMS,
+		resetAt = Week.reset(os.time()),
+	}
 end
 
 function Rewards.sync(player: Player)
@@ -131,6 +168,7 @@ function Rewards.sync(player: Player)
 			save = d.Streak.save,
 			savePrice = if d.Streak.save > 0 then Config.streakSavePrice(d.Streak.save) else 0,
 		},
+		week = weekState(d),
 		now = os.time(),
 	}))
 end
@@ -159,6 +197,67 @@ function Rewards.devShiftSession(player: Player, sec: number)
 	end
 end
 
+local function grant(player: Player, d, coins: number?, gems: number?, what: string?)
+	if coins then
+		local n = Config.rewardCoins(coins, d.Level)
+		d.Coins += n
+		Analytics.economy(player, "Source", "Coins", n, d.Coins, Enum.AnalyticsEconomyTransactionType.TimedReward.Name, what or "Reward")
+	end
+	if gems then
+		d.Gems += gems
+		Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.TimedReward.Name, what or "Reward")
+	end
+end
+
+local function toast(player: Player, head: string, text: string)
+	if player.Parent then
+		Remotes.TaskDone:FireClient(player, text, head)
+	end
+end
+
+-- Задание недели (#56): прогресс из той же статистики заезда (stat), этапы 25/50/75 % — тост и custom
+-- WeeklyQuestStep; 100 % — награда сразу (след навсегда в OwnedTrails, уже есть — OWNED_GEMS) + гемы,
+-- Economy Source Gems «WeeklyChallenge», custom WeeklyQuestDone (значение — день недели 1–7).
+-- OwnedTrails в атрибуты отдаёт вызывающий (Runs.endRun → syncPlayer).
+local function weekOnRun(player: Player, d, stats: { [string]: number })
+	local w = d.WeekQuest
+	local q = WeeklyQuest.poolById(w.id)
+	if w.done or not q then
+		return
+	end
+	local add = stats[q.stat] or 0
+	if add <= 0 then
+		return
+	end
+	w.progress = math.min(w.progress + add, w.target)
+	local text = WeeklyQuest.text(w.id, w.target)
+	if w.progress >= w.target then
+		w.done = true
+		w.step = #Config.WEEKLY_QUEST.STEPS
+		local tr = Config.trail(w.trail)
+		local gems = Config.WEEKLY_QUEST.GEMS
+		local what
+		if tr.id == w.trail and not d.OwnedTrails[tr.id] then
+			d.OwnedTrails[tr.id] = true
+			what = "след «" .. tr.name .. "» твой — надень в «Следах»"
+		else
+			gems += Config.WEEKLY_QUEST.OWNED_GEMS
+			what = "след уже есть"
+		end
+		grant(player, d, nil, gems, "WeeklyChallenge")
+		Analytics.custom(player, "WeeklyQuestDone", (os.time() - Week.start(os.time())) // 86400 + 1)
+		toast(player, "🏆 ЗАДАНИЕ НЕДЕЛИ ВЫПОЛНЕНО!", what .. "  +" .. gems .. " 💎")
+		return
+	end
+	local step = WeeklyQuest.stepOf(w.progress, w.target)
+	if step > w.step then
+		w.step = step
+		local pct = Config.WEEKLY_QUEST.STEPS[step]
+		Analytics.custom(player, "WeeklyQuestStep", pct)
+		toast(player, "📅 ЗАДАНИЕ НЕДЕЛИ: " .. pct .. "%", text .. " · " .. w.progress .. "/" .. w.target)
+	end
+end
+
 -- Итоги заезда → прогресс заданий. Возвращает тексты заданий, выполненных этим заездом.
 function Rewards.onRun(player: Player, stats: { [string]: number }): { string }
 	local d = Data.get(player)
@@ -179,6 +278,7 @@ function Rewards.onRun(player: Player, stats: { [string]: number }): { string }
 			end
 		end
 	end
+	weekOnRun(player, d, stats)
 	Rewards.sync(player)
 	return done
 end
@@ -187,18 +287,6 @@ end
 function Rewards.add(player: Player, id: string, n: number?)
 	local done = Rewards.onRun(player, { [id] = n or 1 })
 	return done
-end
-
-local function grant(player: Player, d, coins: number?, gems: number?, what: string?)
-	if coins then
-		local n = Config.rewardCoins(coins, d.Level)
-		d.Coins += n
-		Analytics.economy(player, "Source", "Coins", n, d.Coins, Enum.AnalyticsEconomyTransactionType.TimedReward.Name, what or "Reward")
-	end
-	if gems then
-		d.Gems += gems
-		Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.TimedReward.Name, what or "Reward")
-	end
 end
 
 -- Возвращает (ok, сообщение | данные)
@@ -333,6 +421,26 @@ function Rewards.declineStreakSave(player: Player): (boolean, any)
 	d.Streak.save = 0
 	Rewards.sync(player)
 	return true, nil
+end
+
+-- DEV (#56): задание недели +25 % цели (как заезды — с тостами этапов и наградой) / «новая неделя»
+-- (сброс прогресса и выданной награды; след, если уже получен, остаётся — проверка OWNED_GEMS)
+function Rewards.devWeekAdd(player: Player)
+	local d = Data.get(player)
+	if d then
+		ensure(d)
+		local q = WeeklyQuest.poolById(d.WeekQuest.id)
+		if q then
+			Rewards.onRun(player, { [q.stat] = math.max(1, math.ceil(d.WeekQuest.target / 4)) })
+		end
+	end
+end
+function Rewards.devWeekReset(player: Player)
+	local d = Data.get(player)
+	if d then
+		d.WeekQuest = nil
+		Rewards.sync(player)
+	end
 end
 
 -- DEV: сдвинуть все дни стрика на n назад (1 = «наступил следующий день», 2 = «пропуск дня»)
