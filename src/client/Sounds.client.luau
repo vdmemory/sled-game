@@ -245,6 +245,11 @@ local function onEvent(name: string, arg: any?)
 		return
 	elseif name == "crystal" then
 		play("gem", 1.2, 0.6) -- звон поверх хруста
+	elseif name == "perfect" then
+		-- идеальный запуск (#58): своего звука в атласе нет — мощный вуш ускорителя + звон на терцию выше
+		play("boost")
+		play("ring", 2 ^ (4 / 12))
+		return
 	end
 	play(name)
 	local hold = DUCK_ON[name]

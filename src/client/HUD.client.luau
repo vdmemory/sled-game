@@ -1109,12 +1109,24 @@ RunService.RenderStepped:Connect(function()
 	controlsHint.Visible = not awaiting and launched and not UI.isPhone() -- на телефоне её место внизу занято текстами заезда
 	local pull = state.Meter.Value
 	local lit = math.floor(pull * GSEG + 0.5)
+	-- зона идеального запуска (#58): деления от Config.PERFECT_ZONE — жёлтые; пока идёт окно
+	-- PERFECT_WINDOW после входа в зону — горят золотом, окно прошло — обычный голубой
+	local zoneAt = state.PerfectAt.Value
+	local inWindow = zoneAt > 0 and os.clock() - zoneAt <= Config.PERFECT_WINDOW
+	local perfectOn = Config.PERFECT_LAUNCH_MULT > 1
 	for i, seg in gaugeSegs do
-		seg.BackgroundColor3 = if i <= lit then C.cyan else Color3.fromRGB(200, 225, 245)
-		seg.BackgroundTransparency = if i <= lit then 0 else 0.35
+		local zone = perfectOn and i / GSEG > Config.PERFECT_ZONE
+		seg.BackgroundColor3 = if i <= lit then (if zone and (inWindow or zoneAt == 0) then C.gold else C.cyan)
+			elseif zone then Color3.fromRGB(255, 225, 120)
+			else Color3.fromRGB(200, 225, 245)
+		seg.BackgroundTransparency = if i <= lit then 0 elseif zone then 0.15 else 0.35
 	end
 	gaugePct.Text = math.floor(pull * 100 + 0.5) .. "%"
-	gaugeHint.Text = if pull > 0.15 then "ОТПУСТИ!" elseif TOUCH then "Потяни вниз и отпусти 👇" else "Зажми мышь и тяни вниз (или держи Пробел)"
+	gaugeHint.Text = if inWindow then "★ ИДЕАЛЬНО — ОТПУСТИ! ★"
+		elseif pull > 0.15 and perfectOn and zoneAt == 0 then string.format("Отпусти в жёлтой зоне: +%d%%!", math.round((Config.PERFECT_LAUNCH_MULT - 1) * 100))
+		elseif pull > 0.15 then "ОТПУСТИ!"
+		elseif TOUCH then "Потяни вниз и отпусти 👇"
+		else "Зажми мышь и тяни вниз (или держи Пробел)"
 
 	local kmh = math.floor(state.Speed.Value * 1.1)
 	speedLabel.Text = tostring(kmh)

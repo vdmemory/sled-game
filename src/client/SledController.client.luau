@@ -85,6 +85,8 @@ local function stopRiding()
 	stickOn.Value = false
 	awaitingLaunch.Value = false
 	st.pulling, st.keyPull, st.pullInput, st.baseCF = false, false, nil, nil
+	st.zoneAt = nil
+	st.perfectAtValue.Value = 0
 	meterValue.Value = 0
 	local cam = workspace.CurrentCamera
 	if cam and cam.CameraType == Enum.CameraType.Scriptable then
@@ -151,6 +153,8 @@ local function startRiding(seat: VehicleSeat, hum: Humanoid)
 	-- Рогатка: ждём, пока игрок оттянет и отпустит
 	st.launchSent = false
 	st.pulling, st.keyPull, st.pullInput, st.baseCF = false, false, nil, nil
+	st.zoneAt = nil
+	st.perfectAtValue.Value = 0
 	meterValue.Value = 0
 	awaitingLaunch.Value = seat.Anchored
 
@@ -263,6 +267,11 @@ RunService.Heartbeat:Connect(function(dt)
 	if not st.started then
 		st.started = true
 		st.speed = s:GetAttribute("LaunchSpeed") or 50
+		-- идеальный запуск (#58): решил сервер (AntiCheat.perfectLaunch), здесь только вспышка и звук
+		if s:GetAttribute("PerfectLaunch") == true then
+			trickPopup:Fire(string.format("✨ ИДЕАЛЬНО! +%d%%", math.round((Config.PERFECT_LAUNCH_MULT - 1) * 100)))
+			sfx:Fire("perfect")
+		end
 	end
 	if st.crashed then
 		-- После кувырка гасим движение: ватрушка останавливается

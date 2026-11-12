@@ -50,7 +50,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `client/SledController` | 415 | посадка/высадка, кадр физики (скорость вдоль склона, руль, подсадка, прыжок, приземление) |
 | `client/Sled/State` | 133 | общее состояние санок (`st.speed`, `st.sled`, `st.trick`…) и объекты под контроллером (`State`, `Sfx`, `RequestLaunch`, `RocketInput`, `TrickPopup`) |
 | `client/Sled/Input` | 109 | руль: клавиатура, PlayerModule, свайп с кольцом (`Stick`) |
-| `client/Sled/Launch` | 117 | рогатка: натяжение, выстрел `Launch(power)` |
+| `client/Sled/Launch` | 130 | рогатка: натяжение (`Launch("pull")`), вход в зону идеального запуска (`st.zoneAt`, `State.PerfectAt`), выстрел `Launch(power, zoneAge)` |
 | `client/Sled/Tricks` | 345 | ручные и авто-трюки, `Tricks.land` (итог полёта), `Tricks.air` (кадр в воздухе), кнопки прыжка/ракеты |
 | `client/Sled/Contacts` | 386 | касания (авария, разбивание, щит, бонусы, гемы, кристалл, ускорители), `Contacts.scan` (монеты по отрезку пути, магнит) |
 | `shared/Track/init` | 574 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `rescueCFrame`, `destroy` |
@@ -96,7 +96,8 @@ GitHub Actions публикует его в Roblox через Open Cloud.
    `Track.new(slot, level, bestH)` и санки `makeSled` (невидимое `VehicleSeat` + модель из
    `SledModels` + декор тиров), сажает персонажа.
 3. Клиент (`SledController`) видит свои санки в `workspace.Sleds` (атрибут `Owner`), даёт оттянуть
-   рогатку → `Launch(power)`. Сервер отпускает санки и отдаёт network ownership клиенту.
+   рогатку → `Launch(power, zoneAge)`. Сервер решает идеальный запуск (#58, атрибут саней
+   `PerfectLaunch`, скорость — атрибут `LaunchSpeed`), отпускает санки и отдаёт network ownership клиенту.
 4. Физику считает клиент (модель «импульса»: гравитация вдоль склона − трение − сопротивление,
    ракета, ускорители, бонусы саней). Касания препятствий, монет, гемов, кристаллов, магнитов
    ловит клиент и сообщает серверу.
@@ -214,7 +215,7 @@ RemoteFunction клиент вызывает **только** через `UI.inv
 | Имя | Тип | Направление / смысл |
 | --- | --- | --- |
 | `StartRun` | Event | клиент → начать заезд |
-| `Launch` | Event | клиент → выстрел рогатки (сила 0..1) |
+| `Launch` | Event | клиент → выстрел рогатки `(сила 0..1, zoneAge)`: zoneAge — с от входа натяга в зону «ИДЕАЛЬНО» (#58, `nil` — не входил); `Launch("pull")` — начал натягивать (сервер запоминает `run.pullAt` для сверки тайминга, `AntiCheat.perfectLaunch`) |
 | `Crash` | Event | клиент → врезался (сервер делает ragdoll) |
 | `Air`, `Trick`, `Smash`, `Crystal`, `CoinGrab` | Event | клиент → время в воздухе, трюки за полёт (`Trick(list { id, count }, airTime)` — сервер проверяет id, count ≤ 5, оборотов ≤ влезающих в серверный полёт), разбил препятствие (`Smash(model)` — модель `Breakable`), кристалл, монета магнитом; проверки — `AntiCheat` |
 | `Restart`, `Back` | Event | клиент → заново / в лобби с рогатки |

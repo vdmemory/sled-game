@@ -60,6 +60,8 @@ export type Run = {
 	slowTime: number,
 	startTime: number,
 	launchTime: number?,
+	pullAt: number?, -- начал натягивать рогатку (Launch "pull", идеальный запуск #58)
+	perfectLaunch: boolean?, -- идеальный запуск засчитан (× Config.PERFECT_LAUNCH_MULT)
 	crashed: boolean?,
 	level: number,
 	farm: boolean,

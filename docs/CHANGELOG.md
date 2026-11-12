@@ -1,5 +1,17 @@
 # Журнал изменений
 
+## «Идеальный запуск»: окно тайминга у рогатки +10 % к скорости (#58; game-designer)
+- Шкала натяга: деления от `Config.PERFECT_ZONE` (0.9) — жёлтая зона; первый вход натяга в зону открывает
+  окно `PERFECT_WINDOW` (0.15 с), отпустил в нём — старт × `PERFECT_LAUNCH_MULT` (1.10). В окне деления горят
+  золотом и подсказка «★ ИДЕАЛЬНО — ОТПУСТИ! ★», после окна — обычный голубой.
+- Сервер-авторитет: `Launch("pull")` в начале натяга (сервер пишет `run.pullAt`), при отпускании
+  `Launch(power, zoneAge)`; решение — `AntiCheat.perfectLaunch` (сила ≥ зоны, окно, натяг до зоны по
+  серверным часам ≥ `PERFECT_MIN_PULL` с запасом `PERFECT_LAG`). `AntiCheat.start(..., mult)` — огибающая
+  скорости от умноженного старта. Атрибут саней `PerfectLaunch` → `SledController`: всплывашка «✨ ИДЕАЛЬНО!
+  +10%» (TrickPopup — на телефоне внизу) и звук `perfect` (`boost` + `ring` на терцию выше, без нового ассета).
+- Аналитика: custom `PerfectLaunch` (1/0 на выстрел) — `docs/METRICS.md`. Числа — TUNABLES «Прокачка» /
+  «Античит». Старый клиент (`Launch(power)` без zoneAge) просто не получает бонус.
+
 ## Симуляция экономики и прогрессии: `scripts/sim_economy.py` (#6; game-designer)
 - Новый скрипт `scripts/sim_economy.py` (Python 3, без зависимостей): читает числа прямо из
   `src/shared/Config.luau` (мини-парсер Lua-таблиц: `F`, `UPGRADES`, `ROCKET_TIER_PRICES`, `PLAYTIME_GIFTS`,

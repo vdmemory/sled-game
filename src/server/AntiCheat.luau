@@ -1,7 +1,9 @@
 -- Античит заезда: санки считает клиент (network ownership после Launch), сервер проверяет,
 -- что сообщённое правдоподобно. Пороги и их расчёт — Config, раздел «АНТИЧИТ».
 --
---   AntiCheat.start(run, player, d, power)  — на Launch (внутри Tuning.forPlayer): огибающая скорости
+--   AntiCheat.start(run, player, d, power, mult) — на Launch (внутри Tuning.forPlayer): огибающая скорости
+--       (mult — идеальный запуск: огибающая стартует от уже умноженной скорости рогатки)
+--   AntiCheat.perfectLaunch(run, power, zoneAge) — засчитать ли «идеальный запуск» (#58)
 --   AntiCheat.tick(run, player, pos, dt, h) — в Heartbeat (внутри Tuning.forPlayer): засчитывает
 --       путь не быстрее предела, копит серверный полёт; → nil | "flag" | "kill"
 --   AntiCheat.air / trickAir                — сколько секунд полёта засчитать по серверу
@@ -25,10 +27,11 @@ local function rocketAcc(): number
 	return Config.ROCKET_THRUST + Config.GRAVITY_ALONG * SIN_STEEP
 end
 
-function AntiCheat.start(run: any, _player: Player, d: any, power: number)
+-- mult — множитель скорости старта, решённый сервером (идеальный запуск #58, Config.PERFECT_LAUNCH_MULT)
+function AntiCheat.start(run: any, _player: Player, d: any, power: number, mult: number?)
 	local sled: VehicleSeat = run.sled
 	local bonus = sled:GetAttribute("SledBonus") or 0
-	local launch = Config.launchSpeed(d.LaunchLevel or 0) * math.clamp(power, 0, 1)
+	local launch = Config.launchSpeed(d.LaunchLevel or 0) * math.clamp(power, 0, 1) * math.max(1, mult or 1)
 	local cap = Config.maxSpeed(d.SledLevel or 0) * (1 + bonus)
 	local rocketTerminal = math.sqrt(rocketAcc() / math.max(Config.DRAG, 1e-6))
 	local floor = math.max(launch, cap, rocketTerminal)
@@ -53,6 +56,22 @@ function AntiCheat.start(run: any, _player: Player, d: any, power: number)
 		smashed = {} :: { [Instance]: boolean },
 		ray = params,
 	}
+end
+
+-- Идеальный запуск (#58): zoneAge — сколько секунд, по словам клиента, прошло от входа натяга в зону
+-- PERFECT_ZONE до отпускания. Засчитываем, если: механика включена, сила ≥ зоны, отпустил в окне
+-- PERFECT_WINDOW, и по серверным часам от начала натяга (run.pullAt — сообщение "pull") до входа в
+-- зону прошло ≥ PERFECT_MIN_PULL (с запасом PERFECT_LAG на разброс пинга двух сообщений). Таймингом
+-- ввода клиент владеет сам, поэтому выгода ограничена: ровно × PERFECT_LAUNCH_MULT к старту, раз за заезд.
+function AntiCheat.perfectLaunch(run: any, power: number, zoneAge: any): boolean
+	if Config.PERFECT_LAUNCH_MULT <= 1 or typeof(zoneAge) ~= "number" or zoneAge ~= zoneAge then
+		return false
+	end
+	if zoneAge < 0 or zoneAge > Config.PERFECT_WINDOW or power < Config.PERFECT_ZONE or not run.pullAt then
+		return false
+	end
+	local held = os.clock() - run.pullAt -- натяг по серверу: от "pull" до отпускания
+	return held + Config.PERFECT_LAG >= zoneAge + Config.PERFECT_MIN_PULL
 end
 
 -- Текущий предел скорости, studs/с

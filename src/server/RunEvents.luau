@@ -25,9 +25,17 @@ local Smash: RemoteEvent = Remotes.Smash
 local RunEvents = {}
 
 function RunEvents.start()
-	-- Игрок отпустил рогатку: power 0..1 — насколько сильно оттянул резинку
-	Launch.OnServerEvent:Connect(function(player, power)
+	-- Игрок отпустил рогатку: power 0..1 — насколько сильно оттянул резинку; zoneAge — с от входа
+	-- натяга в зону «ИДЕАЛЬНО» до отпускания (#58, nil — не входил). Launch("pull") — начал натягивать:
+	-- сервер запоминает время, чтобы сверить тайминг идеального запуска (AntiCheat.perfectLaunch).
+	Launch.OnServerEvent:Connect(function(player, power, zoneAge)
 		local run = runs[player]
+		if power == "pull" then
+			if run and not run.launched then
+				run.pullAt = os.clock()
+			end
+			return
+		end
 		local d = Data.get(player)
 		if not run or run.launched or not d or typeof(power) ~= "number" or power ~= power then
 			return
@@ -39,10 +47,18 @@ function RunEvents.start()
 			r:Destroy()
 		end
 		local sled = run.sled
-		sled:SetAttribute("LaunchSpeed", Tuning.forPlayer(player, function()
-			AntiCheat.start(run, player, d, power) -- огибающая скорости под персональные настройки
-			return Config.launchSpeed(d.LaunchLevel) * power
-		end))
+		local perfect = false
+		local speed = Tuning.forPlayer(player, function()
+			perfect = AntiCheat.perfectLaunch(run, power, zoneAge)
+			local mult = if perfect then Config.PERFECT_LAUNCH_MULT else 1
+			AntiCheat.start(run, player, d, power, mult) -- огибающая скорости под персональные настройки
+			return Config.launchSpeed(d.LaunchLevel) * power * mult
+		end)
+		run.perfectLaunch = perfect
+		sled:SetAttribute("PerfectLaunch", perfect) -- клиент: вспышка «ИДЕАЛЬНО!» и звук
+		sled:SetAttribute("LaunchSpeed", speed)
+		-- доля идеальных: число событий = запуски, сумма значений = идеальные (docs/METRICS.md)
+		Analytics.custom(player, "PerfectLaunch", if perfect then 1 else 0)
 		sled.Anchored = false
 		-- дальше физику считает клиент: мгновенный отклик
 		local ok, err = pcall(sled.SetNetworkOwner, sled, player)
