@@ -1,4 +1,4 @@
--- Трасса уровня для одного игрока: широкий белый снежный склон с мягкими сугробами по краям,
+-- Трасса уровня для одного игрока: широкий белый снежный склон-чаша с ездовыми поясами по краям (#74),
 -- ледяными проплешинами, обрывами с жёлтыми трамплинами, препятствиями, ускорителями, монетами
 -- и финишем. Профиль уровня детерминирован (seed = номер уровня): одна и та же трасса на каждой
 -- попытке, её можно выучить — как в оригинале. Геометрия строится кусками впереди игрока.
@@ -573,7 +573,8 @@ function Track:ensureAround(h: number)
 	end
 end
 
--- Где игрок на трассе: пройденный путь h, смещение вбок x, высота над дном y.
+-- Где игрок на трассе: пройденный путь h, смещение вбок x (от оси дна; на поясах чаши |x| > W/2 —
+-- это ещё трасса, см. Track.rideSpan), высота над дном y (на поясе — над плоскостью дна, не над снегом).
 -- Ищем кусок рядом с прошлым (hint), на который точка проецируется лучше всего.
 function Track:progressOf(pos: Vector3): (number, number, number)
 	local best, bestScore, bestT, bestRel = nil, math.huge, 0, Vector3.zero
@@ -618,8 +619,9 @@ function Track:rescueCFrame(pos: Vector3): CFrame?
 	return seg.cf * CFrame.new(x, Config.RESCUE_LIFT, -t)
 end
 
--- Ходовая часть куска поперёк (x от оси): обычно ±W/2; у развилки (#42) на разгоне, кусках цепочки и
--- приземлении — до внешнего края моста с его стороны (там тоже трасса, а не вылет)
+-- Ходовая часть куска поперёк (x от оси): дно ±W/2 — полосы препятствий, монеты, точка возврата при
+-- спасении; у развилки (#42) на разгоне, кусках цепочки и приземлении — до внешнего края моста с его
+-- стороны (там тоже трасса, а не вылет)
 function Track.floorSpan(seg: any?): (number, number)
 	local fork = seg and seg.fork
 	if not fork then
@@ -631,9 +633,23 @@ function Track.floorSpan(seg: any?): (number, number)
 	return -W / 2, fork.outer
 end
 
--- Насколько игрок (x — смещение вбок из progressOf) вышел за ходовую часть текущего куска; 0 — внутри
+-- Ездовая ширина куска (#74): дно + пояса чаши (Config.BOWL) до барьера — по ним едут честно, спасение
+-- не нужно. Жёлоб: дно + первый (общий с чашей) пояс — выше ледяные борта, с них сани сами съезжают.
+-- Островки, пропасть, озеро и сторона моста у развилки — только ходовая часть (поясов там нет).
+local NO_BANKS = { isle = true, gap = true, lake = true }
+function Track.rideSpan(seg: any?): (number, number)
+	local lo, hi = Track.floorSpan(seg)
+	if not seg or NO_BANKS[seg.kind] then
+		return lo, hi
+	end
+	local out = if seg.chute then Sections.CHUTE_PROFILE.banks[1].width * math.cos(math.rad(Sections.CHUTE_PROFILE.banks[1].angle)) else Sections.BOWL_OUT
+	local open = seg.open or 0
+	return (if open < 0 then lo else lo - out), (if open > 0 then hi else hi + out)
+end
+
+-- Насколько игрок (x — смещение вбок из progressOf) вышел за ездовую ширину текущего куска; 0 — внутри
 function Track:sideOut(x: number): number
-	local lo, hi = Track.floorSpan(self.segments[self.hint])
+	local lo, hi = Track.rideSpan(self.segments[self.hint])
 	return math.max(0, lo - x, x - hi)
 end
 

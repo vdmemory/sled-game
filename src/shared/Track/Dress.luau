@@ -307,7 +307,7 @@ local function dressTrack(theme: number, rng: Random, seg, m: Instance)
 		end
 	end
 	if (kind == "gentle" or kind == "steep") and rng:NextNumber() < Config.SLALOM_CHANCE then
-		-- на первом поясе сугроба (14°), 6 studs за краем дна; цвета чередуются по сторонам
+		-- на первом поясе чаши (Config.BOWL.BANK1_ANGLE), 6 studs за краем дна; цвета чередуются по сторонам
 		local bankY = 6 * math.tan(math.rad(SNOW_PROFILE.banks[1].angle))
 		local k = 0
 		for z = 14, len - 8, 32 do
@@ -319,21 +319,22 @@ local function dressTrack(theme: number, rng: Random, seg, m: Instance)
 		end
 	end
 	if kind == "gentle" and seg.hStart > Config.SAFE_START and rng:NextNumber() < Config.ARCH_CHANCE and not seg.tunnel then -- в тоннеле арка ушла бы в свод
-		-- большая арка: ледяной свод над всей шириной (декор, сквозь неё едем). Меш (#45) — 1 деталь
-		-- вместо 13 блоков; без шаблона — блоки полукругом, как раньше.
+		-- большая арка: ледяной свод над всей шириной чаши (декор, сквозь неё едем), ноги на полке за
+		-- поясами. Меш (#45) — 1 деталь вместо 13 блоков; без шаблона — блоки полукругом, как раньше.
 		local r = BANK_OUT + 4
+		local base = BANK_TOP - 4
 		local z = len * rng:NextNumber(0.35, 0.65)
 		local iceCol = if theme == 7 then Color3.fromRGB(255, 190, 225) elseif theme == 3 then Color3.fromRGB(230, 170, 120) else Color3.fromRGB(150, 205, 245)
 		if Meshes.has("arch") then
 			local span = r * 2 / 2.1 -- ноги арки в x ≈ ±1.05 кадра меша
-			Meshes.place("arch", cf * CFrame.new(0, BANK_TOP * 0.3 - 4, -z), Vector3.new(span, (r * 0.6 + 7) / 1.03, 7 / 1.27), { Material = Enum.Material.Ice, Color = Meshes.vary(iceCol, cf.Position, 0.05), Transparency = 0.05, CastShadow = true }, m)
+			Meshes.place("arch", cf * CFrame.new(0, base, -z), Vector3.new(span, (r * 0.6 + 7) / 1.03, 7 / 1.27), { Material = Enum.Material.Ice, Color = Meshes.vary(iceCol, cf.Position, 0.05), Transparency = 0.05, CastShadow = true }, m)
 			return
 		end
 		for j = 0, 12 do
 			local a = math.pi * j / 12
 			deco({
 				Size = Vector3.new(7, 6, 5),
-				CFrame = cf * CFrame.new(math.cos(a) * r, BANK_TOP * 0.3 + math.sin(a) * r * 0.6, -z) * CFrame.Angles(0, 0, a),
+				CFrame = cf * CFrame.new(math.cos(a) * r, base + 2 + math.sin(a) * r * 0.6, -z) * CFrame.Angles(0, 0, a),
 				Material = Enum.Material.Ice,
 				Color = if j % 4 == 0 then accent else iceCol,
 				Transparency = 0.05,

@@ -539,16 +539,17 @@ function Runs.start()
 	end)
 end
 
--- Страховка «мягкий возврат» (Config.RESCUE_*): сани провалились ниже дна куска, ушли за барьер
--- или катятся снаружи невидимого борта (сугроб после жёлоба) — клиенту (у него физика саней)
--- уходит Rescue с точкой на дне куска. Над пропастью островков и на озере точки нет (nil) —
+-- Страховка «мягкий возврат» (Config.RESCUE_*): сани провалились ниже дна куска, ушли за край чаши
+-- дальше RESCUE_SIDE или дольше RESCUE_OUT_TIME находятся за ним (полка за барьером) — клиенту (у
+-- него физика саней) уходит Rescue с точкой на дне куска. Пояса чаши (#74) — ездовая часть: там
+-- спасение не срабатывает (Track.rideSpan). Над пропастью островков и на озере точки нет (nil) —
 -- там падение остаётся концом заезда «fell». Ответ: вернули ли.
 local function rescueCheck(player: Player, run: Run, x: number, y: number, step: number): boolean
 	local track = run.track
 	local seg = track.segments[track.hint]
-	-- вбок — от края ходовой части куска (у развилки #42 она шире: до края моста, Track.floorSpan)
+	-- вбок — от края ездовой части куска: дно + пояса чаши; у развилки #42 — до края моста (Track.rideSpan)
 	local out = track:sideOut(x)
-	local outside = seg ~= nil and not seg.chute and seg.kind ~= "lake" and out > Config.WALL_OFFSET + 2
+	local outside = seg ~= nil and not seg.chute and seg.kind ~= "lake" and out > 0
 	run.outside = if outside then (run.outside or 0) + step else 0
 	local need = y < -Config.RESCUE_DEPTH or out > Config.RESCUE_SIDE or (run.outside or 0) >= Config.RESCUE_OUT_TIME
 	if not need or (run.rescues or 0) >= Config.RESCUE_MAX then

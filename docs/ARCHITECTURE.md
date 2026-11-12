@@ -60,7 +60,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/DailyTasks` | 140 | задания дня игрока (#32): `baseSet(day)` (общий набор дня), `forPlayer(day, d)`, `revalidate(set, day, d, keep)` — замена невыполнимого (`Config.taskAvailable`), `describe`. Чистые функции; проверка — `scripts/stand/daily_tasks.luau` |
 | `shared/WeeklyQuest` | 57 | задание недели (#56): `forWeek(t)` → `{ key, id, target, trail }` (POOL/TRAILS по номеру недели от 1970), `text`, `stepOf` (этапы 25/50/75 %), `poolById`. Чистые функции; проверка — `scripts/stand/weekly_quest.luau` |
 | `shared/Track/Profile` | 244 | `buildProfile` — цепочка кусков уровня (тип `Segment`) |
-| `shared/Track/Sections` | 189 | профили сечений, цвета снега, `sidePoint`, поперечное сечение куска |
+| `shared/Track/Sections` | 247 | профили сечений (чаша #74, жёлоб, дорога, озеро), цвета снега, `sidePoint`, поперечное сечение куска |
 | `shared/Track/Dress` | 324 | оформление миров вдоль трассы и разметка на ней |
 | `shared/Track/Items` | 189 | монеты, гемы, магнит, бонусы, кристалл, `tagObstacle` |
 | `shared/Track/Valley` | 150 | гребень над долиной: `build` — обрыв, дно, островки по миру; `prune` — убрать декор обочины над обрывом; участки помечает `Profile` (`seg.valley`) |
@@ -147,16 +147,30 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 Машины, поезда и кабинки канатки (тег `Mover`) двигает каждый клиент сам по серверному времени
 (`Traffic.client`) — плавно и одинаково у всех.
 
-### Борта трассы
+### Сечение «чаша» и границы трассы (#74)
 
-`Track.buildCrossSection` ставит у каждого куска (кроме жёлоба поворота, где стенками служат
-ледяные пояса) по одному невидимому борту с каждой стороны у края дна: `Wall`, `CanCollide`,
-`Transparency=1`, `CanQuery=false` (луч санок вниз и `GetPartBoundsInBox` его не видят), наклон
-наружу `Config.WALL_TILT`, высота `Config.WALL_HEIGHT` (на приземлении после обрыва — вдвое выше),
-отступ `Config.WALL_OFFSET`. Так санки не уезжают на сугроб и не проваливаются на стыке с куском без
-сугроба (дорога, озеро). Снаружи остаётся общий `Barrier` у внешней кромки. Если санки всё же
-оказались вне трассы, сервер заканчивает заезд как `fell` (`|x| > 2·TRACK_WIDTH` или `y < −60`)
-или `stopped` (скорость ниже `STOP_SPEED` дольше `STOP_TIME`).
+`Sections.build` (`Track.buildCrossSection`) строит снежный кусок как чашу: дно `Floor` шириной
+`TRACK_WIDTH` 80 (ходовая часть: полосы `LANES`, монеты, безопасная линия) и два ездовых пояса `Bank`
+того же снега (`Config.BOWL`: 30 studs × 14°, затем 30 × 30°; `SNOW_PROFILE`), за ними ровная полка
+`Ground` (без коллизии, на ней декор) и невидимый `Barrier` (`BOWL.BARRIER_H`) у `prof.out + 2`.
+Видимых стенок нет; к центру сани возвращает сам склон (`WALL_PULL · right.Y` в `SledController`,
+части `Bank` — в `TRACK_PARTS`). Жёлоб (`CHUTE_PROFILE`/`SPIRAL_PROFILE`: повороты, вираж, ледяной
+тоннель) начинается с того же первого пояса (изо льда — стык чаша↔жёлоб без ступеньки), дальше борта
+48°/74° (+`SPIRAL_WALL`). Первый пояс жёлоба строится половинами куска поворота (`seg.bank`,
+`Profile.bankHalf`): ступенька между прямыми плитами пояса на дуге `x·sin(поворот плиты)·tg(уклон)` ≤ 0.8
+(подсадка `STEP_UP_MAX` 1.2). Плиты поясов заходят назад под плиту прошлого куска и не выступают вперёд.
+Дорога/переезд: те же пояса невидимые (стык без ступеньки, асфальт и машины не меняются).
+
+Невидимые борта у края дна (`Wall`, `CanCollide`, `Transparency=1`, `CanQuery=false`, наклон наружу
+`WALL_TILT`, высота `WALL_HEIGHT`, отступ `WALL_OFFSET`) остались только там, где за дном трассы нет:
+озеро (шире трассы), островки (`Islands`, ×2), мост и воронка развилки (`Fork`), разгон к островкам
+`isleIn` — там перед бортом воронка от края чаши к краю дна за `BOWL.FUNNEL_LEN` 70 studs (высотой до
+верха поясов). Ширины: `Track.floorSpan(seg)` — ходовая часть (дно; у развилки до края моста),
+`Track.rideSpan(seg)` — ездовая (дно + пояса; жёлоб — дно + первый пояс; островки/пропасть/озеро и
+сторона моста — без поясов), `Track:sideOut(x)` — выход за ездовую. `Runs.rescueCheck`: «снаружи» =
+`sideOut > 0` (полка за барьером), возврат — `rescueCFrame` на дно (`floorSpan` − `RESCUE_INSET`).
+Сервер заканчивает заезд как `fell` (`|x| > 2·TRACK_WIDTH` или `y < −FELL_DEPTH`) или `stopped`.
+Полоса трассы `TRACK_FOOTPRINT` 640 (край чаши 95 + полка `VALLEY_SHOULDER` + долина).
 
 ### Профиль трассы, гладкость и островки (#40)
 - `Track.buildProfile` собирает куски через `add` (скругляет стык: переходные куски `fillet`,
@@ -187,8 +201,8 @@ GitHub Actions публикует его в Roblox через Open Cloud.
   конец разгона, курс цепочки; `fork.h0` — путь там). Куски `isleIn`/`landing` развилки — `seg.fork` +
   `seg.open` (сторона без бортов: `Sections.build` её пропускает, `Fork.buildIn/buildLand` строят пол и
   борта), куски `gap`/`isle` — `seg.fork` (настил части пути куска, `Fork.bridge`). Мост параллелен оси →
-  `progressOf` даёт верный h; `Track.floorSpan(seg)` / `Track:sideOut(x)` — ходовая часть поперёк (у
-  развилки до края моста) для `Runs.rescueCheck` и `rescueCFrame`. Выбор развилки — `Profile.forkRoll`
+  `progressOf` даёт верный h; `Track.floorSpan(seg)` (ходовая часть, у развилки до края моста) /
+  `Track.rideSpan(seg)` + `Track:sideOut(x)` (ездовая: + пояса чаши #74) — для `Runs.rescueCheck` и `rescueCFrame`. Выбор развилки — `Profile.forkRoll`
   (без Random): уровни без развилки не меняются.
 - `Track:progressOf` ищет кусок в окне hint −8…+40 (куски пола поворота и переходы короткие).
 - `SafeLine.plan` пропускает `fillet` при проверке «после приземления первые 60 studs чистые».
@@ -198,7 +212,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
   `check_tail.luau` (стыки ур. 1–30), `isle_tail.luau` (баллистика ур. 1–50), `parts_tail.luau`
   (Part-ы на кусок и в окне стриминга); сборка `python3 build.py <src/shared> <tail>`.
 - В репозитории: `scripts/stand/track_levels.luau` (`python3 scripts/stand/run.py scripts/stand/track_levels.luau
-  [--meshes]`) — все куски уровней 1–45 строятся без ошибок, лестница не перелетается, гладкость стыков;
+  [--meshes]`) — все куски уровней 1–45 строятся без ошибок, лестница не перелетается, гладкость стыков
+  (дно ±39 и пояса чаши #74: первый пояс на всех стыках, второй — между снежными; у жёлоба порог на поясе
+  `STEP_UP_MAX`; стыки с нарушениями — ошибка стенда);
   статистика новых участков по уровням. Шимы копят инстансы — за один запуск ≈ 25 уровней, диапазон
   задаётся глобалами `ARGS_FROM`/`ARGS_TO` (строкой перед сценарием).
 

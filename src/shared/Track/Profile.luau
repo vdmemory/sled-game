@@ -35,6 +35,7 @@ export type Segment = {
 	ice: any?, -- ледяной тоннель с кольцами (#44): { half = 1 | 2 } (Track/IceTunnel)
 	fork: any?, -- развилка у островков (#42): план моста (Track/Fork) на разгоне, кусках цепочки и приземлении
 	open: number?, -- развилка: с этой стороны (−1/1) сечение без бортов — пол уходит к мосту
+	bank: number?, -- часть пола поворота, с которой начинается плита первого пояса жёлоба (#74): её длина
 }
 
 -- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
@@ -257,6 +258,16 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		return push(kind, angle, length, chute, extra)
 	end
 
+	-- Первый (ездовой) пояс жёлоба (#74) строится не на весь кусок поворота, а половинами — на первой
+	-- и средней части пола: ступенька между соседними прямыми плитами пояса x·sin(поворот плиты)·tg(уклон)
+	-- на краю пояса (x ≈ 69) при полном шаге виража 6° была бы 1.3 > подсадки STEP_UP_MAX; с половинами ≈ 0.6
+	local function bankHalf(k: number, sub: number): number?
+		if k == 1 or k == sub // 2 + 1 then
+			return Config.CURVE_PIECE / 2
+		end
+		return nil
+	end
+
 	-- Поворот из коротких кусков. Направление выбираем так, чтобы трасса не уходила далеко вбок
 	-- target (#73) — поворот-доводка: повернуть к этому курсу (радианы), угол — сколько нужно
 	-- (15…CURVE_ANGLE[2]°); случайные числа тратятся как у обычного поворота
@@ -302,7 +313,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 				if turn and not (piece == 1 and k == 1) then
 					yaw += step / sub
 				end
-				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex }
+				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex, bank = bankHalf(k, sub) }
 				if k == 1 then
 					add("curve", pitch, Config.CURVE_PIECE / sub, true, extra)
 				else
@@ -356,7 +367,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 				if not (piece == 1 and k == 1) then
 					yaw += step / sub
 				end
-				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex, spiral = dir }
+				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex, spiral = dir, bank = bankHalf(k, sub) }
 				if k == 1 then
 					add("spiral", pitch, Config.CURVE_PIECE / sub, true, extra)
 				else

@@ -7,6 +7,7 @@
 --     лестницы нет тоннеля, долины, рядов препятствий;
 --   • гладкость стыков ходовой части (как scratchpad/smooth/check_tail, #40): ступенька > 0.2 stud /
 --     излом > 3° на 2 studs; намеренные разрывы — край кикера, островки, трамплины лестницы;
+--     и поясов чаши (#74): первый пояс — на всех стыках (у жёлоба он тот же), второй — между снежными;
 --   • вираж-спираль (#44): не под тоннелем/долиной, курс не дальше SPIRAL_MAX_HEADING; ледяной тоннель:
 --     кольца-ускорители (тег Boost) построены, перед ним нет препятствий;
 --   • снос вбок (#73): центр трассы (начала и концы кусков) не дальше SLOT_SPACING/2 − 150, а полоса
@@ -45,6 +46,22 @@ local Track = require(SHARED.Track)
 ------------------------------------------------------------------ гладкость стыков (#40)
 local INTENT_END = { kicker = true, isleIn = true, isle = true, gap = true, stair = true }
 local XS = { -39, -26, -13, 0, 13, 26, 39 }
+-- пояса чаши (#74): точки на первом и втором поясе, высота поверхности над плоскостью дна
+local BOWL = Config.BOWL
+local HW = Config.TRACK_WIDTH / 2
+local B1_OUT = HW + BOWL.BANK1_W * math.cos(math.rad(BOWL.BANK1_ANGLE))
+local B1_TOP = BOWL.BANK1_W * math.sin(math.rad(BOWL.BANK1_ANGLE))
+local XS_B1 = { -(HW + 8), -(B1_OUT - 6), HW + 8, B1_OUT - 6 }
+local XS_B2 = { -(B1_OUT + 8), -(B1_OUT + 20), B1_OUT + 8, B1_OUT + 20 }
+local function bankY(x: number): number
+	local ax = math.abs(x)
+	if ax <= HW then
+		return 0
+	elseif ax <= B1_OUT then
+		return (ax - HW) * math.tan(math.rad(BOWL.BANK1_ANGLE))
+	end
+	return B1_TOP + (ax - B1_OUT) * math.tan(math.rad(BOWL.BANK2_ANGLE))
+end
 local STEP_MAX, KINK_MAX = 0.2, 3
 local function prep(p)
 	local c, s = p.CFrame, p.Size
@@ -69,20 +86,27 @@ local function smoothness(tr)
 	local segs = tr.segments
 	local floors = {}
 	for _, d in tr.folder:GetDescendants() do
-		if d:IsA("BasePart") and d.CanCollide ~= false and d.Name == "Floor" then
+		if d:IsA("BasePart") and d.CanCollide ~= false and (d.Name == "Floor" or d.Name == "Bank") then
 			local m = d.Parent
 			local idx = if m.Name == "Start" then -1 else tonumber(string.match(m.Name, "Segment_(%d+)"))
 			if idx then
 				idx += 1
 				floors[idx] = floors[idx] or {}
-				table.insert(floors[idx], prep(d))
+				local f = prep(d)
+				f.bank = d.Name == "Bank"
+				table.insert(floors[idx], f)
 			end
 		end
 	end
-	local function H(P, k)
+	-- banks — точка на поясе: считаем и плиты поясов (на дне — только пол: плиты поясов поворота — прямые
+	-- на дуге, у внутреннего края они чуть выше кромки дна, это их давняя особенность, не стык)
+	local function H(P, k, banks: boolean)
 		local best = nil
-		for idx = k - 6, k + 4 do
+		for idx = k - 10, k + 4 do -- борта поворота строит первая из CURVE_SUBSTEPS частей куска: до 8 индексов назад
 			for _, f in floors[idx] or {} do
+				if f.bank and not banks then
+					continue
+				end
 				local y = topAt(f, P)
 				if y and math.abs(y - P.Y) < 3 and (best == nil or y > best) then
 					best = y
@@ -91,18 +115,46 @@ local function smoothness(tr)
 		end
 		return best
 	end
-	local bad, worst, byKind = 0, 0, {}
+	local bad, worst, worstBank, byKind = 0, 0, 0, {}
 	for k = 2, #segs do
 		local A, B = segs[k - 1], segs[k]
 		if INTENT_END[A.kind] or B.kind == "gap" then
 			continue
 		end
 		local hit = nil
-		for _, x in XS do
+		-- пояса чаши (#74). Стык с жёлобом: первый пояс общий, но борта поворота строятся на весь кусок
+		-- CURVE_PIECE (пол — по CURVE_SUBSTEPS частям): на поясе ступенька x·sin(шаг)·tg(уклон) ≤ ~1.1 —
+		-- её снимает «подсадка» саней (STEP_UP_MAX); порог на поясе у жёлоба — STEP_UP_MAX, не 0.2
+		local xs = table.clone(XS)
+		local nFloor = #xs
+		local chuteSeam = A.chute or B.chute
+		-- сторона моста развилки (#42, seg.open): вместо пояса — ровный пол к мосту и стенка, пояса там нет
+		local open = A.open or B.open or 0
+		if A.kind ~= "lake" and B.kind ~= "lake" then
+			for _, x in XS_B1 do -- первый пояс общий у чаши и жёлоба
+				if x * open <= 0 then
+					table.insert(xs, x)
+				end
+			end
+			if not chuteSeam and A.kind ~= "road" and A.kind ~= "rail" and B.kind ~= "road" and B.kind ~= "rail" then
+				for _, x in XS_B2 do -- второй пояс: у жёлоба на его месте ледяная стенка 48°
+					if x * open <= 0 then
+						table.insert(xs, x)
+					end
+				end
+			end
+		end
+		for xi, x in xs do
+			local stepMax = if xi > nFloor and chuteSeam then Config.STEP_UP_MAX else STEP_MAX
 			local pts = {}
+			-- точка на поясе: от точки на плоскости дна вверх по оси Y куска A с обеих сторон стыка (по своей
+			-- оси Y у каждого куска — на изломе уклона точка на высоте пояса прыгает вдоль трассы на y·sin(излом),
+			-- ложная «ступенька»; вертикально — на уклоне столбик уходит вдоль склона на y·sin(уклон) за край
+			-- короткой плиты перехода)
+			local lift = A.cf.UpVector * bankY(x)
 			for t = -3, 3, 0.25 do
-				local P = if t < 0 then A.cf * Vector3.new(x, 0, -(A.length + t)) else B.cf * Vector3.new(x, 0, -t)
-				local hh = H(P, if t < 0 then k - 1 else k)
+				local P = (if t < 0 then A.cf * Vector3.new(x, 0, -(A.length + t)) else B.cf * Vector3.new(x, 0, -t)) + lift
+				local hh = H(P, if t < 0 then k - 1 else k, xi > nFloor)
 				if not hh then
 					hit = "дыра"
 					break
@@ -128,8 +180,12 @@ local function smoothness(tr)
 				local d = math.abs((pts[j + 1].h - pts[j].h) - sRef * hd(j, j + 1))
 				step = math.max(step, d - math.abs(sB - sA) * hd(j, j + 1))
 			end
-			worst = math.max(worst, step)
-			if step > STEP_MAX then
+			if xi <= nFloor then
+				worst = math.max(worst, step)
+			else
+				worstBank = math.max(worstBank, step)
+			end
+			if step > stepMax then
 				hit = string.format("ступенька %.2f", step)
 				break
 			elseif step <= 0.01 and kink > KINK_MAX then
@@ -146,7 +202,7 @@ local function smoothness(tr)
 			end
 		end
 	end
-	return bad, worst, byKind
+	return bad, worst, byKind, worstBank
 end
 
 ------------------------------------------------------------------ лестница (#43)
@@ -243,7 +299,7 @@ local fails = 0
 local worstDrift, worstFoot = 0, 0
 local totalSpirals, totalIce = 0, 0
 local totalStairs, totalSmooth = 0, 0
-local worstStep = 0
+local worstStep, worstBankStep = 0, 0
 for level = tonumber(ARGS_FROM) or 1, tonumber(ARGS_TO) or 45 do
 	local ok, tr = pcall(Track.new, 0, level)
 	if not ok then
@@ -294,9 +350,10 @@ for level = tonumber(ARGS_FROM) or 1, tonumber(ARGS_TO) or 45 do
 		print(string.format("  ур. %d снос %.0f / полоса %.0f: соседний слот (шаг %d, полоса ≤ снос + %d)", level, maxDrift, foot, Config.SLOT_SPACING, Config.TRACK_FOOTPRINT))
 		fails += 1
 	end
-	local bad, worst, byKind = smoothness(tr)
+	local bad, worst, byKind, worstBank = smoothness(tr)
 	totalSmooth += bad
 	worstStep = math.max(worstStep, worst)
+	worstBankStep = math.max(worstBankStep, worstBank)
 	local bk = {}
 	for k, v in byKind do
 		table.insert(bk, k .. "×" .. v)
@@ -309,7 +366,10 @@ for level = tonumber(ARGS_FROM) or 1, tonumber(ARGS_TO) or 45 do
 end
 print(string.format("Итого: виражей %d, ледяных тоннелей %d", totalSpirals, totalIce))
 print(string.format("Итого: снос центра ≤ %.0f, полоса с оформлением ≤ %.0f studs от оси (шаг слотов %d)", worstDrift, worstFoot, Config.SLOT_SPACING))
-print(string.format("Итого: лестниц %d, стыков с нарушениями %d, худшая ступенька %.2f stud, ошибок %d", totalStairs, totalSmooth, worstStep, fails))
+print(string.format("Итого: лестниц %d, стыков с нарушениями %d, худшая ступенька на дне %.2f stud, на поясах %.2f, ошибок %d", totalStairs, totalSmooth, worstStep, worstBankStep, fails))
+if totalSmooth > 0 then
+	fails += 1 -- стыки ходовой части и поясов (#74): ступенька/излом — ошибка сборки
+end
 if fails > 0 then
 	error("есть ошибки сборки трасс")
 end
