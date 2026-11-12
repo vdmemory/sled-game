@@ -254,4 +254,131 @@ function Props.chocolate(rng: Random, base: CFrame, parent: Instance)
 end
 
 
+------------------------------------------------------------------ Камни, скалы, кристаллы (#67)
+-- Референсы владельца 2026-11-11 (docs/ART_REFERENCES.md): крупные гранёные формы, снежные шапки,
+-- смысловое свечение (лава в трещинах, кристаллы). Только декор (без коллизий): обочины
+-- (Track/Dress.dressLayers) и островки долины (Track/Valley).
+local SNOWCOL = Color3.fromRGB(250, 252, 255)
+
+-- Серый валун со снежной шапкой и сосульками (мир 1, 2, 5)
+function Props.snowBoulder(rng: Random, base: CFrame, parent: Instance, s: number?)
+	local r = s or rng:NextNumber(5, 9)
+	local c = base * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+	local rock = Color3.fromRGB(125, 132, 150)
+	if Meshes.has("rock_a") then
+		Meshes.place("rock_a", c * CFrame.new(0, -r * 0.1, 0), Vector3.one * r * 0.75, { Material = Enum.Material.Slate, Color = Meshes.vary(rock, base.Position, 0.1), CastShadow = true }, parent)
+	else
+		deco({ Size = Vector3.new(r * 1.3, r, r * 1.1), CFrame = c * CFrame.new(0, r * 0.45, 0) * CFrame.Angles(0.2, 0.5, 0.15), Material = Enum.Material.Slate, Color = rock, CastShadow = true }, parent)
+	end
+	deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(r * 1.15, r * 0.36, r * 0.95), CFrame = c * CFrame.new(0, r * 0.82, 0), Material = Enum.Material.Snow, Color = SNOWCOL }, parent)
+	for k = 1, 3 do
+		deco({ Size = Vector3.new(0.4, r * 0.18 + k * 0.2, 0.4), CFrame = c * CFrame.new(-r * 0.3 + k * r * 0.18, r * 0.6, -r * 0.42), Material = Enum.Material.Ice, Color = Color3.fromRGB(205, 232, 252), Transparency = 0.1 }, parent)
+	end
+end
+
+-- Ярусная low-poly ёлка: конусы-ярусы (шестигранники) с толстым снегом на каждой «юбке»
+function Props.tierPine(rng: Random, base: CFrame, parent: Instance)
+	local h = rng:NextNumber(16, 30)
+	local green = Color3.fromRGB(45, 110 + rng:NextInteger(0, 25), 75)
+	local turn = rng:NextNumber(0, 1)
+	deco({ Size = Vector3.new(1.8, h * 0.25, 1.8), CFrame = base * CFrame.new(0, h * 0.12, 0), Material = Enum.Material.Wood, Color = Color3.fromRGB(95, 65, 40) }, parent)
+	for t = 0, 3 do
+		local w = h * (0.62 - t * 0.13)
+		local y = h * (0.28 + t * 0.18)
+		for k = 0, 2 do -- три повёрнутых бруска = шестигранный ярус
+			deco({ Size = Vector3.new(w, h * 0.16, w * 0.58), CFrame = base * CFrame.new(0, y, 0) * CFrame.Angles(0, turn + k * math.pi / 3, 0), Color = green, CastShadow = t == 0 }, parent)
+		end
+		deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(h * 0.05, w * 0.95, w * 0.95), CFrame = base * CFrame.new(0, y + h * 0.085, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Snow, Color = SNOWCOL }, parent)
+	end
+	deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * h * 0.1, CFrame = base * CFrame.new(0, h * 0.95, 0), Material = Enum.Material.Snow, Color = SNOWCOL }, parent)
+end
+
+-- «Пушистая» ёлка: шары-облака хвои, присыпанные снегом сверху
+function Props.fluffyPine(rng: Random, base: CFrame, parent: Instance)
+	local h = rng:NextNumber(14, 24)
+	local green = Color3.fromRGB(55, 120 + rng:NextInteger(0, 25), 85)
+	deco({ Size = Vector3.new(1.6, h * 0.3, 1.6), CFrame = base * CFrame.new(0, h * 0.15, 0), Material = Enum.Material.Wood, Color = Color3.fromRGB(95, 65, 40) }, parent)
+	for t = 0, 4 do
+		local w = h * (0.55 - t * 0.09)
+		local y = h * (0.32 + t * 0.15)
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(w, w * 0.62, w), CFrame = base * CFrame.new(0, y, 0), Color = green, CastShadow = t == 0 }, parent)
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(w * 0.8, w * 0.3, w * 0.8), CFrame = base * CFrame.new(0, y + w * 0.2, 0), Material = Enum.Material.Snow, Color = SNOWCOL }, parent)
+	end
+end
+
+-- Красная скала-«худу»: стопка скруглённых глыб, каждая чуть смещена (каньон)
+function Props.hoodoo(rng: Random, base: CFrame, parent: Instance, h: number?)
+	local total = h or rng:NextNumber(14, 32)
+	local n = rng:NextInteger(3, 5)
+	local col = Color3.fromRGB(196, 118, 78)
+	local y = 0
+	for k = 1, n do
+		local seg = total / n * (if k == 1 then 1.4 else 0.9)
+		local w = total * (0.42 - k * 0.04) * (if k == n then 1.25 else 1)
+		deco({
+			Size = Vector3.new(w, seg, w * 0.9),
+			CFrame = base * CFrame.new(rng:NextNumber(-0.6, 0.6), y + seg / 2, rng:NextNumber(-0.6, 0.6)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), rng:NextNumber(-0.06, 0.06)),
+			Material = Enum.Material.Sandstone,
+			Color = col:Lerp(Color3.fromRGB(150, 80, 50), k % 2 * 0.25),
+			CastShadow = k == 1,
+		}, parent)
+		y += seg * 0.92
+	end
+end
+
+-- «Стол»: две опоры-худу и плоская плита сверху (каньон)
+function Props.tableRock(rng: Random, base: CFrame, parent: Instance)
+	local h = rng:NextNumber(12, 20)
+	local span = rng:NextNumber(14, 22)
+	for _, sx in { -1, 1 } do
+		Props.hoodoo(rng, base * CFrame.new(sx * span / 2, 0, 0), parent, h)
+	end
+	deco({ Size = Vector3.new(span + 10, 3, span * 0.5), CFrame = base * CFrame.new(0, h + 1, 0) * CFrame.Angles(0, 0, rng:NextNumber(-0.05, 0.05)), Material = Enum.Material.Sandstone, Color = Color3.fromRGB(210, 135, 90), CastShadow = true }, parent)
+end
+
+-- Тёмная глыба со светящимися трещинами и лужей лавы у основания (вулкан)
+function Props.lavaSpire(rng: Random, base: CFrame, parent: Instance, h: number?)
+	local hh = h or rng:NextNumber(10, 22)
+	local w = hh * 0.45
+	local c = base * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0)
+	if Meshes.has("crag") then
+		Meshes.place("crag", c, Vector3.new(w / 1.96, hh / 3.46, w / 1.46), { Material = Enum.Material.Basalt, Color = Color3.fromRGB(52, 48, 56), CastShadow = true }, parent)
+	else
+		deco({ Size = Vector3.new(w, hh, w * 0.8), CFrame = c * CFrame.new(0, hh / 2, 0), Material = Enum.Material.Basalt, Color = Color3.fromRGB(52, 48, 56), CastShadow = true }, parent)
+	end
+	for k = 1, 3 do -- вертикальные трещины-прожилки
+		local a = k * 2.1
+		deco({ Size = Vector3.new(0.4, hh * rng:NextNumber(0.4, 0.8), 0.4), CFrame = c * CFrame.new(math.cos(a) * w * 0.42, hh * 0.35, math.sin(a) * w * 0.38) * CFrame.Angles(0, 0, rng:NextNumber(-0.3, 0.3)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 120, 30) }, parent)
+	end
+	local pool = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, w * 1.9, w * 1.9), CFrame = c * CFrame.new(0, 0.1, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 140, 40), Transparency = 0.15 }, parent)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 120, 50)
+	light.Range = 18
+	light.Brightness = 1.2
+	light.Parent = pool
+end
+
+-- Высокий светящийся кристалл с друзой у основания на тёмном камне (ледяные пещеры)
+function Props.crystalSpire(rng: Random, base: CFrame, parent: Instance)
+	local h = rng:NextNumber(10, 20)
+	local col = pick(rng, { Color3.fromRGB(110, 210, 255), Color3.fromRGB(150, 235, 255), Color3.fromRGB(120, 245, 220) })
+	deco({ Size = Vector3.new(h * 0.6, h * 0.12, h * 0.5), CFrame = base * CFrame.new(0, h * 0.05, 0) * CFrame.Angles(0, 0.4, 0), Material = Enum.Material.Slate, Color = Color3.fromRGB(70, 78, 105) }, parent)
+	local tilt = rng:NextNumber(-0.18, 0.18)
+	local main = base * CFrame.new(0, h * 0.5, 0) * CFrame.Angles(tilt, rng:NextNumber(0, math.pi), tilt * 0.5)
+	for k = 0, 2 do -- шестигранник из трёх брусков + остриё
+		deco({ Size = Vector3.new(h * 0.2, h * 0.85, h * 0.12), CFrame = main * CFrame.Angles(0, k * math.pi / 3, 0), Material = Enum.Material.Glass, Color = col, Transparency = 0.25 }, parent)
+	end
+	deco({ Size = Vector3.new(h * 0.16, h * 0.18, h * 0.16), CFrame = main * CFrame.new(0, h * 0.48, 0) * CFrame.Angles(math.rad(45), 0, math.rad(45)), Material = Enum.Material.Glass, Color = col, Transparency = 0.2 }, parent)
+	local core = deco({ Size = Vector3.new(h * 0.06, h * 0.7, h * 0.06), CFrame = main, Material = Enum.Material.Neon, Color = col }, parent)
+	local light = Instance.new("PointLight")
+	light.Color = col
+	light.Range = 16
+	light.Brightness = 1.2
+	light.Parent = core
+	for k = 1, 4 do -- друза
+		local a = k * 1.6
+		deco({ Size = Vector3.new(h * 0.08, h * rng:NextNumber(0.2, 0.35), h * 0.08), CFrame = base * CFrame.new(math.cos(a) * h * 0.22, h * 0.15, math.sin(a) * h * 0.18) * CFrame.Angles(math.cos(a) * 0.5, 0, math.sin(a) * 0.5), Material = Enum.Material.Neon, Color = col, Transparency = 0.1 }, parent)
+	end
+end
+
 return Props

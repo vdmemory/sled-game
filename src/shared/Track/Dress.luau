@@ -238,6 +238,31 @@ function dressLayers(theme: number, cf: CFrame, len: number, prof, m: Instance)
 			local r = lr:NextNumber(5, 9)
 			Meshes.place("rock_b", c * CFrame.new(h * 0.35, -0.8, h * 0.1), Vector3.one * r, { Material = crag[2], Color = Meshes.vary(col, c.Position + Vector3.one, 0.1), CastShadow = true }, m)
 		end
+		-- средний план (#67, референсы): скалы и кристаллы мира — худу/«стол» в каньоне, глыбы с лавой
+		-- в вулкане, светящиеся кристаллы в пещерах, валуны со снегом и ярусные/пушистые ёлки в снежных
+		if lr:NextNumber() < Config.DECOR_ROCKS_CHANCE * density then
+			local c = at(lr:NextNumber(14, 60), zr())
+			local roll = lr:NextNumber()
+			if theme == 3 then
+				if roll < 0.35 then
+					Props.tableRock(lr, c * CFrame.Angles(0, lr:NextNumber(0, math.pi), 0), m)
+				else
+					Props.hoodoo(lr, c, m)
+				end
+			elseif theme == 6 then
+				Props.lavaSpire(lr, c, m)
+			elseif theme == 4 then
+				Props.crystalSpire(lr, c, m)
+			elseif theme ~= 2 and theme ~= 7 then
+				if roll < 0.4 then
+					Props.snowBoulder(lr, c, m)
+				elseif roll < 0.7 then
+					Props.tierPine(lr, c, m)
+				else
+					Props.fluffyPine(lr, c, m)
+				end
+			end
+		end
 		-- дальний план: второй ряд гор
 		if Meshes.has("mountain_rock", "mountain_snow") and lr:NextNumber() < Config.DECOR_FAR_CHANCE * density then
 			Props.mountain(lr, at(lr:NextNumber(240, 320), zr()) * CFrame.new(0, -10, 0), theme == 3, m, MTN_TINT[theme])

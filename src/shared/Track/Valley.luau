@@ -40,7 +40,14 @@ end
 
 -- Островок-столб: верх на высоте top над дном (в кадре base, основание на дне долины)
 local function isle(look: Look, theme: number, rng: Random, base: CFrame, top: number, w: number, parent: Instance)
-	if theme == 3 and Meshes.has("mesa") then
+	if theme == 3 and rng:NextNumber() < 0.45 then
+		-- каньон: столб-худу (стопка глыб) вместо мезы
+		Props.hoodoo(rng, base, parent, top)
+		return
+	elseif theme == 6 and rng:NextNumber() < 0.5 then
+		Props.lavaSpire(rng, base, parent, top)
+		return
+	elseif theme == 3 and Meshes.has("mesa") then
 		-- меза каньона: плоский верх, слоистые бока
 		Meshes.place("mesa", base, Vector3.new(w / 2.2, top, w / 2.2), { Material = look.cliffMat, Color = Meshes.vary(look.cliff, base.Position, 0.08), CastShadow = true }, parent)
 	elseif Meshes.has("crag") then
@@ -56,8 +63,18 @@ local function isle(look: Look, theme: number, rng: Random, base: CFrame, top: n
 			deco({ Size = Vector3.new(w * 0.9, 1.6, w * 0.9), CFrame = cap * CFrame.new(0, 0.6, 0), Material = look.capMat or Enum.Material.Snow, Color = look.cap }, parent)
 		end
 	end
-	if rng:NextNumber() < 0.75 then
-		tree(look.tree, rng, cap * CFrame.new(rng:NextNumber(-w * 0.15, w * 0.15), 0.6, rng:NextNumber(-w * 0.15, w * 0.15)), parent)
+	local spot = cap * CFrame.new(rng:NextNumber(-w * 0.15, w * 0.15), 0.6, rng:NextNumber(-w * 0.15, w * 0.15))
+	if theme == 4 then
+		Props.crystalSpire(rng, spot, parent) -- ледяные пещеры: кристалл на верхушке
+	elseif rng:NextNumber() < 0.75 then
+		local roll = rng:NextNumber()
+		if look.tree == "pine" and roll < 0.35 then
+			Props.tierPine(rng, spot, parent)
+		elseif look.tree == "pine" and roll < 0.6 then
+			Props.fluffyPine(rng, spot, parent)
+		else
+			tree(look.tree, rng, spot, parent)
+		end
 	end
 end
 

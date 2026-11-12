@@ -327,6 +327,16 @@ function Islands.buildIsle(track, seg, m: Instance, rng: Random, kit): { any }
 	}, m)
 	-- снежный «подбой» под плитой (толще и чуть уже — плита не выглядит листом)
 	deco({ Size = Vector3.new(fw - 4, 5, len - 4), CFrame = cf * CFrame.new(0, -6, -len / 2), Material = Enum.Material.Snow, Color = SNOW }, m)
+	-- льдина (#67, референсы): сосульки по краю «подбоя» — без Random (раскладка островка та же)
+	if theme ~= 3 and theme ~= 6 then
+		local ice = if theme == 7 then Color3.fromRGB(255, 210, 235) else Color3.fromRGB(200, 230, 252)
+		for _, side in { -1, 1 } do
+			for k = 1, math.floor(len / 6) do
+				local l = 2 + (k * 7 % 5) * 0.9
+				deco({ Size = Vector3.new(0.9, l, 0.9), CFrame = cf * CFrame.new(side * (fw / 2 - 2.6), -8.5 - l / 2, -k * 6 + 3), Material = Enum.Material.Ice, Color = ice, Transparency = 0.1 }, m)
+			end
+		end
+	end
 	-- округлые кромки по бокам (визуальный бортик)
 	for _, side in { -1, 1 } do
 		deco({

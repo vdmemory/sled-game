@@ -1,5 +1,12 @@
 # Журнал изменений
 
+## Скалы, кристаллы, ёлки и льдины по мирам (#67; art-director, track-architect)
+- Новые Part-модели (`Props/Worlds`): `snowBoulder`, `tierPine`, `fluffyPine`, `hoodoo`, `tableRock`,
+  `lavaSpire`, `crystalSpire` — по референсам владельца. Ставятся на средний план обочин
+  (`Dress.dressLayers`, свой Random, `Config.DECOR_ROCKS_CHANCE` + строка в «Настройке») и на островки
+  долины (`Track/Valley`). Островки над пропастью — сосульки по краю подбоя (без Random).
+  Раскладка уровней не изменилась (отпечаток 1–21 тот же), все 7 миров строятся на стенде.
+
 ## Препятствия: ящик TNT и «мягкий» стиль (#66; track-architect, game-designer, art-director)
 - **TNT** (`Props.tnt`, атрибуты `Breakable` + `Explosive`): в городе, каньоне, вулкане. Удар — не авария:
   `Contacts.explode` — обломки, визуальный `Explosion` без урона, подброс `TNT_POP`, скорость × `TNT_SLOW`
