@@ -326,6 +326,9 @@ RunService.Heartbeat:Connect(function(dt)
 			else -Config.GRAVITY_ALONG * d.Y - Config.friction(sledLevel) * (1 - sledBonus) - Config.DRAG * st.speed * st.speed
 		if useRocket then
 			acc += Config.ROCKET_THRUST
+		elseif not onRamp and acc < 0 and st.speed < Config.SLOW_BRAKE_SPEED then
+			-- добавочное торможение на малой скорости: сани встают быстро, а не ползут (Config.SLOW_BRAKE)
+			acc -= Config.SLOW_BRAKE * (1 - st.speed / Config.SLOW_BRAKE_SPEED)
 		end
 		if onRamp then
 			st.speed = math.max(st.speed, Config.RAMP_MIN_SPEED)
