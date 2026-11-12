@@ -63,7 +63,7 @@ function SafeLine.plan(segs: { any }, level: number): { [number]: { Row } }
 	for j, seg in segs do
 		if seg.kind == "gentle" or seg.kind == "steep" then
 			local i = j - 1
-			local maxBlocked = math.clamp(1 + (level - 1) // 3 + i // 16, 1, 3)
+			local maxBlocked = math.clamp(1 + (level - 1) // math.max(1, Config.OBSTACLE_GROW_LEVELS) + i // math.max(1, Config.OBSTACLE_GROW_SEGS), 1, 3)
 			maxBlocked = math.min(maxBlocked, lanes - 2) -- в ряду свободно ≥ 2
 			-- после приземления (обрыв, островки) первые 60 studs чистые; переходные куски
 			-- скругления (#40) между приземлением и этим куском пропускаем
@@ -78,6 +78,9 @@ function SafeLine.plan(segs: { any }, level: number): { [number]: { Row } }
 				local z = seg.length * (row - 0.5) / Config.OBSTACLE_ROWS
 				local h = seg.hStart + z * math.cos(math.rad(seg.angle))
 				local count = if h < Config.SAFE_START or z < safeUntil then 0 else rng:NextInteger(0, maxBlocked)
+				if count > 0 and rng:NextNumber() > Config.OBSTACLE_ROW_CHANCE then
+					count = 0 -- ряд пустой (реже препятствия)
+				end
 				local blocked = {}
 				if count > 0 then
 					local n = SafeLine.maxShift(along + z - lastAt, v)

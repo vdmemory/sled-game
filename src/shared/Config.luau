@@ -100,6 +100,12 @@ Config.STEEP_ANGLE = { 12, 16 }
 
 -- Препятствия, ускорители, монеты
 Config.OBSTACLE_ROWS = 2 -- рядов препятствий на прямой участок
+-- Плотность реже (владелец 2026-11-12): ряд вообще занят с шансом OBSTACLE_ROW_CHANCE; потолок занятых
+-- полос в ряду растёт на 1 каждые OBSTACLE_GROW_LEVELS уровней (было 3) и каждые OBSTACLE_GROW_SEGS
+-- кусков внутри уровня (было 16), всё равно ≤ 3 и в ряду свободно ≥ 2 полос (shared/SafeLine)
+Config.OBSTACLE_ROW_CHANCE = 0.65
+Config.OBSTACLE_GROW_LEVELS = 5
+Config.OBSTACLE_GROW_SEGS = 24
 Config.SAFE_START = 220 -- первые N studs после старта без препятствий
 Config.BOOST_CHANCE = 0.1 -- ускоритель в ряду (≈ 1 на 3 сегмента)
 Config.FORCED_KICKERS = { 0.35, 0.7 } -- обязательные обрывы на этих долях уровня
@@ -112,11 +118,16 @@ Config.SAFE_LINE_MAX_SHIFT = 2 -- больше этого полос между 
 
 -- Дороги поперёк трассы с движущимися машинами (как в оригинале)
 Config.ROAD_AT = { 0.12, 0.42, 0.72 } -- доли уровня, где могут быть дороги
+-- Трафик реже (владелец 2026-11-12): дорог — +1 каждые ROAD_EVERY_LEVELS уровней (было 2), машин на
+-- полосу — от 1, +1 каждые CARS_EVERY_LEVELS (было 2 + каждые 3, до 4), не больше CARS_MAX
+Config.ROAD_EVERY_LEVELS = 3
+Config.CARS_EVERY_LEVELS = 5
+Config.CARS_MAX = 3
 function Config.roadCount(level: number): number
-	return math.min(#Config.ROAD_AT, 1 + (level - 1) // 2)
+	return math.min(#Config.ROAD_AT, 1 + (level - 1) // math.max(1, Config.ROAD_EVERY_LEVELS))
 end
 function Config.carsPerLane(level: number): number
-	return math.min(4, 2 + (level - 1) // 3)
+	return math.min(Config.CARS_MAX, 1 + (level - 1) // math.max(1, Config.CARS_EVERY_LEVELS))
 end
 Config.ROAD_LOOP = 360 -- длина «кольца» полосы (studs): машина уезжает за край и возвращается
 Config.CAR_SPEED = { 38, 55 } -- studs/с
@@ -1040,6 +1051,11 @@ Config.TUNABLES = {
 	{ "ZONE_BANNER_WORLD", "HUD: баннер мира после выстрела (0/1)", "Интерфейс", 0, 1, 1 },
 
 	{ "OBSTACLE_ROWS", "Рядов препятствий на кусок", "Трасса", 0, 6, 1 },
+	{ "OBSTACLE_ROW_CHANCE", "Препятствия: шанс, что ряд занят", "Трасса", 0, 1, 0.05 },
+	{ "OBSTACLE_GROW_LEVELS", "Препятствия: +1 полоса каждые N уровней", "Трасса", 1, 20, 1 },
+	{ "CARS_MAX", "Трафик: макс. машин на полосу", "Трасса", 1, 6, 1 },
+	{ "CARS_EVERY_LEVELS", "Трафик: +1 машина каждые N уровней", "Трасса", 1, 20, 1 },
+	{ "ROAD_EVERY_LEVELS", "Трафик: +1 дорога каждые N уровней", "Трасса", 1, 20, 1 },
 	{ "IDLE_LAUNCH_TIMEOUT", "Без выстрела у рогатки → в лобби, с (0 — нет)", "Трасса", 0, 600, 10 },
 	{ "SAFE_START", "Без препятствий первые, studs", "Трасса", 0, 1000, 10 },
 	{ "COIN_LINE_CHANCE", "Шанс линии монет", "Трасса", 0, 1, 0.05 },

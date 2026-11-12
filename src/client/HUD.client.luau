@@ -508,21 +508,18 @@ local controlsHint = UI.text({
 })
 
 -- Крупные всплывашки в заезде («Удар!», «Флип!», «НОВЫЙ РЕКОРД!»)
-local toast = UI.text({
+local toast = UI.text(UI.at(L.runToast, {
 	Text = "",
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.new(0.5, 0, 0.36, 0),
-	Size = UDim2.fromOffset(560, 110),
 	TextColor3 = Color3.fromRGB(255, 225, 80),
 	Visible = false,
 	ZIndex = 8,
 	Parent = root,
-})
+}))
 UI.outline(toast, 3)
 local toastScale = Instance.new("UIScale")
 toastScale.Parent = toast
 -- Баннер зоны при въезде (#71): «Ледяная пещера!», «Над долиной!», «Дорога!», «Островки!» и мир
--- после выстрела. Крупный текст по центру сверху (UILayout.zoneBanner), проявляется и гаснет.
+-- после выстрела. Внизу по центру над всплывашкой трюка (UILayout.zoneBanner), проявляется и гаснет.
 local zoneBanner = UI.text(UI.at(L.zoneBanner, {
 	Name = "ZoneBanner",
 	Text = "",
@@ -574,7 +571,6 @@ end
 local toastToken = 0
 local function showToast(text: string, seconds: number)
 	toastToken += 1
-	hideBanner() -- всплывашка трюка на том же месте: баннер зоны уступает ей
 	local my = toastToken
 	toast.Text = text
 	toast.Visible = true
