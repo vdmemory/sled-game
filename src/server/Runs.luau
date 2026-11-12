@@ -137,7 +137,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 	local cheat = reason == "cheat" -- античит: заезд не засчитан, наград нет
 	local clean = not run.crashedOnTrack and reason ~= "fell" -- заезд без аварии
 	local mult, earned = 1, 0
-	local parts = { track = 0, air = 0, tricks = 0, bonus = 0 } -- разбивка earned чипами (#71)
+	local parts = { track = 0, air = 0, tricks = 0, bonus = 0, record = 0 } -- разбивка earned чипами (#71)
 	local newBest = false
 	local gems = 0
 
@@ -161,6 +161,12 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 		parts.air = math.floor(air * mult)
 		parts.tricks = math.floor(tricks * mult)
 		parts.bonus = math.max(0, earned - parts.track - parts.air - parts.tricks)
+		-- Новый рекорд уровня (#59): + (NEW_BEST_COIN_MULT − 1) от монет заезда, только при улучшении
+		-- рекорда % (то же условие, что newBest ниже); свой чип «рекорд», сумма чипов = earned
+		if d and not run.farm and not finished and not quiet and pct > d.LevelBest then
+			parts.record = math.max(0, math.floor(earned * (Config.NEW_BEST_COIN_MULT - 1)))
+			earned += parts.record
+		end
 
 		if d then
 			d.Coins += earned
@@ -186,7 +192,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 			if not quiet then
 				d.Stats.Runs = (d.Stats.Runs or 0) + 1
 				local w = Config.worldOf(level)
-				Analytics.economy(player, "Source", "Coins", earned, d.Coins, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
+				Analytics.economy(player, "Source", "Coins", earned, d.Coins, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level, if newBest then "NewBest" else nil))
 				Analytics.economy(player, "Source", "Gems", gems, d.Gems, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, if finished then "Finish" else "Run", Analytics.fields(w, level))
 				Analytics.custom(player, "RunDistance", math.floor(dist))
 				Analytics.custom(player, "RunPercent", pct)
@@ -295,7 +301,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 			mult = math.floor(mult * 100 + 0.5) / 100,
 			gems = gems,
 			week = week,
-			parts = parts, -- { track, air, tricks, bonus }: чипы итога (#71), в сумме = coins
+			parts = parts, -- { track, air, tricks, bonus, record }: чипы итога (#71, #59), в сумме = coins
 		})
 	end
 

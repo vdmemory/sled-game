@@ -37,7 +37,7 @@
 | Вид | Имя | Смысл |
 | --- | --- | --- |
 | Onboarding funnel | 1 Joined → 2 FirstRun → 3 ThirdRun → 4 FirstUpgrade → 5 FinishedLevel → 6 World2 → 7 FirstPurchase | где отваливаются новички; шаг пишется один раз на игрока (`Stats.Onboard`) |
-| Economy Source | Coins/Gems: `Run`/`Finish` (Gameplay), `Task`/`TaskChest`/`Gift`/`LobbyChest` (Reward) | откуда приходят валюты; поля: World, Level |
+| Economy Source | Coins/Gems: `Run`/`Finish` (Gameplay), `Task`/`TaskChest`/`Gift`/`LobbyChest` (Reward) | откуда приходят валюты; поля: World, Level; у монет `Run` поле 3 `NewBest` — заезд с бонусом рекорда (#59) |
 | Economy Sink | Coins/Gems: `Upgrade:<имя>`, `Sled:<id:редкость>`, `Trail:<id>` (Shop) | куда уходят; поле 3 — категория |
 | Custom (значение) | `RunDistance`, `RunPercent`, `SessionMinutes`, `RobuxPurchase` | средние/суммы по дням |
 | Custom (счётчик) | `RunFinished`, `RunCrashed`, `RunStopped` | исходы заездов → доля финишей |

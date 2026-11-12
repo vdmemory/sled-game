@@ -1211,6 +1211,7 @@ local CHIPS = {
 	{ key = "air", icon = "parachute", caption = "воздух" },
 	{ key = "tricks", icon = "flip", caption = "трюки" },
 	{ key = "bonus", icon = "star", caption = "бонусы" },
+	{ key = "record", icon = "trophy", caption = "рекорд" }, -- #59: + NEW_BEST_COIN_MULT за новый рекорд
 }
 local chipSet: { [string]: (string, string?) -> () } = {}
 local chipFrame: { [string]: Frame } = {}
@@ -1222,7 +1223,7 @@ for i, ch in CHIPS do
 	chipSet[ch.key] = set
 	chipFrame[ch.key] = cell
 end
-local _, setRGems = UI.iconText({ Position = UDim2.fromOffset(20, 190), Size = UDim2.new(1, -40, 0, 26), ZIndex = 21, Parent = sheet })
+local rGemsRow, setRGems = UI.iconText({ Position = UDim2.fromOffset(20, 190), Size = UDim2.new(1, -40, 0, 26), ZIndex = 21, Parent = sheet })
 local rDist = UI.text({ Text = "", Position = UDim2.fromOffset(20, 222), Size = UDim2.new(1, -40, 0, 24), TextColor3 = Color3.fromRGB(190, 215, 250), ZIndex = 21, Parent = sheet })
 UI.outline(rDist, 2)
 -- строка лидерборда недели и титула (#26, server/Weekly → RunEnded.week)
@@ -1235,6 +1236,21 @@ local continueBtn = UI.button("blue", "ПРОДОЛЖИТЬ", {
 	ZIndex = 22,
 	Parent = result,
 })
+-- Видно больше 4 чипов (рекорд #59, рубежи #61) — третий ряд сетки: всё ниже чипов, лист, карточка и
+-- кнопка сдвигаются на высоту ряда (40); 4 и меньше — раскладка как раньше
+local CHIP_ROW = 40
+local chipsBelow: { { GuiObject } } = { { rGemsRow, 190 }, { rDist, 222 }, { rWeek, 250 } } :: any
+local function layoutChips(visible: number)
+	local extra = math.max(0, math.ceil(visible / 2) - 2) * CHIP_ROW
+	chipsBox.Size = UDim2.new(1, -20, 0, 72 + extra)
+	for _, row in chipsBelow do
+		local g, y = row[1] :: GuiObject, row[2] :: any
+		g.Position = UDim2.fromOffset(20, y + extra)
+	end
+	sheet.Size = UDim2.new(1, 0, 0, 282 + extra)
+	result.Size = UDim2.fromOffset(420, 376 + extra)
+	continueBtn.Position = UDim2.new(0.5, 0, 0, 296 + extra)
+end
 local resultToken = 0
 local function hideResult()
 	result.Visible = false
@@ -1257,15 +1273,22 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 		elseif r.reason == "stopped" then "ОСТАНОВИЛСЯ"
 		elseif r.reason == "cheat" then "ЗАЕЗД НЕ ЗАСЧИТАН"
 		else "ЗАЕЗД ОКОНЧЕН"
-	bestBanner.Text = if finished then "🎉 ФИНИШ!" elseif r.newBest then "🏆 НОВЫЙ РЕКОРД!" else ""
+	local recordPct = math.round((Config.NEW_BEST_COIN_MULT - 1) * 100)
+	bestBanner.Text = if finished then "🎉 ФИНИШ!"
+		elseif r.newBest and type(r.parts) == "table" and (tonumber(r.parts.record) or 0) > 0 then string.format("🏆 НОВЫЙ РЕКОРД! +%d%% 🪙", recordPct)
+		elseif r.newBest then "🏆 НОВЫЙ РЕКОРД!"
+		else ""
 	setRCoins(UI.money(r.coins) .. (if (r.mult or 1) > 1 then "  x" .. r.mult else ""), "coin")
 	-- чипы разбивки (#71); старый сервер без parts — один чип «трасса» со всей суммой
 	local parts = if type(r.parts) == "table" then r.parts else { track = r.coins or 0 }
+	local shown = 0
 	for _, ch in CHIPS do
 		local v = math.floor(tonumber(parts[ch.key]) or 0)
 		chipFrame[ch.key].Visible = v > 0
 		chipSet[ch.key]("+" .. UI.money(v) .. " " .. ch.caption, ch.icon)
+		shown += if v > 0 then 1 else 0
 	end
+	layoutChips(shown)
 	setRGems("+" .. (r.gems or 0), "gem")
 	rDist.Text = (r.distance or 0) .. " м  ·  " .. r.percent .. "% уровня"
 	local wk = r.week
