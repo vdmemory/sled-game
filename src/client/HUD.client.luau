@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local UI = require(ReplicatedStorage.Shared:WaitForChild("UIKit"))
@@ -42,7 +43,7 @@ gui.Parent = player:WaitForChild("PlayerGui")
 -- Корень с масштабом: на маленьких экранах (телефон боком) всё уменьшается пропорционально.
 -- Масштаб — от области ScreenGui под топбаром Roblox (UI.fitScale, расчёт в Shared/UILayout)
 local root = UI.new("Frame", { Name = "Root", BackgroundTransparency = 1, Parent = gui })
-UI.fitScale(root, gui)
+local rootScale = UI.fitScale(root, gui)
 
 -- Сообщения («Не хватает монет», «✔ Сани выбраны», «ЗАДАНИЕ ВЫПОЛНЕНО!») — свой ScreenGui выше
 -- HUD и окон (#38): видны поверх открытого окна, масштаб — как у корня HUD, место — под полоской
@@ -287,7 +288,7 @@ local noticeN = 0
 notice = function(text: string, seconds: number?)
 	noticeN += 1
 	local my = noticeN
-	UI.at(if player:GetAttribute("InRun") then L.toastRun else L.toastLobby, noticeBox :: any)
+	UI.at(if player:GetAttribute("InRun") then (if UI.isPhone() then L.toastRunPhone else L.toastRun) else L.toastLobby, noticeBox :: any)
 	noticeText.Text = text
 	noticeBox.Visible = true
 	UI.pop(noticeBox)
@@ -530,6 +531,26 @@ local zoneBanner = UI.text(UI.at(L.zoneBanner, {
 	Parent = runUi,
 }))
 local zoneStroke = UI.outline(zoneBanner, 4)
+
+-- Телефон (владелец 2026-11-12: «для мобилы поднять надписи, километраж ещё выше»): метры — в полосу
+-- топбара Roblox по центру (там свободно: кнопки Roblox слева), рекорд и комбо — сразу под ней,
+-- всплывашки трюка и баннер зоны — тоже вверху, мелко (UILayout.*Phone). Нижняя часть экрана на
+-- телефоне — под большими пальцами и кнопками. На ПК — как было (тексты внизу под санями).
+local function placeRunHudPhone()
+	if not UI.isPhone() then
+		return
+	end
+	local top = GuiService:GetGuiInset().Y / math.max(rootScale.Scale, 0.01) -- высота топбара, лог. px
+	distLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+	distLabel.Position = UDim2.new(0.5, 0, 0, -top / 2)
+	distLabel.Size = UDim2.fromOffset(300, math.min(56, top * 0.7))
+	UI.at(L.bestPhone, bestLabel :: any)
+	UI.at(L.comboPhone, comboLabel :: any)
+	UI.at(L.runToastPhone, toast :: any)
+	UI.at(L.zoneBannerPhone, zoneBanner :: any)
+end
+placeRunHudPhone()
+rootScale:GetPropertyChangedSignal("Scale"):Connect(placeRunHudPhone)
 local zoneScale = Instance.new("UIScale")
 zoneScale.Parent = zoneBanner
 local bannerToken = 0

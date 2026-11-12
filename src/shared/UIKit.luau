@@ -52,6 +52,12 @@ function UI.fitScale(frame: GuiObject, gui: ScreenGui): UIScale
 	return scale
 end
 
+-- Телефон/планшет: сенсор без клавиатуры (раскладка заезда на телефоне — UILayout.*Phone)
+function UI.isPhone(): boolean
+	local uis = game:GetService("UserInputService")
+	return uis.TouchEnabled and not uis.KeyboardEnabled
+end
+
 UI.FONT = Enum.Font.FredokaOne
 UI.C = {
 	white = Color3.new(1, 1, 1),
