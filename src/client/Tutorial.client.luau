@@ -198,7 +198,13 @@ local function show(i: number)
 	if s.id == "play" or s.id == "again" then
 		pointAt(playButton())
 	elseif s.id == "upgrade" then
-		pointAt((cheapestCard()))
+		-- панель апгрейдов свёрнута (#11, client/HUD) — раскрываем; рука встанет после выезда (repoint)
+		local l = hudLobby()
+		if l and l:GetAttribute("UpgradesCollapsed") == true then
+			l:SetAttribute("UpgradesCollapsed", false)
+		else
+			pointAt((cheapestCard()))
+		end
 	elseif TOUCH and s.id == "steer" then
 		pointAt(nil, Vector2.new(160, 0))
 	elseif TOUCH and s.id == "launch" then
@@ -233,6 +239,30 @@ end
 
 panel.Activated:Connect(function()
 	hide(true)
+end)
+
+-- Панель апгрейдов свернули/раскрыли (#11) — кнопка «ИГРАТЬ» и карточки сдвинулись: руку ставим заново
+-- после выезда (Config.UPGRADES_PANEL_TWEEN)
+task.spawn(function()
+	local l = hudLobby()
+	while not l do
+		task.wait(1)
+		l = hudLobby()
+	end
+	l:GetAttributeChangedSignal("UpgradesCollapsed"):Connect(function()
+		local i = current
+		task.delay(Config.UPGRADES_PANEL_TWEEN + 0.05, function()
+			if i == nil or current ~= i then
+				return
+			end
+			local id = STEPS[i].id
+			if id == "play" or id == "again" then
+				pointAt(playButton())
+			elseif id == "upgrade" then
+				pointAt((cheapestCard()))
+			end
+		end)
+	end)
 end)
 skip.Activated:Connect(function()
 	hide(false)

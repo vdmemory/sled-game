@@ -312,6 +312,71 @@ end
 local rocketCard = makeCard("Rocket", lobby, UDim2.fromOffset(L.rocket[7], L.rocket[8]), 0, true)
 UI.at(L.rocket, rocketCard.root :: any)
 
+-- Сворачивание апгрейдов (#11): язычок ▼/▲ слева от карточек. Свёрнуто — карточки и ракета уезжают
+-- вниз за край, «ИГРАТЬ» опускается на их место. Состояние — атрибут UpgradesCollapsed кадра Lobby
+-- (на сессию; client/Tutorial ставит false перед шагом «Улучши»). Язычок появляется только после
+-- шага обучения «Улучши» (или когда подсказки уже не показываются — MAX_RUNS заездов).
+local upgradesTab = UI.new("TextButton", UI.at(L.upgradesTab, { Name = "UpgradesTab", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Visible = false, Parent = lobby }))
+local tabBg = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(68, 68), BackgroundColor3 = C.navy, BackgroundTransparency = 0.2, Parent = upgradesTab })
+UI.corner(tabBg, 18)
+UI.stroke(tabBg, 2.5, C.white, 0.3)
+local tabArrow = UI.text({ Text = "▼", Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 1, -16), Parent = tabBg })
+UI.bounce(upgradesTab)
+local function placeUpgrades(animate: boolean)
+	local collapsed = lobby:GetAttribute("UpgradesCollapsed") == true
+	tabArrow.Text = if collapsed then "▲" else "▼"
+	local dy = if collapsed then L.UPGRADES_HIDE_Y else 0
+	local goals: { any } = {
+		{ cardsRow, UDim2.new(L.cards[3], L.cards[4], L.cards[5], L.cards[6] + dy) },
+		{ rocketCard.root, UDim2.new(L.rocket[3], L.rocket[4], L.rocket[5], L.rocket[6] + dy) },
+		{ tapText, if collapsed then UDim2.new(L.playCollapsed[3], L.playCollapsed[4], L.playCollapsed[5], L.playCollapsed[6]) else UDim2.new(L.play[3], L.play[4], L.play[5], L.play[6]) },
+	}
+	if not collapsed then
+		cardsRow.Visible = true
+		rocketCard.root.Visible = true
+	end
+	local info = TweenInfo.new(if animate then Config.UPGRADES_PANEL_TWEEN else 0, Enum.EasingStyle.Quad, if collapsed then Enum.EasingDirection.In else Enum.EasingDirection.Out)
+	for _, g in goals do
+		local o, pos = g[1], g[2]
+		if animate then
+			TweenService:Create(o, info, { Position = pos }):Play()
+		else
+			o.Position = pos
+		end
+	end
+	-- уехавшие за край карточки не ловят нажатия
+	task.delay(if animate then Config.UPGRADES_PANEL_TWEEN else 0, function()
+		if lobby:GetAttribute("UpgradesCollapsed") == true then
+			cardsRow.Visible = false
+			rocketCard.root.Visible = false
+		end
+	end)
+end
+lobby:SetAttribute("UpgradesCollapsed", false)
+lobby:GetAttributeChangedSignal("UpgradesCollapsed"):Connect(function()
+	placeUpgrades(true)
+end)
+upgradesTab.Activated:Connect(function()
+	lobby:SetAttribute("UpgradesCollapsed", lobby:GetAttribute("UpgradesCollapsed") ~= true)
+end)
+local UPGRADE_STEP = 0
+for i, s in Config.TUTORIAL.STEPS do
+	if s.id == "upgrade" then
+		UPGRADE_STEP = i
+	end
+end
+local function updateUpgradesTab()
+	local done = UPGRADE_STEP == 0 or bit32.btest(player:GetAttribute("Tutorial") or 0, 2 ^ (UPGRADE_STEP - 1)) or (player:GetAttribute("Runs") or 0) >= Config.TUTORIAL.MAX_RUNS
+	upgradesTab.Visible = done
+	if not done then
+		lobby:SetAttribute("UpgradesCollapsed", false) -- обучение сброшено (DEV) — панель снова раскрыта
+	end
+end
+player:GetAttributeChangedSignal("Tutorial"):Connect(updateUpgradesTab)
+player:GetAttributeChangedSignal("Runs"):Connect(updateUpgradesTab)
+updateUpgradesTab()
+placeUpgrades(false)
+
 ------------------------------------------------------------------ заезд
 local runUi = UI.new("Frame", { Name = "Run", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = root })
 

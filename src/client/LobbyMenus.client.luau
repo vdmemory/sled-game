@@ -712,20 +712,135 @@ end
 sledsBtn.Activated:Connect(openSleds)
 
 ------------------------------------------------------------------ Следы
-local trailWin, trailBody = panel("СЛЕДЫ", 700, 500)
+-- Слева сетка карточек (UILayout.TRAIL_GRID_W), справа превью выбранного следа (#7)
+local trailWin, trailBody = panel("СЛЕДЫ", L.TRAIL_WIN_W, L.TRAIL_WIN_H)
 local trailArea = scroller(trailBody, false, 6)
+trailArea.Size = UDim2.new(0, L.TRAIL_GRID_W, 1, -6)
 grid(trailArea, 142, 176)
 local trailCells: { [string]: TextButton } = {}
+local trailStrokes: { [string]: UIStroke } = {}
+local CARD_EDGE = Color3.fromRGB(120, 170, 225)
 local RAINBOW = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 70)),
 	ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 210, 50)),
 	ColorSequenceKeypoint.new(0.66, Color3.fromRGB(80, 220, 120)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 90, 255)),
 })
+-- цвет радуги в точке x ∈ [0, 1) (линейно между ключами RAINBOW)
+local function rainbowAt(x: number): Color3
+	local kp = RAINBOW.Keypoints
+	for k = 1, #kp - 1 do
+		local a, b = kp[k], kp[k + 1]
+		if x <= b.Time then
+			return a.Value:Lerp(b.Value, (x - a.Time) / (b.Time - a.Time))
+		end
+	end
+	return kp[#kp].Value
+end
+
+-- Превью справа: небо, снег, иконка текущих саней покачивается, за ней — лента следа из кружков
+-- (объект Trail во ViewportFrame не рисуется, поэтому рисуем 2D; кружки не повёрнуты — их обрезает
+-- ClipsDescendants сцены). Анимация — только пока окно открыто (RenderStepped подключается на показ).
+local TP = Config.TRAIL_PREVIEW
+local pv = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 6), Size = UDim2.new(0, L.TRAIL_PREVIEW_W, 1, -6), BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = trailBody })
+UI.corner(pv, 16)
+UI.stroke(pv, 2.5, CARD_EDGE)
+local pvName = UI.ink({ Text = "", Position = UDim2.fromOffset(10, 8), Size = UDim2.new(1, -20, 0, 32), ZIndex = 34, Parent = pv })
+local stage = UI.new("Frame", { Position = UDim2.fromOffset(10, 46), Size = UDim2.new(1, -20, 1, -136), BackgroundTransparency = 0, ClipsDescendants = true, ZIndex = 34, Parent = pv })
+UI.grad(stage, Color3.fromRGB(120, 185, 250), Color3.fromRGB(205, 232, 255))
+UI.corner(stage, 12)
+UI.stroke(stage, 2)
+-- снег внизу сцены: белая полоса с голубой кромкой
+local ground = UI.new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0.36, 0), BackgroundColor3 = C.white, BackgroundTransparency = 0, ZIndex = 35, Parent = stage })
+UI.new("Frame", { Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = Color3.fromRGB(170, 205, 240), BackgroundTransparency = 0, ZIndex = 36, Parent = ground })
+-- полоски «ветра» (скорость): едут справа налево и появляются снова справа
+local windLines: { Frame } = {}
+for k = 1, 4 do
+	local w = UI.new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.fromOffset(34 + k * 6, 4), BackgroundColor3 = C.white, BackgroundTransparency = 0.35, ZIndex = 35, Parent = stage })
+	UI.corner(w, 1000)
+	table.insert(windLines, w)
+end
+-- лента: первый кружок крупный и плотный у саней, дальше мельче и прозрачнее
+local blobs: { Frame } = {}
+for k = 1, TP.SEGMENTS do
+	local f = 1 - (k - 1) / TP.SEGMENTS
+	local b = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(18 + 18 * f, 12 + 22 * f), BackgroundTransparency = 0.05 + 0.75 * (1 - f), ZIndex = 37, Parent = stage })
+	UI.corner(b, 1000)
+	table.insert(blobs, b)
+end
+local pvSled = UI.icon("donut", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(84, 84), ZIndex = 39, Parent = stage })
+local pvBonus = UI.ink({ Text = "", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 10, 1, -48), Size = UDim2.new(1, -20, 0, 30), TextColor3 = Color3.fromRGB(200, 140, 20), ZIndex = 34, Parent = pv })
+local pvState = UI.ink({ Text = "", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 10, 1, -12), Size = UDim2.new(1, -20, 0, 30), TextColor3 = Color3.fromRGB(70, 100, 150), ZIndex = 34, Parent = pv })
+
+local previewId = "white"
+local function paintPreview()
+	local t = Config.trail(previewId)
+	pvName.Text = t.name
+	pvBonus.Text = if t.bonus > 0 then "+" .. t.bonus .. "% монет" else "без бонуса"
+	local cur = player:GetAttribute("Trail") or "white"
+	pvState.Text = if t.id == cur then "✔ надет" elseif csvSet("OwnedTrails")[t.id] then "куплен" else "цена " .. UI.money(t.price)
+	UI.setIcon(pvSled, Config.sled(player:GetAttribute("Sled")).img)
+	for k, b in blobs do
+		b.BackgroundColor3 = if t.rainbow then rainbowAt((k - 1) / TP.SEGMENTS) else t.color
+	end
+	for id, s in trailStrokes do
+		s.Color = if id == t.id then C.gold else CARD_EDGE
+		s.Thickness = if id == t.id then 4 else 2.5
+	end
+end
+local function previewTrail(id: string)
+	if id ~= previewId then
+		previewId = id
+		paintPreview()
+		UI.pop(pvSled)
+	end
+end
+
+local clock0 = os.clock()
+local function stepPreview()
+	local time = os.clock() - clock0
+	local ph = time * TP.SPEED
+	-- сани — на 2/3 ширины и середине высоты сцены (доли — не зависят от масштаба окна)
+	pvSled.Position = UDim2.new(0.66, 0, 0.5, TP.BOB * math.sin(ph))
+	pvSled.Rotation = -TP.TILT * math.cos(ph)
+	local t = Config.trail(previewId)
+	for k, b in blobs do
+		-- кружок k — там, где сани были «k шагов назад»: та же синусоида с отставанием фазы
+		local p = ph - k * TP.LAG
+		b.Position = UDim2.new(0.66, -26 - k * TP.SPACING, 0.5, 20 + TP.BOB * math.sin(p))
+		if t.rainbow then
+			b.BackgroundColor3 = rainbowAt(((k - 1) / TP.SEGMENTS + time * TP.RAINBOW_SPEED) % 1)
+		end
+	end
+	for k, w in windLines do
+		-- доля ширины 1.2 → −0.3: полоска выезжает из-за правого края и уходит за левый
+		local x = 1.2 - ((time * TP.LINES_SPEED / L.TRAIL_PREVIEW_W + k * 1.5 / #windLines) % 1.5)
+		w.Position = UDim2.new(x, 0, 0.1 + 0.11 * k, 0)
+	end
+end
+local previewConn: RBXScriptConnection? = nil
+trailWin:GetPropertyChangedSignal("Visible"):Connect(function()
+	if trailWin.Visible and not previewConn then
+		previewConn = RunService.RenderStepped:Connect(stepPreview)
+	elseif not trailWin.Visible and previewConn then
+		previewConn:Disconnect()
+		previewConn = nil
+	end
+end)
+
 for i, t in Config.TRAILS do
 	local card = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.row, BackgroundTransparency = 0, ZIndex = 33, Parent = trailArea })
 	UI.corner(card, 14)
-	UI.stroke(card, 2.5, Color3.fromRGB(120, 170, 225))
+	trailStrokes[t.id] = UI.stroke(card, 2.5, CARD_EDGE)
+	-- превью: наведение мышью или тап по карточке (на телефоне)
+	card.MouseEnter:Connect(function()
+		previewTrail(t.id)
+	end)
+	card.InputBegan:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			previewTrail(t.id)
+		end
+	end)
 	local ribbon = UI.new("Frame", { Position = UDim2.fromOffset(14, 16), Size = UDim2.new(1, -28, 0, 46), BackgroundColor3 = t.color, BackgroundTransparency = 0, ZIndex = 34, Parent = card })
 	UI.corner(ribbon, 1000)
 	UI.stroke(ribbon, 2)
@@ -739,6 +854,7 @@ for i, t in Config.TRAILS do
 	UI.ink({ Text = if t.bonus > 0 then "+" .. t.bonus .. "% монет" else "без бонуса", Position = UDim2.fromOffset(8, 98), Size = UDim2.new(1, -16, 0, 24), TextColor3 = Color3.fromRGB(200, 140, 20), ZIndex = 34, Parent = card })
 	local st = UI.button("blue", "", { Position = UDim2.new(0, 10, 1, -54), Size = UDim2.new(1, -20, 0, 48), Radius = 10, StrokeThickness = 2, ZIndex = 34, Parent = card })
 	st.Activated:Connect(function()
+		previewTrail(t.id)
 		say(UI.invoke(Remotes.TrailAction, t.id))
 	end)
 	trailCells[t.id] = st
@@ -760,9 +876,11 @@ local function drawTrails()
 			UI.setText(st, UI.money(t.price), "coin")
 		end
 	end
+	paintPreview()
 end
 trailsBtn.Activated:Connect(function()
 	trailsNew.Visible = false
+	previewId = player:GetAttribute("Trail") or "white" -- открываем с надетым следом
 	drawTrails()
 	open(trailWin)
 end)
