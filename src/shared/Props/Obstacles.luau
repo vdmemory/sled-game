@@ -371,6 +371,26 @@ function Props.heavyMark(m: Model, base: CFrame, hx: number, hz: number)
 	end
 end
 
+-- Пятно-тень (#36): тёмный плоский эллипс под препятствием — контраст на светлом дне и в дымке.
+-- 1 Part 1 × 0.1 × 1 + SpecialMesh Sphere со Scale до габарита: маленький Size — Contacts.smash не
+-- делает из пятна обломок (порог Size.Magnitude > 1.5) и прячет его вместе с моделью. Без Random.
+function Props.obstacleShadow(m: Model, base: CFrame, hx: number, hz: number, heavy: boolean)
+	local S = Config.OBSTACLE_SHADOW
+	local w = math.clamp(hx * S.PAD, S.MIN, S.MAX / 2) * 2
+	local d = math.clamp(hz * S.PAD, S.MIN, S.MAX / 2) * 2
+	local pad = deco({
+		Name = "ObstacleShadow",
+		Size = Vector3.new(1, 0.1, 1),
+		CFrame = base * CFrame.new(0, 0.06, 0),
+		Color = S.COLOR,
+		Transparency = if heavy then S.HEAVY else S.LIGHT,
+	}, m)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Scale = Vector3.new(w, 1, d)
+	mesh.Parent = pad
+end
+
 -- Карточки видов (#30): вид — роль · класс · высота · цвет · с какого уровня мира (from).
 -- Лёгкое = Breakable (ракета/ускоритель разбивают, +SMASH_COINS), тяжёлое = авария.
 --  1 Снежный лес:  снеговик — частый «мягкий» блок · лёгкое · 7.9 · снег, тёплый шарф · 1
@@ -552,8 +572,9 @@ function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instan
 			m:SetAttribute("Explosive", true) -- взрывается от любого удара (Contacts.explode)
 		end
 		m:SetAttribute("Heavy", heavy(chosen)) -- класс для подсказок/аналитики (#30)
+		local hx, hz = footprint(m, base)
+		Props.obstacleShadow(m, base, hx, hz, heavy(chosen))
 		if heavy(chosen) then
-			local hx, hz = footprint(m, base)
 			Props.heavyMark(m, base, hx, hz)
 		end
 		if row and row.class == nil then

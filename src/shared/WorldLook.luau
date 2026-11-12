@@ -8,8 +8,10 @@
 --  • Bloom.Threshold ≥ 2 в снежных солнечных мирах: снег ≈ самая яркая поверхность кадра, ниже
 --    порога он «цветёт» молоком; порог 1.3–1.7 только там, где темнее (сумерки) и есть неон;
 --  • ExposureCompensation ≤ −0.25 днём: снег не уходит в чисто белый;
---  • DOF размывает только дальше ~240 studs (FocusDistance 190 + InFocusRadius 50): всё, на что
---    успевает среагировать игрок (BUILD_AHEAD и ближе), резкое; NearIntensity = 0 — сани резкие.
+--  • DOF: в заезде PostFX отодвигает резкость до Config.obstacleReadDistance() (≈ 510 studs, #36),
+--    в лобби — FocusDistance + InFocusRadius пресета; NearIntensity = 0 — сани резкие;
+--  • дымка в заезде не плотнее Config.FOG_RUN (Density 0.3 / Haze 1.4, #36) — пресет выше этого
+--    действует только в лобби (витрина); препятствие должно читаться за OBSTACLE_READ_TIME.
 -- UI (ScreenGui) пост-обработка не затрагивает — Bloom/CC/DOF действуют только на 3D.
 
 local WorldLook = {}

@@ -129,7 +129,18 @@ local function apply(instant: boolean?)
 	tweenTo(Lighting, lp, info)
 	Lighting.GlobalShadows = q.shadows and player:GetAttribute("SetShadows") ~= false
 
-	tweenTo(Lighting:FindFirstChildOfClass("Atmosphere"), p.atmo, info)
+	-- В заезде дымка не плотнее Config.FOG_RUN (#36): препятствие читается за obstacleReadDistance
+	local atmo = p.atmo
+	if inRun then
+		atmo = table.clone(p.atmo)
+		if atmo.Density then
+			atmo.Density = math.min(atmo.Density, Config.FOG_RUN.DENSITY_MAX)
+		end
+		if atmo.Haze then
+			atmo.Haze = math.min(atmo.Haze, Config.FOG_RUN.HAZE_MAX)
+		end
+	end
+	tweenTo(Lighting:FindFirstChildOfClass("Atmosphere"), atmo, info)
 
 	local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
 	if clouds then
@@ -164,6 +175,9 @@ local function apply(instant: boolean?)
 	dof.Enabled = q.dof and G.DOF > 0 and (inRun or L.dof ~= false)
 	local d = table.clone(p.dof)
 	d.FarIntensity = math.clamp(p.dof.FarIntensity * G.DOF, 0, 1)
+	if inRun then -- резкость до дистанции чтения препятствий (#36): было 190 + 50 = 240 studs
+		d.FocusDistance = math.max(p.dof.FocusDistance, Config.obstacleReadDistance() - p.dof.InFocusRadius)
+	end
 	tweenTo(dof, d, info)
 end
 
