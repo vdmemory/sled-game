@@ -239,7 +239,7 @@ function Track:buildSegment(i: number)
 	end
 	-- Заборчик (#70): на кромке обрыва долины — всегда, вдоль снежных прямых — каждый FENCE_EVERY-й
 	-- кусок (по номеру, без Random); не в тоннеле, не в жёлобе, не в городе
-	if not special and not seg.chute and not seg.tunnel and visLen > 0 and self.theme ~= 2 and (seg.kind == "gentle" or seg.kind == "steep" or seg.kind == "landing") then
+	if not special and not seg.chute and not seg.tunnel and visLen > 0 and self.theme ~= 2 and (seg.kind == "gentle" or seg.kind == "steep" or seg.kind == "climb" or seg.kind == "landing") then
 		local every = math.floor(Config.FENCE_EVERY)
 		for _, side in { -1, 1 } do
 			local onCliff = seg.valley == side or seg.valley == 2
@@ -368,11 +368,24 @@ function Track:buildSegment(i: number)
 				end
 			end
 		end
-	elseif seg.kind == "wave" and seg.crest then
-		-- монеты на гребне волны: линия по центру подъёма, чуть выше — ловятся в подлёте
+	elseif seg.kind == "climb" and seg.crest then
+		-- Гребень волны (#75): в конце подъёма плита-трамплин заподлицо со снегом — SledController на
+		-- «Ramp» не теряет скорость и подбрасывает на CREST_LIFT × скорость: на 95+ studs/с отрыв с «Полётом»,
+		-- на малой — сани лишь вздрагивают. Монеты — тройкой перед гребнем, чуть выше (ловятся в подлёте).
+		local pad = Config.CREST_PAD
+		if pad > 0 and Config.CREST_LIFT > 0 then
+			local plate = part("Part", {
+				Name = "Ramp",
+				Size = Vector3.new(W, 0.4, pad),
+				CFrame = cf * CFrame.new(0, -0.18, -(len - pad / 2)),
+				Material = Enum.Material.Snow,
+				Color = Sections.floorColor(self.theme),
+			}, m)
+			plate:SetAttribute("Lift", Config.CREST_LIFT)
+		end
 		local lane = 2 + (seg.crest % (Config.LANES - 2))
 		for k = 1, 3 do
-			makeCoin(cf * CFrame.new(laneX(lane), 3.5, -(len * 0.35 + k * 4)), m)
+			makeCoin(cf * CFrame.new(laneX(lane), 3.5, -(len - pad - 4 - k * 5)), m)
 		end
 	elseif (seg.kind == "curve" or seg.kind == "spiral") and visLen > 0 and (seg.ci or 0) % 2 == 0 then
 		-- В жёлобе — дорожка монет, которая «едет» по дуге

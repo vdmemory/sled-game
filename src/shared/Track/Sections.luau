@@ -61,6 +61,11 @@ local ICE_FLOOR = Color3.fromRGB(165, 210, 245)
 local ICE_WALL = Color3.fromRGB(130, 190, 240)
 -- seg.vis — длина визуальной части (борта, кромка, земля, барьер) от начала куска: поворот и
 -- переход строят её одним куском на несколько частей пола; 0 — только пол (и невидимые борта).
+-- Цвет снежного дна мира (конфетная гора — розоватый); плита гребня (#75) того же цвета
+function Sections.floorColor(theme: number): Color3
+	return if theme == 7 then SNOW_FLOOR:Lerp(Color3.fromRGB(255, 170, 215), 0.35) else SNOW_FLOOR
+end
+
 local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, m: Instance, alt: number, theme: number, landing: boolean?, seg: Segment?)
 	-- Визуальные части перекрываются, чтобы на поворотах не было щелей по внешнему краю;
 	-- соседние куски чуть сдвинуты по высоте, чтобы перекрытия не мерцали.
@@ -79,7 +84,7 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 	local lake = prof == LAKE_PROFILE
 	-- цвета мира: в конфетной горе снег розоватый, у вулкана земля — тёмный базальт
 	local themeCfg = Config.THEMES[theme] or Config.THEMES[1]
-	local snowFloor = if theme == 7 then SNOW_FLOOR:Lerp(Color3.fromRGB(255, 170, 215), 0.35) else SNOW_FLOOR
+	local snowFloor = Sections.floorColor(theme)
 	local snowBank = if theme == 7 then SNOW_BANK:Lerp(Color3.fromRGB(255, 170, 215), 0.3) else SNOW_BANK
 	local groundMat = if theme == 3 then Enum.Material.Sand elseif theme == 6 then Enum.Material.Basalt else Enum.Material.Snow
 	part("Part", {

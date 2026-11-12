@@ -295,7 +295,7 @@ end
 -- монет и бонусов куска не сдвигается.
 local function dressTrack(theme: number, rng: Random, seg, m: Instance)
 	local kind = seg.kind
-	local straight = kind == "gentle" or kind == "steep" or kind == "start" or kind == "landing" or kind == "kicker" or kind == "isleIn" or kind == "wave" or kind == "stair" or kind == "stairLand"
+	local straight = kind == "gentle" or kind == "steep" or kind == "start" or kind == "landing" or kind == "kicker" or kind == "isleIn" or kind == "climb" or kind == "stair" or kind == "stairLand"
 	if not straight then
 		return
 	end

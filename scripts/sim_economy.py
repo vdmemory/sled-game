@@ -8,7 +8,8 @@
 
 Модель заезда (детерминированный проход + вероятность аварии):
   • трасса уровня — как Track/Profile.build (старт, повороты, крутые/пологие, обрывы, дороги,
-    островки с ISLE_FROM_LEVEL, волны с WAVE_FROM_LEVEL), свой seed на уровень (трасса фиксирована,
+    островки с ISLE_FROM_LEVEL, рельеф «волны» #75: спуск → подъём с гребнем → выкат по долям RELIEF_SHARE,
+    подъём по энергии эталонных саней RELIEF_REF_UPGRADE), свой seed на уровень (трасса фиксирована,
     как в игре, но раскладка не совпадает 1:1 — генератор Python, не Roblox Random);
   • 1D-физика SledController: a = GRAVITY_ALONG·sin(уклон) − friction(Сани)·(1−бонус) − DRAG·v²,
     потолок maxSpeed(Сани)·(1+бонус) (выше — гаснет 30 studs/с²), старт launchSpeed(Рогатка)·сила
@@ -251,7 +252,7 @@ def load_config(path: str = CONFIG_PATH) -> dict:
 
 
 def _fn_numbers(src: str, name: str) -> list[float]:
-    """Числа из тела `function Config.<name>(…) … end` (для формул levelLength/steepChance)."""
+    """Числа из тела `function Config.<name>(…) … end` (для формул Config (сейчас не используется, оставлено для сценариев))."""
     m = re.search(r"function Config\." + name + r"\(.*?\n(.*?)\nend", src, re.S)
     if not m:
         raise SystemExit(f"Config.{name} не найдена в Config.luau")
@@ -268,9 +269,7 @@ class Rules:
         # Config.levelLength (2026-11-12): LEVEL_LEN_BASE + (уровень в мире − 1)·LEVEL_LEN_STEP
         # + (мир − 1)·LEVEL_LEN_WORLD, не больше LEVEL_LEN_MAX
         self._len = (c["LEVEL_LEN_BASE"], c["LEVEL_LEN_STEP"], c["LEVEL_LEN_WORLD"], c["LEVEL_LEN_MAX"], c.get("LEVELS_PER_WORLD", 5))
-        # Config.steepChance: math.max(MIN, START - STEP * (level - 1))
-        nums = _fn_numbers(src, "steepChance")
-        self._steep = (nums[0], nums[1], nums[2])
+        self.per = c.get("LEVELS_PER_WORLD", 5)
         self.U = c["UPGRADES"]
         self.tier = c["TIER_SIZE"]
 
@@ -279,10 +278,16 @@ class Rules:
         base, step, world, mx, per = self._len
         return min(mx, base + ((lv - 1) % per) * step + ((lv - 1) // per) * world)
 
-    # Config.steepChance
-    def steep_chance(self, lv):
-        lo, start, step = self._steep
-        return max(lo, start - step * (lv - 1))
+    # Config.reliefShare (#75): доли рельефа уровня — подъёмов больше к концу мира, выкат — остаток
+    def relief_share(self, lv):
+        s = self.c["RELIEF_SHARE"]
+        climb = min(self.c["RELIEF_CLIMB_MAX"], s["climb"] + self.c["RELIEF_CLIMB_STEP"] * ((lv - 1) % self.per))
+        return {"descent": s["descent"], "climb": climb, "special": s["special"], "runout": max(0.0, 1 - s["descent"] - climb - s["special"])}
+
+    # уровень апгрейдов эталонных саней мира (Config.RELIEF_REF_UPGRADE, #75)
+    def relief_ref(self, lv):
+        ups = self.c["RELIEF_REF_UPGRADE"]
+        return ups[min(len(ups), (lv - 1) // self.per + 1) - 1]
 
     # Config.roadCount / carsPerLane
     def road_count(self, lv):
@@ -405,11 +410,94 @@ def build_track(R: Rules, lv: int, variant: int = 0):
     L = R.level_length(lv)
     segs, h = [], 0.0
     last_isle = None
+    # рельеф «волны» (#75): доли по видам и энергия эталонных саней мира (как Track/Profile.build)
+    RELIEF_OF = {"steep": "descent", "gentle": "runout", "climb": "climb", "landing": "descent", "kicker": "special",
+                 "isleIn": "special", "gap": "special", "isle": "special"}
+    relief = {"descent": 0.0, "runout": 0.0, "climb": 0.0, "special": 0.0}
+    state = {"total": 0.0, "last": "runout", "u": R.launch(R.relief_ref(lv)) ** 2, "prev": 0.0}
+    ref_fr = R.friction(R.relief_ref(lv))
+    ref_cap2 = R.max_speed(R.relief_ref(lv)) ** 2
+    g, k = c["GRAVITY_ALONG"], max(1e-6, c["DRAG"])
+
+    def advance(u0, ang, ln):
+        a = g * math.sin(math.radians(ang)) - ref_fr
+        ue = a / k
+        return min(ref_cap2, max(0.0, ue + (u0 - ue) * math.exp(-2 * k * ln)))
+
+    def transition(u0, a0, a1):
+        d = a1 - a0
+        n = math.ceil(abs(d) / max(0.1, c["SMOOTH_KINK"]) - 1e-6) - 1
+        for j in range(1, n + 1):
+            u0 = advance(u0, a0 + d * j / (n + 1), c["FILLET_LEN"])
+        return u0
 
     def add(kind, ang, ln, **ex):
         nonlocal h
         segs.append((kind, ang, ln, h, ex))
-        h += ln * math.cos(math.radians(ang))
+        hl = ln * math.cos(math.radians(ang))
+        h += hl
+        if kind == "landing":
+            state["u"] = max(state["u"], c["RAMP_MIN_SPEED"] ** 2)
+        if kind not in ("gap", "isle"):
+            state["u"] = advance(transition(state["u"], state["prev"], ang), ang, ln)
+        state["prev"] = ang
+        cat = RELIEF_OF.get(kind)
+        if cat:
+            relief[cat] += hl
+            state["total"] += hl
+            state["last"] = cat
+
+    def lag(cat):
+        share = R.relief_share(lv)
+        if cat == "special":
+            return share["special"] - relief["special"] / max(1.0, state["total"])
+        plain = relief["descent"] + relief["runout"] + relief["climb"]
+        return share[cat] / max(1e-6, share["descent"] + share["runout"] + share["climb"]) - relief[cat] / max(1.0, plain)
+
+    def descent(th=None, dl=None):
+        state["u"] = max(state["u"], c["CLIMB_REF_SPEED"] ** 2)
+        add("steep", th if th is not None else rng.uniform(*c["STEEP_ANGLE"]), dl if dl is not None else rng.uniform(*c["DESCENT_LEN"]))
+
+    def runout(ln=None):
+        add("gentle", rng.uniform(*c["GENTLE_ANGLE"]), ln if ln is not None else rng.uniform(*c["RUNOUT_LEN"]))
+
+    def descent_and_climb():
+        th, dl = rng.uniform(*c["STEEP_ANGLE"]), rng.uniform(*c["DESCENT_LEN"])
+        phi, cl = rng.uniform(*c["CLIMB_ANGLE"]), rng.uniform(*c["CLIMB_LEN"])
+        u0 = max(state["u"], c["CLIMB_REF_SPEED"] ** 2)
+        need = c["CLIMB_MIN_SPEED"] ** 2
+
+        def crest():
+            x = advance(transition(u0, state["prev"], th), th, dl)
+            return advance(transition(x, th, -phi), -phi, cl)
+
+        while crest() < need:
+            if dl < c["DESCENT_LEN"][1]:
+                dl = min(c["DESCENT_LEN"][1], dl + 20)
+            elif th < c["CLIMB_DESCENT_ANGLE"]:
+                th = min(c["CLIMB_DESCENT_ANGLE"], th + 1)
+            elif cl > c["CLIMB_LEN"][0]:
+                cl = max(c["CLIMB_LEN"][0], cl - 10)
+            elif phi > c["CLIMB_ANGLE"][0]:
+                phi = max(c["CLIMB_ANGLE"][0], phi - 0.5)
+            else:
+                descent(th, dl)
+                return
+        descent(th, dl)
+        add("climb", -phi, cl, crest=True)
+
+    def climb_only():
+        phi, cl = rng.uniform(*c["CLIMB_ANGLE"]), rng.uniform(*c["CLIMB_LEN"])
+        need = c["CLIMB_MIN_SPEED"] ** 2
+        while advance(transition(state["u"], state["prev"], -phi), -phi, cl) < need:
+            if cl > c["CLIMB_LEN"][0]:
+                cl = max(c["CLIMB_LEN"][0], cl - 10)
+            elif phi > c["CLIMB_ANGLE"][0]:
+                phi = max(c["CLIMB_ANGLE"][0], phi - 0.5)
+            else:
+                return False
+        add("climb", -phi, cl, crest=True)
+        return True
 
     def islands():
         nonlocal last_isle
@@ -433,7 +521,7 @@ def build_track(R: Rules, lv: int, variant: int = 0):
     roads = list(c["ROAD_AT"][:R.road_count(lv)])
     isle_next = L * c["ISLE_AT"] if lv >= c["ISLE_FROM_LEVEL"] else None
     force_landing = False
-    while h < L:
+    while h < L - c["FINAL_RUNOUT"]:
         if not force_landing and roads and h >= L * roads[0]:
             roads.pop(0)
             add("road", 3, 60)
@@ -443,35 +531,37 @@ def build_track(R: Rules, lv: int, variant: int = 0):
         elif isle_next is not None and h >= isle_next:
             isle_next = None
             if not islands():
-                add("gentle", rng.uniform(*c["GENTLE_ANGLE"]), 120)
+                runout()
         elif forced and h >= L * forced[0]:
             forced.pop(0)
-            add("kicker", 6, 100)
-            force_landing = True
+            if h + 200 <= L - c["FINAL_RUNOUT"]:
+                add("kicker", 6, 100)
+                force_landing = True
         else:
             t = rng.random()
-            steep = R.steep_chance(lv)
             extra = lv >= c["ISLE_FROM_LEVEL"] and irng.random() < R.isle_chance(lv) and last_isle is not None and h - last_isle >= c["ISLE_MIN_SPACING"]
             if extra and islands():
                 pass
-            elif lv >= c["WAVE_FROM_LEVEL"] and h > 300 and irng.random() < c["WAVE_CHANCE"]:
-                for _ in range(irng.randint(*c["WAVE_COUNT"])):
-                    add("wave", c["WAVE_DOWN"][0], c["WAVE_DOWN"][1])
-                    add("wave_up", c["WAVE_UP"][0], c["WAVE_UP"][1])
             elif h > 220 and t < c["CURVE_CHANCE"]:
                 pitch = rng.uniform(*c["CURVE_PITCH"])
                 pieces = max(3, round(rng.uniform(*c["CURVE_ANGLE"]) / c["CURVE_STEP"]))
-                for k in range(pieces):
-                    add("curve", pitch, c["CURVE_PIECE"], coin=(k % 2 == 1))
-            elif t < c["CURVE_CHANCE"] + steep:
-                add("steep", rng.uniform(*c["STEEP_ANGLE"]), 90)
-            elif t < c["CURVE_CHANCE"] + steep + c["KICKER_CHANCE"] and h > 250:
+                for j in range(pieces):
+                    add("curve", pitch, c["CURVE_PIECE"], coin=(j % 2 == 1))
+            elif state["last"] == "descent" and lag("climb") > 0 and climb_only():
+                pass  # #75: подъём прямо за спуском/приземлением
+            elif state["last"] in ("climb", "descent") or (lag("runout") > c["RUNOUT_REPEAT_LAG"] and lag("descent") < 0):
+                runout()  # #75: после гребня и после спуска — выкат; выкатов сильно не хватает — ещё один
+            elif lag("special") > 0 and h > 250 and rng.random() < c["KICKER_CHANCE"]:
                 add("kicker", 6, 100)
                 force_landing = True
+            elif lag("climb") > 0:
+                descent_and_climb()
             else:
-                add("gentle", rng.uniform(*c["GENTLE_ANGLE"]), 120)
+                descent()
     if force_landing:
         add("landing", 18, 90)
+    if h < L:
+        runout((L - h) / math.cos(math.radians(c["GENTLE_ANGLE"][1])) + 1)  # последний выкат (#75)
     # занятость рядов препятствий — как SafeLine.plan: maxBlocked = 1 + (ур−1)//GROW_LEVELS + i//GROW_SEGS
     out = []
     for i, (kind, ang, ln, hs, ex) in enumerate(segs):
@@ -592,8 +682,9 @@ def simulate_run(R: Rules, lv, up, sled_bonus, prof, variant=0, track_cache={}):
                 coins += c["POWERUPS"]["rings"]["chance"] * 3 * c["POWERUPS"]["rings"]["coins"] * pick
                 # канистра = полный бак (не сверх него): в среднем + шанс × подбор × бак, но не выше бака
                 fuel = min(R.fuel(rL), fuel + c["POWERUPS"]["fuel"]["chance"] * pick * R.fuel(rL))
-        if kind == "wave_up":
-            coins += 3 * pick * cv
+        if kind == "climb":
+            coins += 3 * pick * cv  # монеты на гребне (#75)
+            v = max(v, c["RAMP_MIN_SPEED"])  # плита гребня — «Ramp»
         if kind == "curve" and ex.get("coin"):
             coins += pick * cv
         if kind == "road":

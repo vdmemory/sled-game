@@ -27,7 +27,7 @@ export type Segment = {
 	vis: number?, -- длина визуальной части сечения (борта, кромка, земля) от начала куска; 0 — только пол
 	ci: number?, -- номер «визуального» куска поворота (для арок и монет)
 	isle: any?, -- островки: план островка / зазора (shared/Islands)
-	crest: any?, -- волна: номер гребня (подъём) или false (спуск)
+	crest: number?, -- подъём (#75, kind = "climb"): номер гребня на уровне — монеты и плита-трамплин в конце
 	tunnel: string?, -- кусок под сводом тоннеля (#65): "in" / "mid" / "out"
 	valley: number?, -- трасса по гребню над долиной с островками: −1 слева, 1 справа, 2 с обеих сторон
 	stair: any?, -- трамплин-лестница (#43): ступень плана Track/Stairs (трамплин в конце куска)
@@ -36,6 +36,7 @@ export type Segment = {
 	fork: any?, -- развилка у островков (#42): план моста (Track/Fork) на разгоне, кусках цепочки и приземлении
 	open: number?, -- развилка: с этой стороны (−1/1) сечение без бортов — пол уходит к мосту
 	bank: number?, -- часть пола поворота, с которой начинается плита первого пояса жёлоба (#74): её длина
+	final: boolean?, -- последний выкат перед озером (#75): без тоннеля и долины — финишная арка на виду
 }
 
 -- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
@@ -43,8 +44,9 @@ export type Segment = {
 local BREAK_AFTER = { kicker = true, isleIn = true, isle = true, gap = true, stair = true }
 
 -- Тоннели (#65, владелец 2026-11-12: «как минимум 20% длины трассы»). После постройки профиля
--- выбираются непрерывные участки «наземных» кусков (повороты, пологие, крутые, скругления — без
--- трамплинов, приземлений, островков, волн, дорог, озера: там сани в воздухе или своя сцена) и
+-- выбираются непрерывные участки «наземных» кусков (повороты, выкаты, спуски, скругления — без
+-- трамплинов, приземлений, островков, подъёмов с гребнем (#75: отрыв на гребне — под сводом нельзя),
+-- дорог, озера: там сани в воздухе или своя сцена) и
 -- помечаются seg.tunnel = "in" / "mid" / "out", пока под сводом не окажется TUNNEL_SHARE пути.
 -- Сначала длинные участки (каждый — не длиннее TUNNEL_MAX_LEN, середина участка), короче
 -- TUNNEL_MIN_LEN не берутся. Случайные числа не тратятся — раскладка уровня не меняется.
@@ -64,9 +66,9 @@ local function markTunnels(segs: { Segment })
 	local runs = {}
 	local i = 1
 	while i <= #segs do
-		if TUNNEL_KINDS[segs[i].kind] and segs[i].hStart >= Config.TUNNEL_FROM_H then
+		if TUNNEL_KINDS[segs[i].kind] and not segs[i].final and segs[i].hStart >= Config.TUNNEL_FROM_H then
 			local j, len = i, 0
-			while j <= #segs and TUNNEL_KINDS[segs[j].kind] do
+			while j <= #segs and TUNNEL_KINDS[segs[j].kind] and not segs[j].final do
 				len += segs[j].hLen
 				j += 1
 			end
@@ -122,7 +124,7 @@ end
 -- (или с обеих) вместо ровной земли — обрыв вниз к долине с островками. Участки — как у тоннелей,
 -- но не под сводом: VALLEY_SHARE пути, стороны чередуются (каждый 3-й — с обеих). Случайные числа не
 -- тратятся.
-local VALLEY_KINDS = { curve = true, gentle = true, steep = true, fillet = true, landing = true }
+local VALLEY_KINDS = { curve = true, gentle = true, steep = true, climb = true, fillet = true, landing = true }
 local function markValleys(segs: { Segment })
 	local share = Config.VALLEY_SHARE or 0
 	local total = 0
@@ -139,9 +141,9 @@ local function markValleys(segs: { Segment })
 	while i <= #segs do
 		local s = segs[i]
 		-- приземление развилки (#42) — не над долиной: с одной стороны там пол к мосту
-		if VALLEY_KINDS[s.kind] and not s.tunnel and not s.fork and s.hStart >= Config.VALLEY_FROM_H then
+		if VALLEY_KINDS[s.kind] and not s.tunnel and not s.fork and not s.final and s.hStart >= Config.VALLEY_FROM_H then
 			local j, len = i, 0
-			while j <= #segs and VALLEY_KINDS[segs[j].kind] and not segs[j].tunnel and not segs[j].fork do
+			while j <= #segs and VALLEY_KINDS[segs[j].kind] and not segs[j].tunnel and not segs[j].fork and not segs[j].final do
 				len += segs[j].hLen
 				j += 1
 			end
@@ -205,6 +207,38 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	local prevAngle = 0 -- стартовая площадка ровная
 	local prevYaw = 0
 
+	-- Рельеф «волны» (#75): учёт долей пути по видам (Config.RELIEF_SHARE) и оценка энергии эталонных
+	-- саней мира (Config.RELIEF_REF_UPGRADE) — скорость² u по физике SledController без ракеты и
+	-- ускорителей: du/ds = 2·(g·sin − трение − DRAG·u) ⇒ u(s) = u∞ + (u₀ − u∞)·e^(−2·DRAG·s).
+	local RELIEF_OF = {
+		steep = "descent", gentle = "runout", climb = "climb", landing = "descent", stairLand = "descent",
+		kicker = "special", stair = "special", isleIn = "special", gap = "special", isle = "special",
+		spiral = "special", iceTunnel = "special",
+	}
+	local reliefLen = { descent = 0, runout = 0, climb = 0, special = 0 }
+	local reliefTotal = 0
+	local lastRelief = "runout" -- после старта — сначала спуск (сани 0-го уровня на площадке 7° теряют ход)
+	local crestNo = 0
+	local refUp = Config.RELIEF_REF_UPGRADE[math.clamp(Config.worldOf(level), 1, #Config.RELIEF_REF_UPGRADE)] or 0
+	local refFriction = Config.friction(refUp)
+	local refCap2 = Config.maxSpeed(refUp) ^ 2
+	local u = Config.launchSpeed(refUp) ^ 2
+	local function advance(u0: number, angle: number, len: number): number
+		local k = math.max(1e-6, Config.DRAG)
+		local a = Config.GRAVITY_ALONG * math.sin(math.rad(angle)) - refFriction
+		local ue = a / k
+		return math.clamp(ue + (u0 - ue) * math.exp(-2 * k * len), 0, refCap2)
+	end
+	-- то же через переходные куски скругления между уклонами a0 → a1 (как в add)
+	local function transition(u0: number, a0: number, a1: number): number
+		local d = a1 - a0
+		local n = math.ceil(math.abs(d) / math.max(0.1, Config.SMOOTH_KINK) - 1e-6) - 1
+		for j = 1, n do
+			u0 = advance(u0, a0 + d * j / (n + 1), Config.FILLET_LEN)
+		end
+		return u0
+	end
+
 	-- Кусок как есть (без скругления стыка)
 	local function push(kind: string, angle: number, length: number, chute: boolean?, extra: { [string]: any }?): Segment
 		local cf = CFrame.new(pos) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(-math.rad(angle), 0, 0)
@@ -237,6 +271,20 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		prevAngle, prevYaw = angle, yaw
 		if kind == "kicker" then
 			pos -= Vector3.new(0, Config.KICKER_DROP, 0)
+		end
+		-- энергия эталонных саней (#75): в полёте (обрыв, зазор) и на ускорителях островков не считаем;
+		-- на приземление сани приходят не медленнее RAMP_MIN_SPEED (трамплин держит скорость)
+		if kind == "landing" or kind == "stairLand" then
+			u = math.max(u, Config.RAMP_MIN_SPEED ^ 2)
+		end
+		if kind ~= "gap" and kind ~= "isle" and kind ~= "lake" then
+			u = advance(u, angle, length)
+		end
+		local cat = RELIEF_OF[kind]
+		if cat then
+			reliefLen[cat] += hLen
+			reliefTotal += hLen
+			lastRelief = cat
 		end
 		return seg
 	end
@@ -403,14 +451,111 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		return worst <= Config.SPIRAL_DRIFT_LIMIT
 	end
 
-	-- Волны-бугры (#40): серия «вниз → вверх» — сани ныряют и на гребне слегка подлетают; переходы
-	-- между уклонами — те же скругления (излом ≤ SMOOTH_KINK), монеты на каждом гребне
-	local function waves()
-		local count = isleRng:NextInteger(Config.WAVE_COUNT[1], Config.WAVE_COUNT[2])
-		steer(count * (Config.WAVE_DOWN[2] + Config.WAVE_UP[2] + 4 * Config.FILLET_LEN)) -- #73
-		for k = 1, count do
-			add("wave", Config.WAVE_DOWN[1], Config.WAVE_DOWN[2], false, { crest = false })
-			add("wave", Config.WAVE_UP[1], Config.WAVE_UP[2], false, { crest = k })
+	-- Рельеф «волны» (#75, docs/GAME_DESIGN.md → «Рельеф»): обычный кусок — спуск (steep), подъём (climb,
+	-- отрицательный уклон, в конце гребень с плитой-трамплином) или выкат (gentle). Порядок: после выката —
+	-- спуск, и сразу за ним подъём, если доля подъёмов отстаёт и энергии хватает (пара descentAndClimb);
+	-- после подъёма и после спуска — выкат (гребень → длинный пологий выкат, как в видео); обрыв с
+	-- трамплином — вместо спуска, пока отстаёт доля особых участков.
+	local function lag(cat: string): number
+		local share = Config.reliefShare(level)
+		if cat == "special" then
+			return share.special - reliefLen.special / math.max(1, reliefTotal)
+		end
+		-- спуск/выкат/подъём — между собой: островки и лестницы не съедают выкаты
+		local plain = reliefLen.descent + reliefLen.runout + reliefLen.climb
+		local target = (share :: any)[cat] / math.max(1e-6, share.descent + share.runout + share.climb)
+		return target - reliefLen[cat] / math.max(1, plain)
+	end
+
+	local function descent(angle: number?, len: number?)
+		u = math.max(u, Config.CLIMB_REF_SPEED ^ 2) -- в спуск сани входят не медленнее эталона
+		add("steep", angle or rng:NextNumber(Config.STEEP_ANGLE[1], Config.STEEP_ANGLE[2]), len or rng:NextNumber(Config.DESCENT_LEN[1], Config.DESCENT_LEN[2]))
+	end
+
+	local function runout(len: number?)
+		add("gentle", rng:NextNumber(Config.GENTLE_ANGLE[1], Config.GENTLE_ANGLE[2]), len or rng:NextNumber(Config.RUNOUT_LEN[1], Config.RUNOUT_LEN[2]))
+	end
+
+	-- Спуск + подъём одной парой: подъём преодолим с запасом (на гребне ≥ CLIMB_MIN_SPEED у эталонных саней,
+	-- вошедших в спуск не медленнее CLIMB_REF_SPEED). Не хватает — спуск длиннее, потом круче (до
+	-- CLIMB_DESCENT_ANGLE), потом подъём короче, потом положе; если и так нет — только спуск. Ответ: построен ли подъём.
+	local function descentAndClimb(): boolean
+		local th = rng:NextNumber(Config.STEEP_ANGLE[1], Config.STEEP_ANGLE[2])
+		local dl = rng:NextNumber(Config.DESCENT_LEN[1], Config.DESCENT_LEN[2])
+		local phi = rng:NextNumber(Config.CLIMB_ANGLE[1], Config.CLIMB_ANGLE[2])
+		local cl = rng:NextNumber(Config.CLIMB_LEN[1], Config.CLIMB_LEN[2])
+		local u0 = math.max(u, Config.CLIMB_REF_SPEED ^ 2)
+		local need = Config.CLIMB_MIN_SPEED ^ 2
+		local function crest(): number
+			local x = transition(u0, prevAngle, th)
+			x = advance(x, th, dl)
+			x = transition(x, th, -phi)
+			return advance(x, -phi, cl)
+		end
+		local ok = true
+		while crest() < need do
+			if dl < Config.DESCENT_LEN[2] then
+				dl = math.min(Config.DESCENT_LEN[2], dl + 20)
+			elseif th < Config.CLIMB_DESCENT_ANGLE then
+				th = math.min(Config.CLIMB_DESCENT_ANGLE, th + 1)
+			elseif cl > Config.CLIMB_LEN[1] then
+				cl = math.max(Config.CLIMB_LEN[1], cl - 10)
+			elseif phi > Config.CLIMB_ANGLE[1] then
+				phi = math.max(Config.CLIMB_ANGLE[1], phi - 0.5)
+			else
+				ok = false
+				break
+			end
+		end
+		if not ok then
+			descent(th, dl)
+			return false
+		end
+		steer(dl + cl + 20 * Config.FILLET_LEN) -- #73: пара идёт по прямой
+		descent(th, dl)
+		crestNo += 1
+		add("climb", -phi, cl, false, { crest = crestNo })
+		return true
+	end
+
+	-- Подъём сразу за уже построенным спуском или приземлением (без нового разгона), если оценка энергии
+	-- позволяет (без нижней планки CLIMB_REF_SPEED — считаем, что есть): подъём короче, потом положе
+	local function climbOnly(): boolean
+		local phi = rng:NextNumber(Config.CLIMB_ANGLE[1], Config.CLIMB_ANGLE[2])
+		local cl = rng:NextNumber(Config.CLIMB_LEN[1], Config.CLIMB_LEN[2])
+		local need = Config.CLIMB_MIN_SPEED ^ 2
+		local function crest(): number
+			return advance(transition(u, prevAngle, -phi), -phi, cl)
+		end
+		while crest() < need do
+			if cl > Config.CLIMB_LEN[1] then
+				cl = math.max(Config.CLIMB_LEN[1], cl - 10)
+			elseif phi > Config.CLIMB_ANGLE[1] then
+				phi = math.max(Config.CLIMB_ANGLE[1], phi - 0.5)
+			else
+				return false
+			end
+		end
+		steer(cl + 20 * Config.FILLET_LEN)
+		crestNo += 1
+		add("climb", -phi, cl, false, { crest = crestNo })
+		return true
+	end
+
+	local function relief()
+		if lastRelief == "descent" and lag("climb") > 0 and climbOnly() then
+			-- подъём прямо за спуском/приземлением: разгон уже был
+		elseif lastRelief == "climb" or lastRelief == "descent" or (lag("runout") > Config.RUNOUT_REPEAT_LAG and lag("descent") < 0) then
+			-- после гребня и после спуска (в т. ч. приземления особых участков) — выкат; спусков уже с избытком, а
+			-- выкатов сильно не хватает — ещё один подряд (длинный пологий выкат 300–500 studs)
+			runout()
+		elseif lag("special") > 0 and h > 250 and rng:NextNumber() < Config.KICKER_CHANCE then
+			add("kicker", 6, 100)
+			forceNext = "landing"
+		elseif lag("climb") > 0 then
+			descentAndClimb()
+		else
+			descent()
 		end
 	end
 
@@ -505,7 +650,8 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	local nextRoad = 1
 	local roads = Config.roadCount(level)
 	local railDone = false
-	while h < L do
+	-- обычные куски — до последнего выката перед озером (#75, FINAL_RUNOUT)
+	while h < L - Config.FINAL_RUNOUT do
 		if forceNext == nil and h > 150 then
 			-- #73: жёсткий предел сноса перед обычным куском; у финиша — до конца озера
 			steer(if h > L - 600 then math.max(Config.STEER_AHEAD, L - h + 300) else Config.STEER_AHEAD)
@@ -532,15 +678,17 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		elseif isleNext and h >= isleNext then
 			isleNext = nil
 			if not islands() then
-				add("gentle", rng:NextNumber(Config.GENTLE_ANGLE[1], Config.GENTLE_ANGLE[2]), 120)
+				runout()
 			end
 		elseif forcedAt and h >= L * forcedAt then
-			add("kicker", 6, 100)
-			forceNext = "landing"
+			-- #75: обрыв с приземлением (≈ 200 studs) должен уместиться до последнего выката
+			if h + 200 <= L - Config.FINAL_RUNOUT then
+				add("kicker", 6, 100)
+				forceNext = "landing"
+			end
 			nextForced += 1
 		else
 			local t = rng:NextNumber()
-			local steep = Config.steepChance(level)
 			-- доп. цепочка островков (шанс растёт с уровнем, не чаще ISLE_MIN_SPACING)
 			local extraIsle = isleOn and isleRng:NextNumber() < Config.isleChance(level)
 				and lastIsle ~= nil and h - lastIsle >= Config.ISLE_MIN_SPACING
@@ -567,24 +715,21 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 						break
 					end
 				end
-			elseif level >= Config.WAVE_FROM_LEVEL and h > 300 and isleRng:NextNumber() < Config.WAVE_CHANCE then
-				waves()
 			elseif h > 220 and t < Config.CURVE_CHANCE then
 				curve()
-			elseif t < Config.CURVE_CHANCE + steep then
-				add("steep", rng:NextNumber(Config.STEEP_ANGLE[1], Config.STEEP_ANGLE[2]), 90)
-			elseif t < Config.CURVE_CHANCE + steep + Config.KICKER_CHANCE and h > 250 then
-				add("kicker", 6, 100)
-				forceNext = "landing"
 			else
-				add("gentle", rng:NextNumber(Config.GENTLE_ANGLE[1], Config.GENTLE_ANGLE[2]), 120)
+				relief() -- #75: спуск / подъём с гребнем / выкат по долям RELIEF_SHARE
 			end
 		end
 	end
 	if forceNext == "landing" then
 		add("landing", 18, 90)
 	end
-	steer(300) -- #73: последний кусок мог быть поворотом от оси — озеро тоже прямая под курсом
+	-- длинный пологий выкат до финиша (#75): скорость гаснет плавно, остановка за 3–5 с (SLOW_BRAKE)
+	steer(math.max(L - h, 0) + 300) -- #73: выкат и озеро — прямая под курсом
+	if h < L then
+		add("gentle", rng:NextNumber(Config.GENTLE_ANGLE[1], Config.GENTLE_ANGLE[2]), (L - h) / math.cos(math.rad(Config.GENTLE_ANGLE[2])) + 1, false, { final = true })
+	end
 	add("lake", 0.5, 300) -- ледяное озеро: после финиша катимся до остановки
 	markTunnels(segs)
 	markValleys(segs)
