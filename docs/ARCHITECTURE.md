@@ -61,6 +61,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Track/Items` | 189 | монеты, гемы, магнит, бонусы, кристалл, `tagObstacle` |
 | `shared/Track/Valley` | 150 | гребень над долиной: `build` — обрыв, дно, островки по миру; `prune` — убрать декор обочины над обрывом; участки помечает `Profile` (`seg.valley`) |
 | `shared/Track/Stairs` | 171 | трамплин-лестница (#43): `plan` — ступени, длины кусков, дуги монет (баллистика `Islands` со своим трамплином), `build` — трамплин с окном скорости, флажки, монеты, x2; `bonusAt` — гем/кристалл в дуге; куски `stair`/`stairLand` ставит `Profile` |
+| `shared/Track/IceTunnel` | 60 | ледяной тоннель с кольцами-ускорителями (#44): `build` — кольца `Items.boostRing` (тег `Boost`), монеты, лампы; свод — `Tunnel.build` с видом `Tunnel.ICE`; куски `iceTunnel` (`seg.ice`) ставит `Profile` перед островками |
 | `shared/Track/Tunnel` | 140 | тоннель над поворотом (#65): `build` — кольцо свода (меш `tunnel_vault` или блоки), порталы, свет, вид по миру; куски помечает `Profile` (`seg.tunnel`) |
 | `shared/Props/init` | 16 | фасад: подключает модули категорий, отдаёт таблицу `Props` |
 | `shared/Props/Base` | 103 | `part`, `deco`, `pick`, надписи, колёса, общие цвета |
@@ -169,6 +170,10 @@ GitHub Actions публикует его в Roblox через Open Cloud.
   плана, трамплин в конце куска) и `stairLand`; `Islands.takeoff/yAt/landX/coinArc(…, ramp?)` считают
   баллистику для любого трамплина `{ длина, высота, подброс }`. Новые участки берут случайные числа из
   своего `featRng` (seed уровня) — уровни, где их нет, не сдвигаются.
+- Вираж-спираль (#44): куски `spiral` (`seg.spiral` — направление), сечение `Sections.SPIRAL_PROFILE`;
+  ледяной тоннель — куски `iceTunnel` с заранее заданным `seg.tunnel` (`markTunnels` их не трогает: вид не в
+  `TUNNEL_KINDS`). Ускорители: клиент гасит повтор касания той же части 0.4 с, сервер считает каждую часть
+  `Boost` один раз (`run.boostPads`).
 - `Track:progressOf` ищет кусок в окне hint −8…+40 (куски пола поворота и переходы короткие).
 - `SafeLine.plan` пропускает `fillet` при проверке «после приземления первые 60 studs чистые».
 - `SledController`: «подсадка» на ступеньку ≤ `STEP_UP_MAX` впереди (луч из `STEP_PROBE`, та же

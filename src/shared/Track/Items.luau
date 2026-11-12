@@ -153,6 +153,28 @@ local function makeRing(at: CFrame, parent: Instance)
 	end
 end
 
+-- Кольцо-ускоритель (#44, ледяной тоннель): светящийся голубой обод над полосой, датчик в проёме —
+-- обычный ускоритель (тег Boost, имя Boost: +BOOST_ADD в client/Sled/Contacts, учёт и предел скорости —
+-- server/Pickups → AntiCheat.onBoost). at — точка на дне под центром кольца, r — радиус обода.
+local function makeBoostRing(at: CFrame, r: number, parent: Instance)
+	local cy = r + 0.4
+	local hit = part("Part", {
+		Name = "Boost",
+		Size = Vector3.new(r * 1.6, r * 1.6, 6),
+		CFrame = at * CFrame.new(0, cy, 0),
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+	}, parent)
+	CollectionService:AddTag(hit, "Boost")
+	local n = 20
+	for k = 0, n - 1 do
+		local a = k / n * math.pi * 2
+		deco({ Size = Vector3.new(0.7, r * 2 * math.pi / n + 0.2, 0.7), CFrame = at * CFrame.new(math.cos(a) * r, math.sin(a) * r + cy, 0) * CFrame.Angles(0, 0, a), Material = Enum.Material.Neon, Color = if k % 5 == 0 then Color3.new(1, 1, 1) else Color3.fromRGB(80, 230, 255) }, parent)
+	end
+	return hit
+end
+
 local function makeCrystal(at: CFrame, rng: Random, parent: Instance)
 	local m = Instance.new("Model")
 	m.Name = "Crystal"
@@ -185,6 +207,7 @@ Items.shield = makeShield
 Items.x2 = makeX2
 Items.fuel = makeFuel
 Items.ring = makeRing
+Items.boostRing = makeBoostRing
 Items.crystal = makeCrystal
 
 return Items

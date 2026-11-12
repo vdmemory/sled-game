@@ -257,6 +257,43 @@ function Config.stairSpeed(level: number): (number, number)
 	return v, v * Config.STAIR_SPREAD
 end
 
+-- Вираж-спираль (#44): длинный поворот 120–150° по широкому ледяному жёлобу с высокими бортами
+-- (сечение SPIRAL_PROFILE = жёлоб + ещё пояс SPIRAL_WALL) и стрелками-шевронами по внешнему краю.
+-- Начинается, когда трасса уже смотрит вбок (|курс| ≥ SPIRAL_MIN_YAW), поворачивает через ось в другую
+-- сторону до SPIRAL_MAX_HEADING (назад трасса не уходит) и сразу за ним — обычный поворот обратно.
+-- Пол — из CURVE_SUBSTEPS частей по SPIRAL_STEP / n: ступенька на краю дна 40·sin(0.75°)·tg(9°) ≈ 0.08.
+Config.SPIRAL_FROM_LEVEL = 6 -- с мира 2
+Config.SPIRAL_FROM_H = 400 -- не раньше (studs от старта)
+Config.SPIRAL_CHANCE_BASE = 0.12 -- шанс вместо обычного куска (когда курс подходит)…
+Config.SPIRAL_CHANCE_STEP = 0.002 -- …+ за уровень…
+Config.SPIRAL_CHANCE_MAX = 0.18 -- …до этого
+Config.SPIRAL_MIN_SPACING = 1800 -- studs между виражами
+Config.SPIRAL_ANGLE = { 120, 150 } -- градусов на вираж (меньше, если упирается в SPIRAL_MAX_HEADING)
+Config.SPIRAL_MIN_YAW = 32 -- курс перед виражом не меньше (иначе 120° не набрать)
+Config.SPIRAL_MAX_HEADING = 88 -- курс в конце виража не больше (трасса не поворачивает назад)
+Config.SPIRAL_STEP = 6 -- градусов на кусок CURVE_PIECE (радиус ≈ 134 studs)
+Config.SPIRAL_PITCH = { 7, 9 } -- уклон виража, градусы
+Config.SPIRAL_WALL = { 12, 84 } -- доп. пояс борта снаружи жёлоба: ширина, угол (борт выше на ~12 studs)
+Config.SPIRAL_SIGN_EVERY = 2 -- стрелка-шеврон на внешнем краю на каждом N-м куске
+function Config.spiralChance(level: number): number
+	if level < Config.SPIRAL_FROM_LEVEL then
+		return 0
+	end
+	return math.min(Config.SPIRAL_CHANCE_MAX, Config.SPIRAL_CHANCE_BASE + Config.SPIRAL_CHANCE_STEP * (level - Config.SPIRAL_FROM_LEVEL))
+end
+
+-- Ледяной тоннель с кольцами-ускорителями (#44, Track/IceTunnel): перед цепочкой островков (разгон
+-- перед прыжками; ускоритель островков всё равно задаёт окно скорости вылета) — короткий ледяной жёлоб
+-- под сводом, внутри ICE_TUNNEL_RINGS колец по центру (каждое = ускоритель, +BOOST_ADD), монеты между
+-- ними, лампы по бортам. Препятствий нет.
+Config.ICE_TUNNEL_FROM_LEVEL = 6 -- с мира 2
+Config.ICE_TUNNEL_CHANCE = 0.5 -- перед цепочкой островков
+Config.ICE_TUNNEL_LEN = 84 -- длина (два куска по половине: портал входа и выхода)
+Config.ICE_TUNNEL_PITCH = 6 -- уклон
+Config.ICE_TUNNEL_RINGS = 3 -- колец-ускорителей
+Config.ICE_TUNNEL_RING_R = 5.5 -- радиус кольца (датчик — квадрат 1.6·r)
+Config.ICE_TUNNEL_LAMP_STEP = 12 -- лампы по бортам через столько studs
+
 -- Оформление обычных кусков (#40, art): цветные кромки дна, флажки-слалом по бортам, ледяные арки
 Config.EDGE_STRIPES = true -- цветные полосы вдоль края дна (цвет мира)
 Config.SLALOM_CHANCE = 0.45 -- флажки-слалом на бортах пологого/крутого куска
@@ -1203,6 +1240,15 @@ Config.TUNABLES = {
 	{ "STAIR_SPEED_STEP", "Лестница: + скорость за уровень", "Трасса", 0, 10, 0.5 },
 	{ "STAIR_SPREAD", "Лестница: окно скорости ×", "Трасса", 1, 1.5, 0.01 },
 	{ "STAIR_END_MARGIN", "Лестница: запас до след. трамплина", "Трасса", 0, 40, 1 },
+	{ "SPIRAL_FROM_LEVEL", "Вираж-спираль: с уровня", "Трасса", 1, 50, 1 },
+	{ "SPIRAL_CHANCE_BASE", "Вираж: шанс", "Трасса", 0, 1, 0.01 },
+	{ "SPIRAL_CHANCE_MAX", "Вираж: макс. шанс", "Трасса", 0, 1, 0.01 },
+	{ "SPIRAL_MIN_SPACING", "Вираж: не чаще, studs", "Трасса", 200, 10000, 100 },
+	{ "SPIRAL_ANGLE.1", "Вираж: угол от, °", "Трасса", 60, 180, 5 },
+	{ "SPIRAL_ANGLE.2", "Вираж: угол до, °", "Трасса", 60, 180, 5 },
+	{ "ICE_TUNNEL_FROM_LEVEL", "Ледяной тоннель с кольцами: с уровня", "Трасса", 1, 50, 1 },
+	{ "ICE_TUNNEL_CHANCE", "Ледяной тоннель: шанс перед островками", "Трасса", 0, 1, 0.05 },
+	{ "ICE_TUNNEL_RINGS", "Ледяной тоннель: колец-ускорителей", "Трасса", 0, 6, 1 },
 	{ "ISLE_FROM_LEVEL", "Островки: с уровня", "Острова", 1, 50, 1 },
 	{ "ISLE_AT", "Островки: обязательная цепочка на доле уровня", "Острова", 0.2, 0.9, 0.01 },
 	{ "ISLE_CHANCE_BASE", "Островки: шанс доп. цепочки", "Острова", 0, 0.5, 0.005 },

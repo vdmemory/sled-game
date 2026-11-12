@@ -7,6 +7,9 @@
 --     лестницы нет тоннеля, долины, рядов препятствий;
 --   • гладкость стыков ходовой части (как scratchpad/smooth/check_tail, #40): ступенька > 0.2 stud /
 --     излом > 3° на 2 studs; намеренные разрывы — край кикера, островки, трамплины лестницы;
+--   • вираж-спираль (#44): не под тоннелем/долиной, курс не дальше SPIRAL_MAX_HEADING
+--     (снос вбок от оси — только в статистике: его держит MAX_DRIFT); ледяной тоннель: кольца-ускорители
+--     (тег Boost) построены, перед ним нет препятствий;
 --   • статистика по уровням: сколько новых участков и какая доля пути.
 --   python3 scripts/stand/run.py scripts/stand/track_levels.luau [--meshes]
 -- STAND_MESHES — шаблоны MeshTemplates на все имена MeshSpecs (как после загрузки мешей).
@@ -174,7 +177,47 @@ local function checkStairs(segs, level): (number, number, { string })
 	return series, coins, errs
 end
 
+------------------------------------------------------------------ вираж и ледяной тоннель (#44)
+local CS = game:GetService("CollectionService")
+local function checkSpiral(tr): (number, number, number, number, number, { string })
+	local segs = tr.segments
+	local errs = {}
+	local spirals, ice, maxYaw, maxDrift = 0, 0, 0, 0
+	for k, s in segs do
+		maxYaw = math.max(maxYaw, math.abs(math.deg(s.yaw)))
+		maxDrift = math.max(maxDrift, math.abs(tr.origin:PointToObjectSpace(s.cf.Position).X))
+		if s.kind == "spiral" then
+			if s.tunnel or s.valley then
+				table.insert(errs, "свод/долина на вираже")
+			end
+			if not segs[k - 1] or segs[k - 1].kind ~= "spiral" then
+				spirals += 1
+			end
+		elseif s.kind == "iceTunnel" and s.ice.half == 1 then
+			ice += 1
+		end
+	end
+	if maxYaw > Config.SPIRAL_MAX_HEADING + 0.5 then
+		table.insert(errs, string.format("курс %.0f°", maxYaw))
+	end
+	local rings = 0
+	for _, d in tr.folder:GetDescendants() do
+		if d:IsA("BasePart") and d.Name == "Boost" and CS:HasTag(d, "Boost") then
+			local m = d.Parent
+			local idx = tonumber(string.match(m.Name, "Segment_(%d+)"))
+			if idx and segs[idx + 1].kind == "iceTunnel" then
+				rings += 1
+			end
+		end
+	end
+	if rings ~= ice * Config.ICE_TUNNEL_RINGS then
+		table.insert(errs, string.format("колец %d вместо %d", rings, ice * Config.ICE_TUNNEL_RINGS))
+	end
+	return spirals, ice, rings, maxYaw, maxDrift, errs
+end
+
 local fails = 0
+local totalSpirals, totalIce = 0, 0
 local totalStairs, totalSmooth = 0, 0
 local worstStep = 0
 for level = tonumber(ARGS_FROM) or 1, tonumber(ARGS_TO) or 45 do
@@ -213,6 +256,13 @@ for level = tonumber(ARGS_FROM) or 1, tonumber(ARGS_TO) or 45 do
 		print("  ур.", level, "лестница:", e)
 		fails += 1
 	end
+	local spirals, ice, rings, maxYaw, maxDrift, perr = checkSpiral(tr)
+	totalSpirals += spirals
+	totalIce += ice
+	for _, e in perr do
+		print("  ур.", level, "вираж/тоннель:", e)
+		fails += 1
+	end
 	local bad, worst, byKind = smoothness(tr)
 	totalSmooth += bad
 	worstStep = math.max(worstStep, worst)
@@ -221,10 +271,12 @@ for level = tonumber(ARGS_FROM) or 1, tonumber(ARGS_TO) or 45 do
 		table.insert(bk, k .. "×" .. v)
 	end
 	local stairShare = ((by.stair or 0) + (by.stairLand or 0)) / total * 100
-	print(string.format("ур.%2d мир %d тема %d  кусков %4d  ошибок %d  лестниц %d (%.0f%% пути, монет %d)  стыков с нарушениями %d %s",
-		level, Config.worldOf(level), Config.themeOf(level), #segs, errs, series, stairShare, coins, bad, table.concat(bk, " ")))
+	local spiralShare = (by.spiral or 0) / total * 100
+	print(string.format("ур.%2d мир %d тема %d  кусков %4d  ошибок %d  лестниц %d (%.0f%% пути, монет %d)  виражей %d (%.0f%%)  ледяных тоннелей %d (колец %d)  курс ≤ %.0f°  снос ≤ %.0f  стыков с нарушениями %d %s",
+		level, Config.worldOf(level), Config.themeOf(level), #segs, errs, series, stairShare, coins, spirals, spiralShare, ice, rings, maxYaw, maxDrift, bad, table.concat(bk, " ")))
 	tr:destroy()
 end
+print(string.format("Итого: виражей %d, ледяных тоннелей %d", totalSpirals, totalIce))
 print(string.format("Итого: лестниц %d, стыков с нарушениями %d, худшая ступенька %.2f stud, ошибок %d", totalStairs, totalSmooth, worstStep, fails))
 if fails > 0 then
 	error("есть ошибки сборки трасс")

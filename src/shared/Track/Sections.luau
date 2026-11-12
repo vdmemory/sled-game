@@ -29,6 +29,9 @@ local function profile(banks: { { width: number, angle: number } })
 end
 local SNOW_PROFILE = profile({ { width = 14, angle = 14 }, { width = 14, angle = 32 } })
 local CHUTE_PROFILE = profile({ { width = 12, angle = 22 }, { width = 14, angle = 48 }, { width = 14, angle = 74 } })
+-- Вираж-спираль (#44): тот же жёлоб (ходовая часть и первые пояса совпадают — стык без ступеньки) и
+-- ещё один почти отвесный пояс снаружи — борт выше, на вираже не вылетишь
+local SPIRAL_PROFILE = profile({ { width = 12, angle = 22 }, { width = 14, angle = 48 }, { width = 14, angle = 74 }, { width = Config.SPIRAL_WALL[1], angle = Config.SPIRAL_WALL[2] } })
 local ROAD_PROFILE = profile({}) -- дорога: ровная площадка без бортов
 local LAKE_PROFILE = { banks = {}, out = W * 1.5, top = 0, floorW = W * 3 } -- ледяное озеро после финиша
 local BANK_OUT, BANK_TOP = SNOW_PROFILE.out, SNOW_PROFILE.top
@@ -182,6 +185,7 @@ end
 Sections.W = W
 Sections.SNOW_PROFILE = SNOW_PROFILE
 Sections.CHUTE_PROFILE = CHUTE_PROFILE
+Sections.SPIRAL_PROFILE = SPIRAL_PROFILE
 Sections.ROAD_PROFILE = ROAD_PROFILE
 Sections.LAKE_PROFILE = LAKE_PROFILE
 Sections.BANK_OUT, Sections.BANK_TOP = BANK_OUT, BANK_TOP
