@@ -249,6 +249,39 @@ function Config.isleSpeed(level: number): (number, number)
 	return v, v * Config.ISLE_SPEED_SPREAD
 end
 
+-- Развилка у островков (#42, Track/Fork): с FORK_FROM_LEVEL часть цепочек островков получает
+-- ледяной мост сбоку (сторона FORK_SIDE: −1 — слева). Разгон перед прыжком шире (FORK_IN_LEN), на
+-- FORK_SPLIT_AT его делит разделитель: по центру — ускоритель и островки (монет × FORK_RISK_COINS,
+-- FORK_RISK_GEMS гемов), сбоку — мост (без монет и препятствий, с бортами и ускорителями). Обе ветки
+-- сходятся на склоне приземления (длиннее — FORK_LAND_LEN, воронка FORK_MERGE_LEN).
+Config.FORK_FROM_LEVEL = 6 -- с этого уровня (мир 2)
+Config.FORK_CHANCE_BASE = 0.5 -- доля цепочек островков с развилкой на FORK_FROM_LEVEL…
+Config.FORK_CHANCE_STEP = 0.01 -- …+ за уровень…
+Config.FORK_CHANCE_MAX = 0.7 -- …до этого
+Config.FORK_INTRO = 1 -- 1 — первая цепочка уровня FORK_FROM_LEVEL всегда с развилкой (знакомство)
+Config.FORK_SIDE = -1 -- сторона моста: −1 слева, 1 справа (вывеска подстраивается)
+Config.FORK_BRIDGE_X = 65 -- центр моста от оси трассы, studs
+Config.FORK_BRIDGE_W = 30 -- ширина настила (2 полосы + запас на снос руля)
+Config.FORK_ISLE_RIM = 6 -- островки цепочки с мостом не шире коридора больше чем на это (зазор до моста)
+Config.FORK_IN_LEN = 200 -- длина разгона перед прыжком у развилки (обычно ISLE_IN[2])
+Config.FORK_SPLIT_AT = 160 -- где на разгоне начинается разделитель веток, studs от начала
+Config.FORK_LAND_LEN = 130 -- склон приземления у развилки (обычно 90)
+Config.FORK_MERGE_LEN = 110 -- воронка: борт моста сводится к коридору за столько studs склона
+Config.FORK_PITCH = { 1, 12 } -- уклон средней части моста: от / до (иначе развилки нет)
+Config.FORK_BOOST_EVERY = 110 -- ускоритель на мосту каждые столько studs (пологий мост держит скорость)
+Config.FORK_RISK_COINS = 2 -- монет дугой над пропастью × это (вывеска «РИСК ×2»)
+Config.FORK_RISK_GEMS = 1 -- гемов над пропастью на рисковой ветке
+Config.FORK_POST_STEP = 16 -- шаг столбиков перил моста
+Config.FORK_PYLON_STEP = 160 -- шаг ледяных опор под мостом
+Config.FORK_SIGN_SAFE = "БЕЗОПАСНО"
+Config.FORK_SIGN_RISK = "РИСК ×2"
+function Config.forkChance(level: number): number
+	if level < Config.FORK_FROM_LEVEL then
+		return 0
+	end
+	return math.min(Config.FORK_CHANCE_MAX, Config.FORK_CHANCE_BASE + Config.FORK_CHANCE_STEP * (level - Config.FORK_FROM_LEVEL))
+end
+
 -- Волны-бугры (#40): серия «спуск WAVE_DOWN → подъём WAVE_UP» со скруглёнными стыками
 Config.WAVE_FROM_LEVEL = 3
 Config.WAVE_CHANCE = 0.05 -- вместо обычного куска (свой генератор, раскладка уровня не сдвигается)
@@ -1442,6 +1475,14 @@ Config.TUNABLES = {
 	{ "ISLE_LAND_MARGIN", "Островки: запас долёта, studs", "Острова", 2, 60, 1 },
 	{ "ISLE_GAP_MIN", "Островки: мин. зазор, studs", "Острова", 4, 100, 1 },
 	{ "ISLE_BONUS_CHANCE", "Островки: шанс бонуса", "Острова", 0, 1, 0.05 },
+	{ "FORK_FROM_LEVEL", "Развилка-мост: с уровня", "Острова", 1, 50, 1 },
+	{ "FORK_CHANCE_BASE", "Развилка-мост: доля цепочек", "Острова", 0, 1, 0.05 },
+	{ "FORK_CHANCE_STEP", "Развилка-мост: + доля за уровень", "Острова", 0, 0.1, 0.005 },
+	{ "FORK_CHANCE_MAX", "Развилка-мост: макс. доля", "Острова", 0, 1, 0.05 },
+	{ "FORK_INTRO", "Развилка-мост: первая цепочка ур. «с» — всегда (0/1)", "Острова", 0, 1, 1 },
+	{ "FORK_BOOST_EVERY", "Мост: ускоритель каждые, studs", "Острова", 40, 400, 10 },
+	{ "FORK_RISK_COINS", "Развилка: монет над пропастью ×", "Острова", 1, 4, 1 },
+	{ "FORK_RISK_GEMS", "Развилка: гемов над пропастью", "Острова", 0, 3, 1 },
 
 	{ "AC_SPEED_MULT", "Предел скорости: × огибающей", "Античит", 1, 3, 0.05 },
 	{ "AC_SPEED_ADD", "Предел скорости: + studs/с", "Античит", 0, 200, 5 },

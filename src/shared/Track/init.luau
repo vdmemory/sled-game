@@ -24,6 +24,7 @@ local Valley = require(script.Valley)
 local Milestones = require(script.Milestones)
 local Stairs = require(script.Stairs)
 local IceTunnel = require(script.IceTunnel)
+local Fork = require(script.Fork)
 
 local part, deco = Props.part, Props.deco
 local W = Sections.W
@@ -138,6 +139,7 @@ function Track:buildSegment(i: number)
 	if special then
 		local kit = {
 			coin = makeCoin,
+			gem = makeGem,
 			shield = makeShield,
 			x2 = makeX2,
 			fuel = makeFuel,
@@ -147,11 +149,22 @@ function Track:buildSegment(i: number)
 			end,
 		}
 		self.clears[i] = if seg.kind == "isle" then Islands.buildIsle(self, seg, m, rng, kit) else Islands.buildGap(self, seg, m, rng, kit)
+		if seg.fork then
+			Fork.bridge(self, seg, m) -- ледяной мост развилки сбоку от цепочки (#42), без Random
+		end
 	else
 		buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme, seg.kind == "landing" or seg.kind == "stairLand", seg)
 	end
 	if seg.kind == "isleIn" then
 		Islands.buildIn(self, seg, m)
+	end
+	if seg.open then
+		-- развилка (#42): пол к мосту, разделитель и вывеска на разгоне, воронка на приземлении
+		if seg.kind == "isleIn" then
+			Fork.buildIn(self, seg, m)
+		else
+			Fork.buildLand(self, seg, m)
+		end
 	end
 	if seg.stair then
 		Stairs.build(self.theme, seg, m, { coin = makeCoin, x2 = makeX2 }) -- трамплин-лестница (#43)
@@ -212,6 +225,11 @@ function Track:buildSegment(i: number)
 			local tmp = Instance.new("Folder")
 			dressSegment(self.theme, rng, cf, visLen, tmp, prof)
 			Valley.prune(seg, cf, prof, tmp, m)
+		elseif seg.open then
+			-- развилка (#42): со стороны моста — пол, декор обочины убираем (те же Random)
+			local tmp = Instance.new("Folder")
+			dressSegment(self.theme, rng, cf, visLen, tmp, prof)
+			Fork.prune(seg, cf, tmp, m)
 		else
 			dressSegment(self.theme, rng, cf, visLen, m, prof)
 		end
@@ -225,6 +243,9 @@ function Track:buildSegment(i: number)
 		local every = math.floor(Config.FENCE_EVERY)
 		for _, side in { -1, 1 } do
 			local onCliff = seg.valley == side or seg.valley == 2
+			if seg.open == side then
+				continue -- развилка (#42): с этой стороны пол к мосту
+			end
 			if onCliff or (every > 0 and (i + (if side > 0 then 1 else 0)) % every == 0) then
 				local x = if onCliff then prof.out + Config.VALLEY_SHOULDER - 2 else prof.out + 6
 				Props.fenceRun(cf * CFrame.new(0, prof.top - 0.2, 0), side * x, visLen, Config.FENCE_STEP, m)
@@ -233,7 +254,8 @@ function Track:buildSegment(i: number)
 	end
 
 	-- Канатная дорога над местом приземления: кабинки едут поперёк трассы
-	if seg.kind == "landing" and self.theme ~= 2 and rng:NextNumber() < Config.GONDOLA_CHANCE then
+	-- (у развилки #42 не строим: опора встала бы на пол к мосту; Random тратится как раньше)
+	if seg.kind == "landing" and self.theme ~= 2 and rng:NextNumber() < Config.GONDOLA_CHANCE and not seg.open then
 		local z = 42
 		local cableY = 34
 		local center = cf * CFrame.new(0, 0, -z)
@@ -591,8 +613,28 @@ function Track:rescueCFrame(pos: Vector3): CFrame?
 	end
 	local rel = seg.cf:PointToObjectSpace(pos)
 	local t = math.clamp(-rel.Z, 2, math.max(2, seg.length - 2))
-	local x = math.clamp(rel.X, -(W / 2 - Config.RESCUE_INSET), W / 2 - Config.RESCUE_INSET)
+	local lo, hi = Track.floorSpan(seg)
+	local x = math.clamp(rel.X, lo + Config.RESCUE_INSET, hi - Config.RESCUE_INSET)
 	return seg.cf * CFrame.new(x, Config.RESCUE_LIFT, -t)
+end
+
+-- Ходовая часть куска поперёк (x от оси): обычно ±W/2; у развилки (#42) на разгоне, кусках цепочки и
+-- приземлении — до внешнего края моста с его стороны (там тоже трасса, а не вылет)
+function Track.floorSpan(seg: any?): (number, number)
+	local fork = seg and seg.fork
+	if not fork then
+		return -W / 2, W / 2
+	end
+	if fork.side < 0 then
+		return -fork.outer, W / 2
+	end
+	return -W / 2, fork.outer
+end
+
+-- Насколько игрок (x — смещение вбок из progressOf) вышел за ходовую часть текущего куска; 0 — внутри
+function Track:sideOut(x: number): number
+	local lo, hi = Track.floorSpan(self.segments[self.hint])
+	return math.max(0, lo - x, x - hi)
 end
 
 function Track:destroy()

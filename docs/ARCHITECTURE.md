@@ -66,6 +66,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Track/Valley` | 150 | гребень над долиной: `build` — обрыв, дно, островки по миру; `prune` — убрать декор обочины над обрывом; участки помечает `Profile` (`seg.valley`) |
 | `shared/Track/Milestones` | 105 | рубежи дистанции (#61, `Config.MILESTONES`): `at` — рубежи на куске, `isBig`, `build` — арка-декор «N м» (модель `Milestone`, атрибут `Meters`; без коллизий и Random, отпечаток раскладки не меняется); награду считает `server/Runs` (`milestoneCheck` по `run.distance`) |
 | `shared/Track/Stairs` | 171 | трамплин-лестница (#43): `plan` — ступени, длины кусков, дуги монет (баллистика `Islands` со своим трамплином), `build` — трамплин с окном скорости, флажки, монеты, x2; `bonusAt` — гем/кристалл в дуге; куски `stair`/`stairLand` ставит `Profile` |
+| `shared/Track/Fork` | 347 | развилка у островков (#42): `plan` — профиль ледяного моста по плану островков (без Instance), `yAt`; `bridge` — настил, борта, ускорители на кусках `gap`/`isle`; `buildIn`/`buildLand` — пол к мосту, разделитель, вывеска, воронка; `prune` — декор обочины со стороны моста. Куски помечает `Profile` (`seg.fork`, `seg.open`) |
 | `shared/Track/IceTunnel` | 60 | ледяной тоннель с кольцами-ускорителями (#44): `build` — кольца `Items.boostRing` (тег `Boost`), монеты, лампы; свод — `Tunnel.build` с видом `Tunnel.ICE`; куски `iceTunnel` (`seg.ice`) ставит `Profile` перед островками |
 | `shared/Track/Tunnel` | 140 | тоннель над поворотом (#65): `build` — кольцо свода (меш `tunnel_vault` или блоки), порталы, свет, вид по миру; куски помечает `Profile` (`seg.tunnel`) |
 | `shared/Props/init` | 16 | фасад: подключает модули категорий, отдаёт таблицу `Props` |
@@ -180,6 +181,13 @@ GitHub Actions публикует его в Roblox через Open Cloud.
   ледяной тоннель — куски `iceTunnel` с заранее заданным `seg.tunnel` (`markTunnels` их не трогает: вид не в
   `TUNNEL_KINDS`). Ускорители: клиент гасит повтор касания той же части 0.4 с, сервер считает каждую часть
   `Boost` один раз (`run.boostPads`).
+- Развилка-мост (#42): `Profile.islands` → `Fork.plan` (профиль настила в системе цепочки: `fork.origin` —
+  конец разгона, курс цепочки; `fork.h0` — путь там). Куски `isleIn`/`landing` развилки — `seg.fork` +
+  `seg.open` (сторона без бортов: `Sections.build` её пропускает, `Fork.buildIn/buildLand` строят пол и
+  борта), куски `gap`/`isle` — `seg.fork` (настил части пути куска, `Fork.bridge`). Мост параллелен оси →
+  `progressOf` даёт верный h; `Track.floorSpan(seg)` / `Track:sideOut(x)` — ходовая часть поперёк (у
+  развилки до края моста) для `Runs.rescueCheck` и `rescueCFrame`. Выбор развилки — `Profile.forkRoll`
+  (без Random): уровни без развилки не меняются.
 - `Track:progressOf` ищет кусок в окне hint −8…+40 (куски пола поворота и переходы короткие).
 - `SafeLine.plan` пропускает `fillet` при проверке «после приземления первые 60 studs чистые».
 - `SledController`: «подсадка» на ступеньку ≤ `STEP_UP_MAX` впереди (луч из `STEP_PROBE`, та же
