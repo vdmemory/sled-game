@@ -40,7 +40,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `server/Environment` | 48 | Lighting, облака, цветокоррекция, bloom |
 | `server/Sleds` | 145 | `makeSled` (сиденье, модель/редкость/тиры, след, ракеты, крепления), `ragdoll`, `setRider` |
 | `server/PlayerState` | 158 | `sync` (профиль → атрибуты), `onPlayerAdded`, `postLevel` (OrderedDataStore `BestLevel_v1`), `TutorialStep`, `SetSetting` |
-| `server/Runs` | 690 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, финиш, остановка, вылет), таймаут без выстрела `IDLE_LAUNCH_TIMEOUT` → `endRun("idle")` (#20, custom-событие `RunIdle`), `onLeave`/`endAll` (выход/закрытие сервера посреди заезда → `endRun(..., leaving)` до `Data.release`/сохранения, #21, custom `RunLeft` с % трассы; события — `docs/METRICS.md`) |
+| `server/Runs` | 690 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, рубежи дистанции `milestoneCheck` #61, финиш, остановка, вылет), таймаут без выстрела `IDLE_LAUNCH_TIMEOUT` → `endRun("idle")` (#20, custom-событие `RunIdle`), `onLeave`/`endAll` (выход/закрытие сервера посреди заезда → `endRun(..., leaving)` до `Data.release`/сохранения, #21, custom `RunLeft` с % трассы; события — `docs/METRICS.md`) |
 | `server/RunEvents` | 218 | `Launch`, `Air`, `Crash`, `Smash`, `Trick` |
 | `server/Pickups` | 190 | монеты (касание, магнит `CoinGrab`, комбо), `PowerUp` (x2, кольца, канистра, ускорители), гемы, кристалл |
 | `server/Podium` | 304 | пьедестал топ-3 недели (#48): аватары `CreateHumanoidModelFromUserIdAsync` (pcall, манекен при ошибке, кэш `PODIUM.CACHE`), поза/анимации на серверном `Animator`, таблички, «?» пустых ступеней; по смене `ReplicatedStorage.WeeklyBoard` |
@@ -53,7 +53,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `client/SledController` | 415 | посадка/высадка, кадр физики (скорость вдоль склона, руль, подсадка, прыжок, приземление) |
 | `client/Sled/State` | 133 | общее состояние санок (`st.speed`, `st.sled`, `st.trick`…) и объекты под контроллером (`State`, `Sfx`, `RequestLaunch`, `RocketInput`, `TrickPopup`) |
 | `client/Sled/Input` | 109 | руль: клавиатура, PlayerModule, свайп с кольцом (`Stick`) |
-| `client/Sled/Launch` | 117 | рогатка: натяжение, выстрел `Launch(power)` |
+| `client/Sled/Launch` | 130 | рогатка: натяжение (`Launch("pull")`), вход в зону идеального запуска (`st.zoneAt`, `State.PerfectAt`), выстрел `Launch(power, zoneAge)` |
 | `client/Sled/Tricks` | 345 | ручные и авто-трюки, `Tricks.land` (итог полёта), `Tricks.air` (кадр в воздухе), кнопки прыжка/ракеты |
 | `client/Sled/Contacts` | 386 | касания (авария, разбивание, щит, бонусы, гемы, кристалл, ускорители), `Contacts.scan` (монеты по отрезку пути, магнит) |
 | `shared/Track/init` | 574 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `rescueCFrame`, `destroy` |
@@ -63,6 +63,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Track/Dress` | 324 | оформление миров вдоль трассы и разметка на ней |
 | `shared/Track/Items` | 189 | монеты, гемы, магнит, бонусы, кристалл, `tagObstacle` |
 | `shared/Track/Valley` | 150 | гребень над долиной: `build` — обрыв, дно, островки по миру; `prune` — убрать декор обочины над обрывом; участки помечает `Profile` (`seg.valley`) |
+| `shared/Track/Milestones` | 105 | рубежи дистанции (#61, `Config.MILESTONES`): `at` — рубежи на куске, `isBig`, `build` — арка-декор «N м» (модель `Milestone`, атрибут `Meters`; без коллизий и Random, отпечаток раскладки не меняется); награду считает `server/Runs` (`milestoneCheck` по `run.distance`) |
 | `shared/Track/Tunnel` | 140 | тоннель над поворотом (#65): `build` — кольцо свода (меш `tunnel_vault` или блоки), порталы, свет, вид по миру; куски помечает `Profile` (`seg.tunnel`) |
 | `shared/Props/init` | 16 | фасад: подключает модули категорий, отдаёт таблицу `Props` |
 | `shared/Props/Base` | 103 | `part`, `deco`, `pick`, надписи, колёса, общие цвета |
@@ -99,7 +100,8 @@ GitHub Actions публикует его в Roblox через Open Cloud.
    `Track.new(slot, level, bestH)` и санки `makeSled` (невидимое `VehicleSeat` + модель из
    `SledModels` + декор тиров), сажает персонажа.
 3. Клиент (`SledController`) видит свои санки в `workspace.Sleds` (атрибут `Owner`), даёт оттянуть
-   рогатку → `Launch(power)`. Сервер отпускает санки и отдаёт network ownership клиенту.
+   рогатку → `Launch(power, zoneAge)`. Сервер решает идеальный запуск (#58, атрибут саней
+   `PerfectLaunch`, скорость — атрибут `LaunchSpeed`), отпускает санки и отдаёт network ownership клиенту.
 4. Физику считает клиент (модель «импульса»: гравитация вдоль склона − трение − сопротивление,
    ракета, ускорители, бонусы саней). Касания препятствий, монет, гемов, кристаллов, магнитов
    ловит клиент и сообщает серверу.
@@ -217,11 +219,11 @@ RemoteFunction клиент вызывает **только** через `UI.inv
 | Имя | Тип | Направление / смысл |
 | --- | --- | --- |
 | `StartRun` | Event | клиент → начать заезд |
-| `Launch` | Event | клиент → выстрел рогатки (сила 0..1) |
+| `Launch` | Event | клиент → выстрел рогатки `(сила 0..1, zoneAge)`: zoneAge — с от входа натяга в зону «ИДЕАЛЬНО» (#58, `nil` — не входил); `Launch("pull")` — начал натягивать (сервер запоминает `run.pullAt` для сверки тайминга, `AntiCheat.perfectLaunch`) |
 | `Crash` | Event | клиент → врезался (сервер делает ragdoll) |
 | `Air`, `Trick`, `Smash`, `Crystal`, `CoinGrab` | Event | клиент → время в воздухе, трюки за полёт (`Trick(list { id, count }, airTime)` — сервер проверяет id, count ≤ 5, оборотов ≤ влезающих в серверный полёт), разбил препятствие (`Smash(model)` — модель `Breakable`), кристалл, монета магнитом; проверки — `AntiCheat` |
 | `Restart`, `Back` | Event | клиент → заново / в лобби с рогатки |
-| `RunEnded` | Event | сервер → итог заезда: `reason`, `percent`, `coins`, `bonus`, `distance`, `length`, `level`, `newBest`, `mult`, `gems`, `week`, `parts` — разбивка `coins` для чипов `{ track, air, tricks, bonus }` (сумма = `coins`, #71) |
+| `RunEnded` | Event | сервер → итог заезда: `reason`, `percent`, `coins`, `bonus`, `distance`, `length`, `level`, `newBest`, `mult`, `gems`, `week`, `parts` — разбивка `coins` для чипов `{ track, air, tricks, bonus, milestones, record }` (сумма = `coins`, #71; рубежи #61, рекорд #59), `milestones` — рубежей пройдено |
 | `TaskDone` | Event | сервер → задание выполнено |
 | `Rescue` | Event | сервер → мягкий возврат: `(CFrame на дне куска, доля скорости)`; клиент переставляет свои санки, сбрасывает полёт и трюки (#50) |
 | `SetSetting` | Event | клиент → настройка (Sfx/Music/Snow/Shadows/Ghost) |
@@ -262,7 +264,7 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LevelLength`, `ThemeName`, `*Level` (апгрейды), `Sled`, `SledRarity`, `OwnedSleds`, `Trail`, `OwnedTrails`, `Set*` (настройки), `Tutorial` (биты шагов обучения), `Runs` (`Stats.Runs`),
 `Rewards` (JSON: задания, подарки, сундук; `sessionStart`, `big` — индекс большого подарка), в заезде — `InRun`, `Launched`, `RunDistance`,
-`RunLevel` (уровень заезда, с фармом — уровень мира; HUD: баннеры зон по `Profile.build` и аватары тех, кто едет тот же уровень, #71), `RunOrigin` (Vector3 начала трассы заезда — от него пишется и играется призрак, #62), `RunCoins`, `RunGems`, `Combo`, `Finished`; лидерборд недели — `Title`, `TitleUntil`, `WeeklyMe` (JSON), у
+`RunLevel` (уровень заезда, с фармом — уровень мира; HUD: баннеры зон по `Profile.build` и аватары тех, кто едет тот же уровень, #71), `RunOrigin` (Vector3 начала трассы заезда — от него пишется и играется призрак, #62), `RunCoins`, `RunGems`, `Combo`, `Finished`; лидерборд недели — `Title`, `TitleUntil`, `WeeklyMe` (JSON), у Также `RunMilestone` (последний засчитанный рубеж, м — всплывашка HUD, #61).
 `ReplicatedStorage` — `WeeklyBoard` (JSON). Только у клиента (ставит сам, не реплицируется):
 `LobbyTheme` (тема витрины лобби, `LobbyScene` → `PostFX`/`Effects`), `GfxChoice` (выбор графики в ⚙:
 0 авто, 1–3; на сессию), `AutoLowFps` (`Effects`: FPS < `GRAPHICS.FPS_LOW`), `GfxTier` (итоговый уровень

@@ -37,12 +37,13 @@
 | Вид | Имя | Смысл |
 | --- | --- | --- |
 | Onboarding funnel | 1 Joined → 2 FirstRun → 3 ThirdRun → 4 FirstUpgrade → 5 FinishedLevel → 6 World2 → 7 FirstPurchase | где отваливаются новички; шаг пишется один раз на игрока (`Stats.Onboard`) |
-| Economy Source | Coins/Gems: `Run`/`Finish` (Gameplay), `Task`/`TaskChest`/`Gift`/`LobbyChest` (Reward) | откуда приходят валюты; поля: World, Level |
+| Economy Source | Coins/Gems: `Run`/`Finish` (Gameplay), `Task`/`TaskChest`/`Gift`/`LobbyChest` (Reward) | откуда приходят валюты; поля: World, Level; у монет `Run` поле 3 `NewBest` — заезд с бонусом рекорда (#59) |
 | Economy Sink | Coins/Gems: `Upgrade:<имя>`, `Sled:<id:редкость>`, `Trail:<id>` (Shop) | куда уходят; поле 3 — категория |
 | Custom (значение) | `RunDistance`, `RunPercent`, `SessionMinutes`, `RobuxPurchase` | средние/суммы по дням |
 | Custom (счётчик) | `RunFinished`, `RunCrashed`, `RunStopped` | исходы заездов → доля финишей |
 | Custom (значение) | `RunLeft` (% трассы; 0 — вышел у рогатки, не выстрелив) | вышел из игры посреди заезда (#21) — ключевой сигнал отвала; монеты/гемы такого заезда — Economy Source `Run` |
 | Custom (счётчик) | `RunIdle` | сел у рогатки и не выстрелил за `IDLE_LAUNCH_TIMEOUT` (#20) — не понял запуск или AFK |
+| Custom (значение) | `PerfectLaunch` (1 — идеальный запуск, 0 — обычный; на каждый выстрел) | доля идеальных запусков (#58) = сумма / число событий; цель ≈ 1/3 |
 | Custom (значение) | `AntiCheatFlag` (число флагов) | заезд отменён античитом; рост = чит или ложные срабатывания |
 | Custom (значение) | `CheatSuspect` (флаги), `TitleAwarded` (место 1–3) | заезд не пошёл в лидерборд недели; выдан титул недели (#26) |
 Счётчики на игроке в сейве: `Stats = { Runs, Finishes, Onboard, Purchases, Playtime }`.

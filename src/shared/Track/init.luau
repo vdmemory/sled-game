@@ -21,6 +21,7 @@ local Dress = require(script.Dress)
 local Items = require(script.Items)
 local Tunnel = require(script.Tunnel)
 local Valley = require(script.Valley)
+local Milestones = require(script.Milestones)
 
 local part, deco = Props.part, Props.deco
 local W = Sections.W
@@ -418,6 +419,9 @@ function Track:buildSegment(i: number)
 			}, m)
 		end
 	end
+
+	-- Арки рубежей дистанции (#61): декор без Random — раскладка куска не меняется
+	Milestones.build(seg, cf, prof, self.length, m)
 
 	if i == #self.segments - 1 and not self.preview then
 		part("Part", {

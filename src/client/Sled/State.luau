@@ -44,6 +44,7 @@ local State = {
 	pullStartY = 0,
 	keyPull = false,
 	pullAmount = 0,
+	zoneAt = nil :: number?, -- os.clock() входа натяга в зону «ИДЕАЛЬНО» (#58), nil — не входил
 	baseCF = nil :: CFrame?,
 	-- Авария и подбор (client/Sled/Contacts)
 	crashed = false,
@@ -78,6 +79,7 @@ function State.init(controller: Instance)
 	local rocketOn = value("RocketOn", "BoolValue")
 	local meterValue = value("Meter") -- шкала силы рогатки 0..1
 	local awaitingLaunch = value("AwaitingLaunch", "BoolValue")
+	local perfectAtValue = value("PerfectAt") -- os.clock() входа натяга в зону «ИДЕАЛЬНО» (#58), 0 — нет
 	local magnetLeft = value("MagnetLeft") -- сек до конца магнита (HUD показывает иконку)
 	local shieldOn = value("ShieldOn", "BoolValue") -- щит: одно столкновение без аварии
 	local x2Left = value("X2Left") -- сек до конца «x2 монеты»
@@ -119,6 +121,7 @@ function State.init(controller: Instance)
 	State.rocketOn = rocketOn
 	State.meterValue = meterValue
 	State.awaitingLaunch = awaitingLaunch
+	State.perfectAtValue = perfectAtValue
 	State.magnetLeft = magnetLeft
 	State.shieldOn = shieldOn
 	State.x2Left = x2Left
