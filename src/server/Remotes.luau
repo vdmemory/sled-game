@@ -33,6 +33,9 @@ local Remotes = {
 	WorldAction = remote("RemoteFunction", "WorldAction") :: RemoteFunction, -- фарм пройденного мира / пропуск мира за Robux
 	TutorialStep = remote("RemoteEvent", "TutorialStep") :: RemoteEvent, -- обучение: шаг i пройден (0 — пропустить всё)
 	Rescue = remote("RemoteEvent", "Rescue") :: RemoteEvent, -- сервер → клиент: вернуть сани на трассу (CFrame, доля скорости)
+	-- призрак рекорда (#62, server/Ghosts): запрос записи уровня и обмен «пришли запись» ↔ запись
+	GetGhost = remote("RemoteFunction", "GetGhost") :: RemoteFunction, -- (level) → запись | false
+	Ghost = remote("RemoteEvent", "Ghost") :: RemoteEvent, -- сервер → клиент: (level) рекорд; клиент → сервер: (level, dt, data)
 }
 
 return Remotes

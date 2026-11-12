@@ -891,7 +891,7 @@ local setWin = UI.new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Position = UDim2.fromScale(0.5, 0.42), -- выше карточек апгрейдов, чтобы их значки не налезали
 
-	Size = UDim2.fromOffset(470, 270),
+	Size = UDim2.fromOffset(570, 270), -- 5 кнопок по 84 через 106 (+ подписи 110)
 	BackgroundColor3 = Color3.fromRGB(26, 44, 86),
 	BackgroundTransparency = 0,
 	Visible = false,
@@ -932,10 +932,11 @@ local function toggle(key: string, icon: string, caption: string, x: number)
 	player:GetAttributeChangedSignal("Set" .. key):Connect(paint)
 	paint()
 end
-toggle("Sfx", "speaker", "Звуки", -159)
-toggle("Music", "music", "Музыка", -53)
-toggle("Snow", "snowflake", "Снегопад", 53)
-toggle("Shadows", "moon", "Тени", 159)
+toggle("Sfx", "speaker", "Звуки", -212)
+toggle("Music", "music", "Музыка", -106)
+toggle("Snow", "snowflake", "Снегопад", 0)
+toggle("Shadows", "moon", "Тени", 106)
+toggle("Ghost", "stopwatch", "Призрак", 212) -- призрак своего рекорда в заезде (#62, client/Ghost)
 gear.Activated:Connect(function()
 	open(setWin)
 end)

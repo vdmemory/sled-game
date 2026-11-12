@@ -18,6 +18,7 @@ local Weekly = require(script.Parent.Weekly)
 local Remotes = require(script.Parent.Remotes)
 local Sleds = require(script.Parent.Sleds)
 local PlayerState = require(script.Parent.PlayerState)
+local Ghosts = require(script.Parent.Ghosts) -- призрак рекорда (#62)
 
 local syncPlayer = PlayerState.sync
 local postLevel = PlayerState.postLevel
@@ -266,6 +267,11 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 		Analytics.custom(player, "RunLeft", 0)
 	end
 
+	-- призрак рекорда (#62): заезд лучше сохранённого — сервер просит у клиента запись траектории
+	if d and not leaving and not quiet and not cheat then
+		Ghosts.onRunEnd(player, run, dist, finished)
+	end
+
 	player:SetAttribute("InRun", false)
 	player:SetAttribute("Launched", false)
 	if leaving then
@@ -353,6 +359,7 @@ startRun = function(player: Player)
 	-- игроков реплицируются всем)
 	player:SetAttribute("RunLevel", level)
 	player:SetAttribute("LevelLength", track.length)
+	player:SetAttribute("RunOrigin", track.origin.Position) -- начало трассы: от него пишется и играется призрак (#62)
 	local startCF = track:startCFrame()
 	local sled = makeSled(player, startCF)
 

@@ -47,6 +47,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `server/Shop` | 186 | `SledAction`, `TrailAction`, `RewardAction`, `BuyUpgrade`, `WorldAction` |
 | `server/Purchases` | 71 | геймпасс x2, `PRODUCT_HANDLERS`, `ProcessReceipt` (дедуп чеков) |
 | `server/DevTools` | 110 | `DevAction` (только `game.CreatorId`) |
+| `server/Ghosts` | 266 | призрак рекорда (#62): `GetGhost` (чтение `Ghost_v1`, кэш одной записи на игрока), `onRunEnd` (из `endRun`: рекорд? → `Ghost(level)` клиенту), приём записи `Ghost(level, dt, data)` — проверка и `UpdateAsync` |
+| `client/Ghost` | 343 | запись траектории с выстрела, сани-призрак (модель надетых саней, прозрачная, без коллизий, подпись «Твой рекорд»), HUD «±N м к рекорду» (`UILayout.ghost`/`ghostPhone`), настройка `SetGhost` |
+| `shared/GhostCodec` | 115 | сжатие записи: квантование, разности, zigzag-varint в base64url-символы; `encode`/`decode`/`quantize` |
 | `client/SledController` | 415 | посадка/высадка, кадр физики (скорость вдоль склона, руль, подсадка, прыжок, приземление) |
 | `client/Sled/State` | 133 | общее состояние санок (`st.speed`, `st.sled`, `st.trick`…) и объекты под контроллером (`State`, `Sfx`, `RequestLaunch`, `RocketInput`, `TrickPopup`) |
 | `client/Sled/Input` | 109 | руль: клавиатура, PlayerModule, свайп с кольцом (`Stick`) |
@@ -221,7 +224,9 @@ RemoteFunction клиент вызывает **только** через `UI.inv
 | `RunEnded` | Event | сервер → итог заезда: `reason`, `percent`, `coins`, `bonus`, `distance`, `length`, `level`, `newBest`, `mult`, `gems`, `week`, `parts` — разбивка `coins` для чипов `{ track, air, tricks, bonus }` (сумма = `coins`, #71) |
 | `TaskDone` | Event | сервер → задание выполнено |
 | `Rescue` | Event | сервер → мягкий возврат: `(CFrame на дне куска, доля скорости)`; клиент переставляет свои санки, сбрасывает полёт и трюки (#50) |
-| `SetSetting` | Event | клиент → настройка (Sfx/Music/Snow/Shadows) |
+| `SetSetting` | Event | клиент → настройка (Sfx/Music/Snow/Shadows/Ghost) |
+| `GetGhost` | Function | клиент → `(level)` на старте заезда → запись призрака `{ v, level, dist, fin, time, dt, n, data, ts }` или `false`; уровень ≤ текущего (владелец — любой), не чаще `GHOST_FETCH_COOLDOWN`, кэш в памяти сервера (#62) |
+| `Ghost` | Event | сервер → `(level)`: «заезд — рекорд, пришли запись» (из `endRun`, до `InRun = false`); клиент → `(level, dt, data)`: одна попытка на заезд, окно `GHOST_UPLOAD_WINDOW`, проверка в `server/Ghosts` (#62) |
 | `PowerUp` | Event | клиент → подобрал бонус (x2, кольцо, магнит, щит, канистра, ускоритель) |
 | `BuyUpgrade`, `SledAction`, `TrailAction` | Function | покупки/экипировка |
 | `RewardAction` | Function | задания, сундук заданий, подарки, сундук лобби, `streak` (награда дня стрика, раз в UTC-день), `streakSave` (спасти серию за гемы, только в день после пропуска 1 дня и до награды), `streakDecline` |
@@ -257,7 +262,7 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LevelLength`, `ThemeName`, `*Level` (апгрейды), `Sled`, `SledRarity`, `OwnedSleds`, `Trail`, `OwnedTrails`, `Set*` (настройки), `Tutorial` (биты шагов обучения), `Runs` (`Stats.Runs`),
 `Rewards` (JSON: задания, подарки, сундук; `sessionStart`, `big` — индекс большого подарка), в заезде — `InRun`, `Launched`, `RunDistance`,
-`RunLevel` (уровень заезда, с фармом — уровень мира; HUD: баннеры зон по `Profile.build` и аватары тех, кто едет тот же уровень, #71), `RunCoins`, `RunGems`, `Combo`, `Finished`; лидерборд недели — `Title`, `TitleUntil`, `WeeklyMe` (JSON), у
+`RunLevel` (уровень заезда, с фармом — уровень мира; HUD: баннеры зон по `Profile.build` и аватары тех, кто едет тот же уровень, #71), `RunOrigin` (Vector3 начала трассы заезда — от него пишется и играется призрак, #62), `RunCoins`, `RunGems`, `Combo`, `Finished`; лидерборд недели — `Title`, `TitleUntil`, `WeeklyMe` (JSON), у
 `ReplicatedStorage` — `WeeklyBoard` (JSON). Только у клиента (ставит сам, не реплицируется):
 `LobbyTheme` (тема витрины лобби, `LobbyScene` → `PostFX`/`Effects`), `GfxChoice` (выбор графики в ⚙:
 0 авто, 1–3; на сессию), `AutoLowFps` (`Effects`: FPS < `GRAPHICS.FPS_LOW`), `GfxTier` (итоговый уровень
@@ -388,7 +393,7 @@ Open Cloud publish не принимает Union/EditableMesh, а MeshId у Mesh
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LaunchLevel`, `SledLevel`, `IncomeLevel`, `RocketLevel`,
 `Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings` (`Sfx`, `Snow`, `Shadows`,
-`Music`), `Daily` (задания дня: `day`, `set` — набор игрока `{ {id, target} }`, фиксируется в начале дня и перепроверяется при входе (#32; у сейвов без `set` — общий набор дня + замена невыполнимого), `progress` по id, `claimed` по номеру слота, `chest`; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `Streak` (`day` — последний засчитанный UTC-день, `count` — серия, `claimedDay` — день последней награды, `save` — серия, которую можно спасти сегодня; пересчёт в `Rewards.ensure`, недостающие ключи у старых сейвов дополняет `migrate`), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
+`Music`, `Ghost` — призрак рекорда, #62; сама запись — в `Ghost_v1`), `Daily` (задания дня: `day`, `set` — набор игрока `{ {id, target} }`, фиксируется в начале дня и перепроверяется при входе (#32; у сейвов без `set` — общий набор дня + замена невыполнимого), `progress` по id, `claimed` по номеру слота, `chest`; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `Streak` (`day` — последний засчитанный UTC-день, `count` — серия, `claimedDay` — день последней награды, `save` — серия, которую можно спасти сегодня; пересчёт в `Rewards.ensure`, недостающие ключи у старых сейвов дополняет `migrate`), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
 Onboard, Purchases, Playtime — для аналитики), `Tutorial` (биты пройденных шагов `Config.TUTORIAL.STEPS`, порядок не менять; при входе с `Stats.Runs ≥ 3` — все биты). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
 Новые поля — в `DEFAULT`, миграции — `migrate()` в `DataService`.
 
@@ -410,6 +415,49 @@ Onboard, Purchases, Playtime — для аналитики), `Tutorial` (бит�
 лидерборда недели (#26): `Title` (id из `Config.WEEKLY.TITLES`, `""` — нет), `TitleUntil` (unix,
 сброс недели), `TitleWeek` (неделя, в которую титул проверен), `WeekPlay = { key, worlds["N"],
 clean }` (где игрок попал в доски на неделе `key`); `migrate` чинит типы и дополняет `WeekPlay`.
+
+## Призрак рекорда (#62, DataStore `Ghost_v1`, `server/Ghosts`, `client/Ghost`, `shared/GhostCodec`)
+
+Отдельное хранилище, не профиль: запись — килобайты и пишется только на рекорде, профиль
+`SledData_v1` остаётся маленьким и с сессионной блокировкой. Ключ `g_<UserId>_<уровень>` (≤ 50
+символов; уровень однозначно задаёт мир, фарм мира едет его последний уровень — призрак общий).
+Значение: `{ v = 1, level, dist (засчитанный путь, studs), fin, time (с от выстрела до endRun), dt,
+n, data, ts }`.
+
+**Формат `data`.** Сэмпл раз в `GHOST_SAMPLE_DT` (0.15 с) с выстрела: позиция саней от `RunOrigin`
+(квант `GHOST_POS_Q` = 0.1 stud) и направление движения по горизонтали (1/256 оборота). Хранятся
+разности соседних целых (без накопления ошибки), каждое — zigzag-varint по 5 бит в символе
+base64url (`A–Z a–z 0–9 - _`: валидный UTF-8 и без экранирования в JSON). В среднем ~6.7 символа на
+сэмпл: заезд 40 с ≈ 270 сэмплов ≈ 1.8 КБ; потолок — `GHOST_MAX_SAMPLES` 1700 (≈ 255 с, сервер
+обрывает заезд на 240 с) и `GHOST_MAX_CHARS` 24 000 (худший случай 1000 studs/с на всех сэмплах ≈ 22 КБ).
+
+**Поток.** Старт заезда: клиент → `GetGhost(level)` (GetAsync, 2 попытки; кэш одной записи на игрока
+— ⟳ не тратит чтений). Конец заезда (`endRun`, не BACK/⟳/idle/cheat и не выход из игры): засчитан
+путь ≥ `GHOST_MIN_DIST` и он лучше сохранённого (финиш лучше нефиниша, два финиша — быстрее, иначе —
+дальше) → сервер запоминает ожидание (уровень, путь, время, профиль трассы заезда) и шлёт
+`Ghost(level)`. Клиент шлёт запись; сервер проверяет одним проходом: размер и алфавит, число
+сэмплов, длительность ≈ времени заезда (± `GHOST_TIME_TOL` + 10 %), по каждому сэмплу
+`Track.progressOf` по профилю заезда — сбоку ≤ `GHOST_MAX_SIDE`, не ниже `FELL_DEPTH` + 20, не выше
+`GHOST_MAX_ABOVE`, путь не откатывается больше `GHOST_BACK_SLACK`, скорость между сэмплами ≤
+`GHOST_MAX_SPEED`; эпизодов-нарушений ≤ `GHOST_BAD_MAX` (возвраты на трассу, вылет); итоговый путь
+записи ≈ засчитанному (± `GHOST_DIST_TOL` + 8 %). Запись — `UpdateAsync` (3 попытки): внутри снова
+сравнение с хранилищем (другой сервер мог записать лучше) — иначе отмена.
+
+**Бюджет** (Context7, create.roblox.com → Data stores → Error codes and limits): значение ≤ 4 МБ,
+ключ ≤ 50 символов, сервер — 60 + 40 × игроков чтений и записей в минуту (`UpdateAsync` тратит оба),
+ключ — 4 МБ/мин записи. У нас: ≤ 1 чтения на смену уровня, ≤ 1 записи на рекордный заезд (≥ десятков
+секунд), ≤ 24 КБ.
+
+**Клиент.** Призрак — модель надетых саней (`SledModels.build`) под закреплённым корнем `GhostRoot`
+(двигается только он: одна запись CFrame в кадр), детали прозрачные (`GHOST_TRANSPARENCY`), без
+коллизий, `CanQuery`/`CanTouch` = false, без теней, света и частиц; BillboardGui «Твой рекорд» до
+`GHOST_TAG_DIST`. Позиция — линейная интерполяция сэмплов по времени от своего выстрела, поворот —
+кратчайший по yaw, наклон — по разности позиций (±45°). После конца записи призрак стоит в последней
+точке. «К рекорду» — раз в `GHOST_HUD_EVERY`: путь своих саней (`progressOf` по локальному
+`Profile.build` уровня — как `RunDistance`, но без задержки атрибута) минус путь призрака в тот же
+момент (неубывающий). Конец заезда / новый заезд / выключение настройки — модель удаляется,
+массивы сбрасываются; невостребованная запись живёт до следующего заезда. Выход из игры посреди
+заезда — записи нет.
 
 ## Лидерборд недели (#26, `server/Weekly`, `client/WeeklyBoard`, `shared/Week`)
 

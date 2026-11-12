@@ -25,6 +25,7 @@ local Pickups = require(script.Parent.Pickups)
 local Shop = require(script.Parent.Shop)
 local Purchases = require(script.Parent.Purchases)
 local DevTools = require(script.Parent.DevTools)
+local Ghosts = require(script.Parent.Ghosts) -- призрак рекорда (#62)
 Tuning.init() -- настройки из панели разработчика (DataStore) — до постройки лобби и трасс
 
 Remotes.folder.Parent = ReplicatedStorage
@@ -46,6 +47,7 @@ RunEvents.start() -- Launch, Air, Crash, Smash, Trick
 DevTools.start()
 Purchases.start() -- геймпасс и ProcessReceipt
 Pickups.start() -- монеты, магнит, бонусы, гемы, кристалл
+Ghosts.start() -- призрак рекорда: GetGhost, приём записи (#62)
 Runs.startLoop() -- Heartbeat: прогресс, остановка, финиш
 
 ------------------------------------------------------------------ Подключение / выход
