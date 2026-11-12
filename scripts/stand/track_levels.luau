@@ -7,9 +7,11 @@
 --     лестницы нет тоннеля, долины, рядов препятствий;
 --   • гладкость стыков ходовой части (как scratchpad/smooth/check_tail, #40): ступенька > 0.2 stud /
 --     излом > 3° на 2 studs; намеренные разрывы — край кикера, островки, трамплины лестницы;
---   • вираж-спираль (#44): не под тоннелем/долиной, курс не дальше SPIRAL_MAX_HEADING
---     (снос вбок от оси — только в статистике: его держит MAX_DRIFT); ледяной тоннель: кольца-ускорители
---     (тег Boost) построены, перед ним нет препятствий;
+--   • вираж-спираль (#44): не под тоннелем/долиной, курс не дальше SPIRAL_MAX_HEADING; ледяной тоннель:
+--     кольца-ускорители (тег Boost) построены, перед ним нет препятствий;
+--   • снос вбок (#73): центр трассы (начала и концы кусков) не дальше SLOT_SPACING/2 − 150, а полоса
+--     трассы со всем оформлением (углы всех BasePart) — не дальше SLOT_SPACING/2 и не шире
+--     |снос| + TRACK_FOOTPRINT: соседние слоты не пересекаются (с --meshes — с горами и скалами мешей);
 --   • статистика по уровням: сколько новых участков и какая доля пути.
 --   python3 scripts/stand/run.py scripts/stand/track_levels.luau [--meshes]
 -- STAND_MESHES — шаблоны MeshTemplates на все имена MeshSpecs (как после загрузки мешей).
@@ -185,7 +187,8 @@ local function checkSpiral(tr): (number, number, number, number, number, { strin
 	local spirals, ice, maxYaw, maxDrift = 0, 0, 0, 0
 	for k, s in segs do
 		maxYaw = math.max(maxYaw, math.abs(math.deg(s.yaw)))
-		maxDrift = math.max(maxDrift, math.abs(tr.origin:PointToObjectSpace(s.cf.Position).X))
+		maxDrift = math.max(maxDrift, math.abs(tr.origin:PointToObjectSpace(s.cf.Position).X),
+			math.abs(tr.origin:PointToObjectSpace((s.cf * CFrame.new(0, 0, -s.length)).Position).X))
 		if s.kind == "spiral" then
 			if s.tunnel or s.valley then
 				table.insert(errs, "свод/долина на вираже")
@@ -216,7 +219,28 @@ local function checkSpiral(tr): (number, number, number, number, number, { strin
 	return spirals, ice, rings, maxYaw, maxDrift, errs
 end
 
+------------------------------------------------------------------ полоса трассы (#73)
+-- Дальше всего от оси слота: углы всех BasePart трассы
+local function footprint(tr): number
+	local o, foot = tr.origin, 0
+	for _, d in tr.folder:GetDescendants() do
+		if d:IsA("BasePart") then
+			local c, sz = d.CFrame, d.Size
+			for _, sx in { -1, 1 } do
+				for _, sy in { -1, 1 } do
+					for _, sz2 in { -1, 1 } do
+						local p = c * Vector3.new(sx * sz.X / 2, sy * sz.Y / 2, sz2 * sz.Z / 2)
+						foot = math.max(foot, math.abs(o:PointToObjectSpace(p).X))
+					end
+				end
+			end
+		end
+	end
+	return foot
+end
+
 local fails = 0
+local worstDrift, worstFoot = 0, 0
 local totalSpirals, totalIce = 0, 0
 local totalStairs, totalSmooth = 0, 0
 local worstStep = 0
@@ -263,6 +287,13 @@ for level = tonumber(ARGS_FROM) or 1, tonumber(ARGS_TO) or 45 do
 		print("  ур.", level, "вираж/тоннель:", e)
 		fails += 1
 	end
+	local foot = footprint(tr)
+	worstDrift, worstFoot = math.max(worstDrift, maxDrift), math.max(worstFoot, foot)
+	local half = Config.SLOT_SPACING / 2
+	if maxDrift > half - 150 or foot > half or foot > maxDrift + Config.TRACK_FOOTPRINT then
+		print(string.format("  ур. %d снос %.0f / полоса %.0f: соседний слот (шаг %d, полоса ≤ снос + %d)", level, maxDrift, foot, Config.SLOT_SPACING, Config.TRACK_FOOTPRINT))
+		fails += 1
+	end
 	local bad, worst, byKind = smoothness(tr)
 	totalSmooth += bad
 	worstStep = math.max(worstStep, worst)
@@ -272,11 +303,12 @@ for level = tonumber(ARGS_FROM) or 1, tonumber(ARGS_TO) or 45 do
 	end
 	local stairShare = ((by.stair or 0) + (by.stairLand or 0)) / total * 100
 	local spiralShare = (by.spiral or 0) / total * 100
-	print(string.format("ур.%2d мир %d тема %d  кусков %4d  ошибок %d  лестниц %d (%.0f%% пути, монет %d)  виражей %d (%.0f%%)  ледяных тоннелей %d (колец %d)  курс ≤ %.0f°  снос ≤ %.0f  стыков с нарушениями %d %s",
-		level, Config.worldOf(level), Config.themeOf(level), #segs, errs, series, stairShare, coins, spirals, spiralShare, ice, rings, maxYaw, maxDrift, bad, table.concat(bk, " ")))
+	print(string.format("ур.%2d мир %d тема %d  кусков %4d  ошибок %d  лестниц %d (%.0f%% пути, монет %d)  виражей %d (%.0f%%)  ледяных тоннелей %d (колец %d)  курс ≤ %.0f°  снос ≤ %.0f  полоса ≤ %.0f  стыков с нарушениями %d %s",
+		level, Config.worldOf(level), Config.themeOf(level), #segs, errs, series, stairShare, coins, spirals, spiralShare, ice, rings, maxYaw, maxDrift, foot, bad, table.concat(bk, " ")))
 	tr:destroy()
 end
 print(string.format("Итого: виражей %d, ледяных тоннелей %d", totalSpirals, totalIce))
+print(string.format("Итого: снос центра ≤ %.0f, полоса с оформлением ≤ %.0f studs от оси (шаг слотов %d)", worstDrift, worstFoot, Config.SLOT_SPACING))
 print(string.format("Итого: лестниц %d, стыков с нарушениями %d, худшая ступенька %.2f stud, ошибок %d", totalStairs, totalSmooth, worstStep, fails))
 if fails > 0 then
 	error("есть ошибки сборки трасс")

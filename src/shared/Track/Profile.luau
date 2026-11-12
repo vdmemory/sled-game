@@ -244,12 +244,16 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	end
 
 	-- Поворот из коротких кусков. Направление выбираем так, чтобы трасса не уходила далеко вбок
-	local function curve()
+	-- target (#73) — поворот-доводка: повернуть к этому курсу (радианы), угол — сколько нужно
+	-- (15…CURVE_ANGLE[2]°); случайные числа тратятся как у обычного поворота
+	local function curve(target: number?)
 		local drift = origin:PointToObjectSpace(pos).X
 		local dir
 		-- после виража (#44) курс шире MAX_HEADING: сначала возвращаем курс, потом смотрим на снос
 		local wide = math.abs(math.deg(yaw)) > Config.MAX_HEADING + 1
-		if not wide and math.abs(drift) > Config.MAX_DRIFT then
+		if target then
+			dir = if target > yaw then 1 else -1
+		elseif not wide and math.abs(drift) > Config.MAX_DRIFT then
 			dir = if drift > 0 then 1 else -1 -- поворачиваем обратно к центру (yaw > 0 — влево)
 		elseif math.abs(math.deg(yaw)) > Config.MAX_HEADING * 0.5 then
 			dir = if yaw > 0 then -1 else 1
@@ -259,6 +263,11 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		lastTurn = dir
 		local total = math.rad(rng:NextNumber(Config.CURVE_ANGLE[1], Config.CURVE_ANGLE[2]))
 		local maxYaw = math.rad(Config.MAX_HEADING)
+		if target then
+			-- первая часть поворота не доворачивает: на неё — ещё кусок
+			local need = math.abs(target - yaw) + math.rad(Config.CURVE_STEP) / math.max(1, Config.CURVE_SUBSTEPS)
+			total = math.clamp(need, math.rad(Config.CURVE_STEP * 3), math.rad(Config.CURVE_ANGLE[2]))
+		end
 		local pieces = math.max(3, math.floor(math.deg(total) / Config.CURVE_STEP + 0.5))
 		local step = total / pieces * dir
 		local pitch = rng:NextNumber(Config.CURVE_PITCH[1], Config.CURVE_PITCH[2])
@@ -286,6 +295,28 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 					push("curve", pitch, Config.CURVE_PIECE / sub, true, extra)
 				end
 			end
+		end
+	end
+
+	-- Жёсткий предел сноса (#73). Прямые куски под курсом сносят трассу вбок на sin(курс)·путь, а
+	-- поворот (и MAX_DRIFT в нём) случаен — длинные участки (цепочка островков ~1000 studs, лестница,
+	-- волны) уводили трассу на 2000+ studs. Перед куском/участком длиной ahead: если прогноз сноса в
+	-- конце (или снос сейчас) дальше DRIFT_LIMIT — поворот-доводка к курсу, который выводит к оси за
+	-- max(ahead, STEER_RETURN); не больше двух поворотов подряд. Повороты — обычные куски curve.
+	local function steer(ahead: number)
+		local lim = Config.DRIFT_LIMIT
+		local maxSin = math.sin(math.rad(Config.MAX_HEADING))
+		for _ = 1, 2 do
+			local x = origin:PointToObjectSpace(pos).X
+			local xEnd = x - math.sin(yaw) * ahead -- yaw > 0 — влево, к −X
+			if math.abs(xEnd) <= lim and math.abs(x) <= lim then
+				return
+			end
+			local target = math.asin(math.clamp(x / math.max(ahead, Config.STEER_RETURN), -maxSin, maxSin))
+			if math.abs(target - yaw) < math.rad(Config.CURVE_STEP) then
+				return -- курс уже ведёт к оси: дальше доведут прямые куски
+			end
+			curve(target)
 		end
 	end
 
@@ -323,10 +354,35 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		lastTurn = dir
 	end
 
+	-- Влезает ли вираж с поворотами обратно в SPIRAL_DRIFT_LIMIT (#73): прогон дуги в худшем случае (наибольший
+	-- угол, пологий уклон) и возврата курса до MAX_HEADING / 2 по CURVE_STEP на кусок. Без случайных чисел.
+	local function spiralFits(): boolean
+		local x = origin:PointToObjectSpace(pos).X
+		local y = yaw
+		local dir = if y > 0 then -1 else 1
+		local total = math.min(math.rad(Config.SPIRAL_ANGLE[2]), math.abs(y) + math.rad(Config.SPIRAL_MAX_HEADING))
+		local pieces = math.max(3, math.floor(math.deg(total) / Config.SPIRAL_STEP + 0.5))
+		local hl = Config.CURVE_PIECE * math.cos(math.rad(Config.SPIRAL_PITCH[1]))
+		local worst = math.abs(x)
+		for _ = 1, pieces do
+			y += total / pieces * dir
+			x -= math.sin(y) * hl
+			worst = math.max(worst, math.abs(x))
+		end
+		local back = math.rad(Config.CURVE_STEP)
+		while math.abs(y) > math.rad(Config.MAX_HEADING * 0.5) do
+			y -= back * math.sign(y)
+			x -= math.sin(y) * hl
+			worst = math.max(worst, math.abs(x))
+		end
+		return worst <= Config.SPIRAL_DRIFT_LIMIT
+	end
+
 	-- Волны-бугры (#40): серия «вниз → вверх» — сани ныряют и на гребне слегка подлетают; переходы
 	-- между уклонами — те же скругления (излом ≤ SMOOTH_KINK), монеты на каждом гребне
 	local function waves()
 		local count = isleRng:NextInteger(Config.WAVE_COUNT[1], Config.WAVE_COUNT[2])
+		steer(count * (Config.WAVE_DOWN[2] + Config.WAVE_UP[2] + 4 * Config.FILLET_LEN)) -- #73
 		for k = 1, count do
 			add("wave", Config.WAVE_DOWN[1], Config.WAVE_DOWN[2], false, { crest = false })
 			add("wave", Config.WAVE_UP[1], Config.WAVE_UP[2], false, { crest = k })
@@ -348,6 +404,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		if ice then
 			total += Config.ICE_TUNNEL_LEN
 		end
+		steer(total) -- #73: цепочка идёт по прямой — курс к оси до неё
 		if h + total > L - 80 then
 			return false
 		end
@@ -372,6 +429,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	-- Трамплин-лестница (#43): план — Track/Stairs (баллистика); не строим, если не влезает до финиша
 	local function stairs(): boolean
 		local spec = Stairs.plan(level, featRng)
+		steer(spec.total) -- #73
 		if h + spec.total > L - 80 then
 			return false
 		end
@@ -392,6 +450,10 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	local roads = Config.roadCount(level)
 	local railDone = false
 	while h < L do
+		if forceNext == nil and h > 150 then
+			-- #73: жёсткий предел сноса перед обычным куском; у финиша — до конца озера
+			steer(if h > L - 600 then math.max(Config.STEER_AHEAD, L - h + 300) else Config.STEER_AHEAD)
+		end
 		local forcedAt = Config.FORCED_KICKERS[nextForced]
 		local roadAt = if nextRoad <= roads then Config.ROAD_AT[nextRoad] else nil
 		if forceNext ~= "landing" and roadAt and h >= L * roadAt then
@@ -435,9 +497,11 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 				-- лестница трамплинов вместо обычного куска
 			elseif level >= Config.SPIRAL_FROM_LEVEL and h >= Config.SPIRAL_FROM_H and h < L - 600
 				and math.abs(math.deg(yaw)) >= Config.SPIRAL_MIN_YAW
-				-- вираж ведёт трассу к оси, а не от неё (yaw > 0 — влево, к −X): снос не растёт
-				and origin:PointToObjectSpace(pos).X * (if yaw > 0 then -1 else 1) >= 0
 				and (lastSpiral == nil or h - lastSpiral >= Config.SPIRAL_MIN_SPACING)
+				-- #73: вираж с поворотами обратно не выводит трассу за SPIRAL_DRIFT_LIMIT. Вираж — S-образный: за
+				-- ним трасса уходит в ту сторону, откуда шла (~+240 studs), поэтому прежнее условие «вираж
+				-- ведёт к оси» уводило её от оси; теперь решает прогон дуги
+				and spiralFits()
 				and featRng:NextNumber() < Config.spiralChance(level) then
 				spiral()
 				-- и сразу обратно: поворотами, пока курс не станет ≤ MAX_HEADING / 2 (не больше трёх)
@@ -464,6 +528,7 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	if forceNext == "landing" then
 		add("landing", 18, 90)
 	end
+	steer(300) -- #73: последний кусок мог быть поворотом от оси — озеро тоже прямая под курсом
 	add("lake", 0.5, 300) -- ледяное озеро: после финиша катимся до остановки
 	markTunnels(segs)
 	markValleys(segs)
