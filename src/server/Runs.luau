@@ -51,6 +51,11 @@ export type Run = {
 	launched: boolean,
 	distance: number,
 	bonusCoins: number,
+	-- части bonusCoins для разбивки чипами в итоге (#71): воздух, трюки, бонусы (разбил/TNT, кольца,
+	-- кристалл); остальное в bonusCoins — монеты на трассе (подобранные, с комбо и x2)
+	bonusAir: number?,
+	bonusTricks: number?,
+	bonusExtra: number?,
 	lastTrick: number,
 	slowTime: number,
 	startTime: number,
@@ -130,6 +135,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 	local cheat = reason == "cheat" -- античит: заезд не засчитан, наград нет
 	local clean = not run.crashedOnTrack and reason ~= "fell" -- заезд без аварии
 	local mult, earned = 1, 0
+	local parts = { track = 0, air = 0, tricks = 0, bonus = 0 } -- разбивка earned чипами (#71)
 	local newBest = false
 	local gems = 0
 
@@ -143,7 +149,16 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 		if cheat then
 			return
 		end
-		earned = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + (if finished then Config.finishBonus(level) else 0)) * mult)
+		local finishCoins = if finished then Config.finishBonus(level) else 0
+		earned = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + finishCoins) * mult)
+		-- Разбивка только для показа (#71): сумма чипов = earned, сам earned считается как раньше.
+		-- «Трасса» = дистанция + подобранные монеты, «Бонусы» = финиш + разбил/кольца/кристалл + округление.
+		local air, tricks, extra = run.bonusAir or 0, run.bonusTricks or 0, run.bonusExtra or 0
+		local pickups = math.max(0, run.bonusCoins - air - tricks - extra)
+		parts.track = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + pickups) * mult)
+		parts.air = math.floor(air * mult)
+		parts.tricks = math.floor(tricks * mult)
+		parts.bonus = math.max(0, earned - parts.track - parts.air - parts.tricks)
 
 		if d then
 			d.Coins += earned
@@ -278,6 +293,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 			mult = math.floor(mult * 100 + 0.5) / 100,
 			gems = gems,
 			week = week,
+			parts = parts, -- { track, air, tricks, bonus }: чипы итога (#71), в сумме = coins
 		})
 	end
 
@@ -332,6 +348,10 @@ startRun = function(player: Player)
 		return Track.new(slot, level, if farm then 0 else d.LevelBest / 100 * Config.levelLength(d.Level))
 	end)
 	player:SetAttribute("RunTheme", Config.themeOf(level))
+	-- уровень заезда (с фармом — уровень пройденного мира): HUD строит по нему профиль для баннеров
+	-- зон и показывает на шкале аватары тех, кто едет тот же уровень (#71; RunDistance/LevelLength
+	-- игроков реплицируются всем)
+	player:SetAttribute("RunLevel", level)
 	player:SetAttribute("LevelLength", track.length)
 	local startCF = track:startCFrame()
 	local sled = makeSled(player, startCF)

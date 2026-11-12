@@ -11,6 +11,8 @@ local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local UI = require(ReplicatedStorage.Shared:WaitForChild("UIKit"))
 local UIFx = require(ReplicatedStorage.Shared:WaitForChild("UIFx"))
+-- профиль уровня (детерминирован по номеру): какие куски — тоннель, гребень, дорога, островки (#71)
+local Profile = require(ReplicatedStorage.Shared:WaitForChild("Track"):WaitForChild("Profile"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local player = Players.LocalPlayer
@@ -519,9 +521,60 @@ local toast = UI.text({
 UI.outline(toast, 3)
 local toastScale = Instance.new("UIScale")
 toastScale.Parent = toast
+-- Баннер зоны при въезде (#71): «Ледяная пещера!», «Над долиной!», «Дорога!», «Островки!» и мир
+-- после выстрела. Крупный текст по центру сверху (UILayout.zoneBanner), проявляется и гаснет.
+local zoneBanner = UI.text(UI.at(L.zoneBanner, {
+	Name = "ZoneBanner",
+	Text = "",
+	TextColor3 = Color3.fromRGB(255, 240, 150),
+	Rotation = -2,
+	Visible = false,
+	ZIndex = 7,
+	Parent = runUi,
+}))
+local zoneStroke = UI.outline(zoneBanner, 4)
+local zoneScale = Instance.new("UIScale")
+zoneScale.Parent = zoneBanner
+local bannerToken = 0
+local function fadeBanner(to: number, t: number)
+	local info = TweenInfo.new(t, Enum.EasingStyle.Quad)
+	TweenService:Create(zoneBanner, info, { TextTransparency = to }):Play()
+	TweenService:Create(zoneStroke, info, { Transparency = to }):Play()
+end
+local function hideBanner()
+	if zoneBanner.Visible then
+		bannerToken += 1
+		zoneBanner.Visible = false
+	end
+end
+local function showBanner(text: string)
+	bannerToken += 1
+	local my = bannerToken
+	local fade = Config.ZONE_BANNER_FADE
+	zoneBanner.Text = text
+	zoneBanner.TextTransparency = 1
+	zoneStroke.Transparency = 1
+	zoneBanner.Visible = true
+	zoneScale.Scale = 0.75
+	TweenService:Create(zoneScale, TweenInfo.new(fade, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	fadeBanner(0, fade)
+	task.delay(math.max(fade, Config.ZONE_BANNER_TIME - fade), function()
+		if bannerToken ~= my then
+			return
+		end
+		fadeBanner(1, fade)
+		task.delay(fade, function()
+			if bannerToken == my then
+				zoneBanner.Visible = false
+			end
+		end)
+	end)
+end
+
 local toastToken = 0
 local function showToast(text: string, seconds: number)
 	toastToken += 1
+	hideBanner() -- всплывашка трюка на том же месте: баннер зоны уступает ей
 	local my = toastToken
 	toast.Text = text
 	toast.Visible = true
@@ -720,6 +773,186 @@ controller:WaitForChild("TrickPopup").Event:Connect(function(text)
 	showToast(text, 1)
 end)
 
+------------------------------------------------------------------ зоны трассы (#71)
+-- Профиль уровня заезда строим локально (тот же Profile.build, что у сервера; RunLevel) и режем на
+-- зоны: подряд идущие куски одного вида — одна зона. Въезд в зону по RunDistance (путь по
+-- горизонтали, как hStart/hLen кусков) — баннер, один раз на зону за заезд.
+type Zone = { h0: number, h1: number, key: string }
+local ZONE_KINDS = { road = "road", rail = "rail", isleIn = "isle", isle = "isle", gap = "isle" }
+local zones: { Zone } = {}
+local zonesLevel: number? = nil
+local zoneAt = 1 -- следующая зона, в которую ещё не въехали
+local function zoneKey(seg: any): string?
+	if seg.tunnel then
+		return "tunnel"
+	elseif seg.valley then
+		return "valley"
+	end
+	return ZONE_KINDS[seg.kind]
+end
+local function buildZones(level: number)
+	zonesLevel = level
+	zoneAt = 1
+	table.clear(zones)
+	local ok, built = pcall(function()
+		return (Profile.build(CFrame.new(), level))
+	end)
+	if not ok or type(built) ~= "table" then
+		return
+	end
+	local segs: { any } = built
+	local last: Zone? = nil
+	for _, seg in segs do
+		local key = zoneKey(seg)
+		if key and last and last.key == key and math.abs(last.h1 - seg.hStart) < 1 then
+			last.h1 = seg.hStart + seg.hLen
+		elseif key then
+			last = { h0 = seg.hStart, h1 = seg.hStart + seg.hLen, key = key }
+			table.insert(zones, last :: Zone)
+		else
+			last = nil
+		end
+	end
+end
+local function zoneText(key: string): string
+	local t = Config.ZONE_BANNERS[key]
+	if type(t) == "table" then
+		return t[player:GetAttribute("RunTheme") or 1] or t[1]
+	end
+	return t or ""
+end
+local function checkZone()
+	if not player:GetAttribute("InRun") or not player:GetAttribute("Launched") then
+		return
+	end
+	local level = player:GetAttribute("RunLevel")
+	if typeof(level) ~= "number" then
+		return
+	end
+	if zonesLevel ~= level then
+		buildZones(level)
+	end
+	local h = player:GetAttribute("RunDistance") or 0
+	-- проехали зону целиком между обновлениями (0.2 с) — пропускаем её молча
+	while zones[zoneAt] and zones[zoneAt].h1 <= h do
+		zoneAt += 1
+	end
+	local z = zones[zoneAt]
+	if z and h >= z.h0 then
+		zoneAt += 1
+		showBanner(zoneText(z.key))
+	end
+end
+player:GetAttributeChangedSignal("RunDistance"):Connect(checkZone)
+player:GetAttributeChangedSignal("InRun"):Connect(function()
+	zonesLevel = nil -- новый заезд: зоны заново (и при ⟳ того же уровня)
+	hideBanner()
+end)
+player:GetAttributeChangedSignal("Launched"):Connect(function()
+	if player:GetAttribute("Launched") and player:GetAttribute("InRun") and Config.ZONE_BANNER_WORLD >= 1 then
+		local farm = player:GetAttribute("FarmWorld") or 0
+		local level = player:GetAttribute("RunLevel") or player:GetAttribute("Level") or 1
+		local world = if farm > 0 then farm else Config.worldOf(level)
+		showBanner(Config.worldName(world) .. "!")
+	end
+end)
+
+------------------------------------------------------------------ аватары на шкале (#71)
+-- Другие игроки сервера на том же уровне (RunLevel) — круглые аватары на шкале прогресса справа,
+-- на месте RunDistance / LevelLength. Картинка — GetUserThumbnailAsync (HeadShot 48×48), кэш по
+-- UserId; обновление раз в Config.HUD_AVATAR_PERIOD, движение — твином за тот же период.
+local thumbs: { [number]: string | boolean } = {} -- UserId → картинка; true — грузится; false — не вышло
+local avatars: { [Player]: Frame } = {}
+local function thumbOf(userId: number): string?
+	local t = thumbs[userId]
+	if t == nil then
+		thumbs[userId] = true
+		task.spawn(function()
+			local ok, img = pcall(Players.GetUserThumbnailAsync, Players, userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+			thumbs[userId] = if ok and typeof(img) == "string" then img else false
+		end)
+		return nil
+	end
+	return if typeof(t) == "string" then t else nil
+end
+local function avatarFor(p: Player): Frame
+	local f = avatars[p]
+	if f then
+		return f
+	end
+	local size = Config.HUD_AVATAR_SIZE
+	f = UI.new("Frame", {
+		Name = "Avatar",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.fromOffset(size, size),
+		BackgroundColor3 = C.navy,
+		BackgroundTransparency = 0,
+		Visible = false,
+		ZIndex = 4,
+		Parent = progress,
+	})
+	UI.corner(f, 1000)
+	UI.stroke(f, 2.5, C.white)
+	-- первая буква имени, пока картинка не загрузилась (или если не загрузилась)
+	UI.text({ Name = "Initial", Text = utf8.char(utf8.codepoint(p.DisplayName, 1, 1)), Size = UDim2.fromScale(1, 1), ZIndex = 5, Parent = f })
+	local img = UI.new("ImageLabel", { Name = "Face", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Image = "", ZIndex = 6, Parent = f })
+	UI.corner(img, 1000)
+	avatars[p] = f
+	return f :: Frame
+end
+Players.PlayerRemoving:Connect(function(p)
+	local f = avatars[p]
+	if f then
+		f:Destroy()
+		avatars[p] = nil
+	end
+	thumbs[p.UserId] = nil
+end)
+local function updateAvatars()
+	local myLevel = player:GetAttribute("RunLevel")
+	local mine = player:GetAttribute("InRun") == true and typeof(myLevel) == "number"
+	local shown = 0
+	local period = Config.HUD_AVATAR_PERIOD
+	for _, p in Players:GetPlayers() do
+		if p == player then
+			continue
+		end
+		local on = mine and shown < Config.HUD_AVATAR_MAX and p:GetAttribute("InRun") == true and p:GetAttribute("RunLevel") == myLevel
+		if not on then
+			local f = avatars[p]
+			if f then
+				f.Visible = false
+			end
+			continue
+		end
+		shown += 1
+		local f = avatarFor(p)
+		local face = f:FindFirstChild("Face") :: ImageLabel
+		local img = thumbOf(p.UserId)
+		if img and face.Image ~= img then
+			face.Image = img
+		end
+		local frac = math.clamp((p:GetAttribute("RunDistance") or 0) / math.max(1, p:GetAttribute("LevelLength") or 1), 0, 1)
+		local target = UDim2.fromScale(0.5, 1 - frac)
+		if f.Visible then
+			TweenService:Create(f, TweenInfo.new(period, Enum.EasingStyle.Linear), { Position = target }):Play()
+		else
+			f.Position = target
+			f.Visible = true
+		end
+	end
+end
+task.spawn(function()
+	while true do
+		task.wait(Config.HUD_AVATAR_PERIOD)
+		local ok, err = pcall(updateAvatars)
+		if not ok then
+			warn("[HUD] аватары на шкале: " .. tostring(err))
+		end
+	end
+end)
+
 ------------------------------------------------------------------ кадр
 local result: Frame -- карточка итога (создаётся ниже)
 RunService.RenderStepped:Connect(function()
@@ -806,14 +1039,14 @@ end
 tapText.Activated:Connect(start)
 
 ------------------------------------------------------------------ итог заезда («Ты получил»)
-result = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(380, 340), BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
+result = UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(420, 376), BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
 local resultScale = Instance.new("UIScale")
 resultScale.Parent = result
 local resultTitle = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.fromOffset(460, 52), Outline = 3, ZIndex = 22, Parent = result })
 local bestBanner = UI.text({ Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -58), Size = UDim2.fromOffset(420, 40), TextColor3 = Color3.fromRGB(255, 215, 60), Rotation = -3, ZIndex = 22, Parent = result })
 UI.outline(bestBanner, 3)
 -- Лист итогов: тёмно-синяя карточка с крупной суммой монет, строками бонуса и гемов
-local sheet = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 246), BackgroundTransparency = 0, ZIndex = 20, Parent = result })
+local sheet = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 282), BackgroundTransparency = 0, ZIndex = 20, Parent = result })
 UI.grad(sheet, Color3.fromRGB(56, 78, 124), Color3.fromRGB(32, 46, 82))
 UI.corner(sheet, 20)
 UI.stroke(sheet, 3, C.ink)
@@ -823,16 +1056,40 @@ UI.text({ Text = "ТЫ ПОЛУЧИЛ:", Position = UDim2.fromOffset(20, 14), Si
 local _, setRCoins = UI.iconText({ Position = UDim2.fromOffset(20, 50), Size = UDim2.new(1, -40, 0, 46), Outline = 3, ZIndex = 21, Parent = sheet })
 local divider = UI.new("Frame", { Position = UDim2.fromOffset(24, 104), Size = UDim2.new(1, -48, 0, 2), BackgroundColor3 = C.white, BackgroundTransparency = 0.8, ZIndex = 21, Parent = sheet })
 local _ = divider
-local _, setRBonus = UI.iconText({ Position = UDim2.fromOffset(20, 114), Size = UDim2.new(1, -40, 0, 26), ZIndex = 21, Parent = sheet })
-local _, setRGems = UI.iconText({ Position = UDim2.fromOffset(20, 146), Size = UDim2.new(1, -40, 0, 26), ZIndex = 21, Parent = sheet })
-local rDist = UI.text({ Text = "", Position = UDim2.fromOffset(20, 182), Size = UDim2.new(1, -40, 0, 24), TextColor3 = Color3.fromRGB(190, 215, 250), ZIndex = 21, Parent = sheet })
+-- Разбивка монет чипами (#71, как в референсе): трасса / воздух / трюки / бонусы — сетка 2×2,
+-- 112–184 (лист 380 → 420 под подписи чипов); чипы с нулём скрыты (сетка сдвигает остальные). Сумма чипов = крупная сумма сверху.
+local chipsBox = UI.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 112), Size = UDim2.new(1, -20, 0, 72), ZIndex = 21, Parent = sheet })
+local chipsGrid = Instance.new("UIGridLayout")
+chipsGrid.CellSize = UDim2.fromOffset(196, 32) -- 2 × 196 + 8 = 400 = лист 420 − 2 × 10; «+1.2K бонусы» влезает
+chipsGrid.CellPadding = UDim2.fromOffset(8, 8)
+chipsGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+chipsGrid.SortOrder = Enum.SortOrder.LayoutOrder
+chipsGrid.Parent = chipsBox
+local CHIPS = {
+	{ key = "track", icon = "coin", caption = "трасса" },
+	{ key = "air", icon = "parachute", caption = "воздух" },
+	{ key = "tricks", icon = "flip", caption = "трюки" },
+	{ key = "bonus", icon = "star", caption = "бонусы" },
+}
+local chipSet: { [string]: (string, string?) -> () } = {}
+local chipFrame: { [string]: Frame } = {}
+for i, ch in CHIPS do
+	local cell = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = C.navy, BackgroundTransparency = 0.25, ZIndex = 21, Parent = chipsBox })
+	UI.corner(cell, 1000)
+	UI.stroke(cell, 2, C.white, 0.55)
+	local _, set = UI.iconText({ Position = UDim2.fromOffset(6, 3), Size = UDim2.new(1, -12, 0, 26), ZIndex = 22, Parent = cell })
+	chipSet[ch.key] = set
+	chipFrame[ch.key] = cell
+end
+local _, setRGems = UI.iconText({ Position = UDim2.fromOffset(20, 190), Size = UDim2.new(1, -40, 0, 26), ZIndex = 21, Parent = sheet })
+local rDist = UI.text({ Text = "", Position = UDim2.fromOffset(20, 222), Size = UDim2.new(1, -40, 0, 24), TextColor3 = Color3.fromRGB(190, 215, 250), ZIndex = 21, Parent = sheet })
 UI.outline(rDist, 2)
 -- строка лидерборда недели и титула (#26, server/Weekly → RunEnded.week)
-local rWeek = UI.text({ Text = "", Position = UDim2.fromOffset(20, 210), Size = UDim2.new(1, -40, 0, 22), TextColor3 = Color3.fromRGB(255, 215, 90), ZIndex = 21, Parent = sheet })
+local rWeek = UI.text({ Text = "", Position = UDim2.fromOffset(20, 250), Size = UDim2.new(1, -40, 0, 22), TextColor3 = Color3.fromRGB(255, 215, 90), ZIndex = 21, Parent = sheet })
 UI.outline(rWeek, 2)
 local continueBtn = UI.button("blue", "ПРОДОЛЖИТЬ", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 260),
+	Position = UDim2.new(0.5, 0, 0, 296),
 	Size = UDim2.fromOffset(250, 78), -- ≥ 44 px на телефоне
 	ZIndex = 22,
 	Parent = result,
@@ -861,7 +1118,13 @@ Remotes.RunEnded.OnClientEvent:Connect(function(r)
 		else "ЗАЕЗД ОКОНЧЕН"
 	bestBanner.Text = if finished then "🎉 ФИНИШ!" elseif r.newBest then "🏆 НОВЫЙ РЕКОРД!" else ""
 	setRCoins(UI.money(r.coins) .. (if (r.mult or 1) > 1 then "  x" .. r.mult else ""), "coin")
-	setRBonus("Монеты на трассе и трюки: +" .. math.floor(r.bonus or 0), "coin")
+	-- чипы разбивки (#71); старый сервер без parts — один чип «трасса» со всей суммой
+	local parts = if type(r.parts) == "table" then r.parts else { track = r.coins or 0 }
+	for _, ch in CHIPS do
+		local v = math.floor(tonumber(parts[ch.key]) or 0)
+		chipFrame[ch.key].Visible = v > 0
+		chipSet[ch.key]("+" .. UI.money(v) .. " " .. ch.caption, ch.icon)
+	end
 	setRGems("+" .. (r.gems or 0), "gem")
 	rDist.Text = (r.distance or 0) .. " м  ·  " .. r.percent .. "% уровня"
 	local wk = r.week

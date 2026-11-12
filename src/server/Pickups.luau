@@ -138,6 +138,7 @@ function Pickups.start()
 				return Config.POWERUPS.rings.coins
 			end)
 			run.bonusCoins += c
+			run.bonusExtra = (run.bonusExtra or 0) + c -- разбивка итога (#71)
 			player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + c)
 		end
 	end)
@@ -178,6 +179,7 @@ function Pickups.start()
 			return Config.CRYSTAL_COINS
 		end)
 		run.bonusCoins += add
+		run.bonusExtra = (run.bonusExtra or 0) + add -- разбивка итога (#71)
 		run.gems = (run.gems or 0) + 1
 		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 		player:SetAttribute("RunGems", run.gems)
