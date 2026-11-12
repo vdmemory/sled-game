@@ -265,9 +265,9 @@ class Rules:
         src = c["_src"]
         F = c["F"]
         self.F = F
-        # Config.levelLength: return A + (level - 1) * B
-        a, _one, b = _fn_numbers(src, "levelLength")[:3]
-        self._len = c.get("_levelLength", (a, b))  # --set levelLength.step=… подменяет только в модели
+        # Config.levelLength (2026-11-12): LEVEL_LEN_BASE + (уровень в мире − 1)·LEVEL_LEN_STEP
+        # + (мир − 1)·LEVEL_LEN_WORLD, не больше LEVEL_LEN_MAX
+        self._len = (c["LEVEL_LEN_BASE"], c["LEVEL_LEN_STEP"], c["LEVEL_LEN_WORLD"], c["LEVEL_LEN_MAX"], c.get("LEVELS_PER_WORLD", 5))
         # Config.steepChance: math.max(MIN, START - STEP * (level - 1))
         nums = _fn_numbers(src, "steepChance")
         self._steep = (nums[0], nums[1], nums[2])
@@ -276,7 +276,8 @@ class Rules:
 
     # Config.levelLength
     def level_length(self, lv):
-        return self._len[0] + (lv - 1) * self._len[1]
+        base, step, world, mx, per = self._len
+        return min(mx, base + ((lv - 1) % per) * step + ((lv - 1) // per) * world)
 
     # Config.steepChance
     def steep_chance(self, lv):
@@ -1054,9 +1055,8 @@ def summary(R: Rules, max_level: int, variants: int = 5) -> str:
 def apply_set(cfg: dict, expr: str):
     """--set F.finishPerLevel=60 / UPGRADES.Income.BaseCost=300 / UPGRADE_PRICE_POW=2.4 — только в модели."""
     path, val = expr.split("=", 1)
-    if path in ("levelLength.base", "levelLength.step"):
-        base, step = cfg.get("_levelLength") or tuple(_fn_numbers(cfg["_src"], "levelLength")[i] for i in (0, 2))
-        cfg["_levelLength"] = (float(val), step) if path.endswith("base") else (base, float(val))
+    if path in ("levelLength.base", "levelLength.step"):  # старые ключи → новые константы
+        cfg["LEVEL_LEN_BASE" if path.endswith("base") else "LEVEL_LEN_STEP"] = float(val)
         return
     keys = path.split(".")
     node = cfg

@@ -37,7 +37,7 @@ local Remotes = require(script.Parent.Remotes)
 local GetGhost: RemoteFunction = Remotes.GetGhost
 local GhostRemote: RemoteEvent = Remotes.Ghost
 
-local store = DataStoreService:GetDataStore("Ghost_v1")
+local store = DataStoreService:GetDataStore("Ghost_v2") -- v2: длины уровней и раскладки изменились (2026-11-12), старые записи не подходят
 
 local Ghosts = {}
 

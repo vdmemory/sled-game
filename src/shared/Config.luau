@@ -103,9 +103,19 @@ Config.TRACK_FOOTPRINT = 610
 Config.AIR_COINS_PER_SEC = 12
 Config.AIR_MIN_TIME = 0.6
 
--- Длина уровня по горизонтали (studs)
+-- Длина уровня по горизонтали (studs). Владелец 2026-11-12: «трассы мира II слишком длинные» — было
+-- 1200 + (уровень − 1) × 450 без предела (ур. 35 — 16 500, ур. 45 — 21 000, дольше лимита заезда 240 с).
+-- Стало: от номера уровня ВНУТРИ мира (1…LEVELS_PER_WORLD) + небольшая надбавка за мир, с потолком;
+-- сложность дальше растёт скоростью, плотностью препятствий и особыми участками, а не длиной.
+Config.LEVEL_LEN_BASE = 1200 -- 1-й уровень мира
+Config.LEVEL_LEN_STEP = 500 -- + за каждый следующий уровень внутри мира
+Config.LEVEL_LEN_WORLD = 150 -- + за каждый следующий мир
+Config.LEVEL_LEN_MAX = 5000 -- потолок
 function Config.levelLength(level: number): number
-	return 1200 + (level - 1) * 450
+	local per = Config.LEVELS_PER_WORLD or 5
+	local inWorld = (level - 1) % per
+	local world = (level - 1) // per
+	return math.min(Config.LEVEL_LEN_MAX, Config.LEVEL_LEN_BASE + inWorld * Config.LEVEL_LEN_STEP + world * Config.LEVEL_LEN_WORLD)
 end
 
 -- Доля крутых участков (они разгоняют), уменьшается с уровнем
@@ -1260,6 +1270,9 @@ Config.GHOST_TAG_DIST = 220 -- studs: дальше этого подпись «�
 Config.GHOST_HUD_EVERY = 0.2 -- сек между обновлениями «+12 м к рекорду»
 
 Config.TUNABLES = {
+	{ "LEVEL_LEN_STEP", "Длина: + за уровень внутри мира (studs; новый заезд)", "Трасса", 0, 1500, 50 },
+	{ "LEVEL_LEN_WORLD", "Длина: + за мир (studs)", "Трасса", 0, 1000, 25 },
+	{ "LEVEL_LEN_MAX", "Длина: потолок (studs)", "Трасса", 1500, 20000, 250 },
 	{ "F.launchBase", "Рогатка: сила на 0 ур.", "Прокачка", 10, 200, 1 },
 	{ "F.launchStep", "Рогатка: + силы за уровень", "Прокачка", 1, 20, 0.5 },
 	{ "UPGRADES.Launch.BaseCost", "Рогатка: цена 1-го ур.", "Прокачка", 5, 1000, 5 },
