@@ -993,7 +993,7 @@ RunService.RenderStepped:Connect(function()
 	distLabel.Visible = not awaiting
 	bestLabel.Visible = not awaiting
 	backBtn.Visible = awaiting
-	controlsHint.Visible = not awaiting and launched
+	controlsHint.Visible = not awaiting and launched and not UI.isPhone() -- на телефоне её место внизу занято текстами заезда
 	local pull = state.Meter.Value
 	local lit = math.floor(pull * GSEG + 0.5)
 	for i, seg in gaugeSegs do
