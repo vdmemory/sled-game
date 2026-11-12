@@ -81,6 +81,7 @@ function RunEvents.start()
 			return math.floor(math.min(sec, 4) * Config.AIR_COINS_PER_SEC)
 		end)
 		run.bonusCoins += add
+		run.bonusAir = (run.bonusAir or 0) + add -- разбивка итога (#71)
 		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 	end)
 
@@ -135,6 +136,7 @@ function RunEvents.start()
 			return if model:GetAttribute("Explosive") then Config.TNT_COINS else Config.SMASH_COINS
 		end)
 		run.bonusCoins += add
+		run.bonusExtra = (run.bonusExtra or 0) + add -- разбивка итога (#71)
 		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 	end)
 
@@ -207,6 +209,7 @@ function RunEvents.start()
 		run.flips = (run.flips or 0) + flips
 		run.tricks = (run.tricks or 0) + total
 		run.bonusCoins += add
+		run.bonusTricks = (run.bonusTricks or 0) + add -- разбивка итога (#71)
 		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
 		Analytics.custom(player, "Tricks", total)
 	end)

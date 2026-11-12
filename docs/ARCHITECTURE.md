@@ -40,9 +40,9 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `server/Environment` | 48 | Lighting, облака, цветокоррекция, bloom |
 | `server/Sleds` | 145 | `makeSled` (сиденье, модель/редкость/тиры, след, ракеты, крепления), `ragdoll`, `setRider` |
 | `server/PlayerState` | 158 | `sync` (профиль → атрибуты), `onPlayerAdded`, `postLevel` (OrderedDataStore `BestLevel_v1`), `TutorialStep`, `SetSetting` |
-| `server/Runs` | 670 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, финиш, остановка, вылет), таймаут без выстрела `IDLE_LAUNCH_TIMEOUT` → `endRun("idle")` (#20, custom-событие `RunIdle`), `onLeave`/`endAll` (выход/закрытие сервера посреди заезда → `endRun(..., leaving)` до `Data.release`/сохранения, #21, custom `RunLeft` с % трассы; события — `docs/METRICS.md`) |
-| `server/RunEvents` | 215 | `Launch`, `Air`, `Crash`, `Smash`, `Trick` |
-| `server/Pickups` | 188 | монеты (касание, магнит `CoinGrab`, комбо), `PowerUp` (x2, кольца, канистра, ускорители), гемы, кристалл |
+| `server/Runs` | 690 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, финиш, остановка, вылет), таймаут без выстрела `IDLE_LAUNCH_TIMEOUT` → `endRun("idle")` (#20, custom-событие `RunIdle`), `onLeave`/`endAll` (выход/закрытие сервера посреди заезда → `endRun(..., leaving)` до `Data.release`/сохранения, #21, custom `RunLeft` с % трассы; события — `docs/METRICS.md`) |
+| `server/RunEvents` | 218 | `Launch`, `Air`, `Crash`, `Smash`, `Trick` |
+| `server/Pickups` | 190 | монеты (касание, магнит `CoinGrab`, комбо), `PowerUp` (x2, кольца, канистра, ускорители), гемы, кристалл |
 | `server/Podium` | 304 | пьедестал топ-3 недели (#48): аватары `CreateHumanoidModelFromUserIdAsync` (pcall, манекен при ошибке, кэш `PODIUM.CACHE`), поза/анимации на серверном `Animator`, таблички, «?» пустых ступеней; по смене `ReplicatedStorage.WeeklyBoard` |
 | `server/Shop` | 186 | `SledAction`, `TrailAction`, `RewardAction`, `BuyUpgrade`, `WorldAction` |
 | `server/Purchases` | 71 | геймпасс x2, `PRODUCT_HANDLERS`, `ProcessReceipt` (дедуп чеков) |
@@ -68,7 +68,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Props/Decor` | 309 | деревья, постройки, горы, трамплин, шар |
 | `shared/Props/Worlds` | 257 | модели миров 4–7 |
 | `shared/Props/LobbyDecor` | 320 | костёр, флагшток, гирлянда; меши лобби: `lampPost`, `podium`, `boardFrame`, `startGate` (фолбэк — Part); станции кольца (#69): `worldPortal`, `shopStall` (деталь `Zone` с атрибутом `Menu`), `tent`, `hangLamp`, `snowCap` |
-| `shared/UILayout` | 84 | места и размеры лобби-UI (`{ ax, ay, sx, ox, sy, oy, w, h }`), `DESIGN_W/H`, `MIN_TOUCH`/`MIN_PILL`/`MIN_TEXT` (+ для окон) |
+| `shared/UILayout` | 88 | места и размеры лобби-UI (`{ ax, ay, sx, ox, sy, oy, w, h }`), `DESIGN_W/H`, `MIN_TOUCH`/`MIN_PILL`/`MIN_TEXT` (+ для окон) |
 | `shared/Meshes` | 107 | меши декора (#45): `has(...)` (все шаблоны есть и `MESH_DECOR` = 1), `waitFor(имена, таймаут)` (ждать шаблоны с ID в `MeshIds`), `place(имя, основание, масштаб, свойства, родитель)`, `vary` (разброс оттенка по позиции) |
 | `shared/SledModels/init` | 73 | фасад транспорта (прежний API): `build` (корпус: меши `BodyMeshes`, если все шаблоны модели есть, иначе Part `Bodies`), `extras`, `rocket`, `slingshot`, `ROCKETS`, `MOUNTS`, `ROPE_*`, `MESHES` (все меши транспорта — витрина ждёт их) |
 | `shared/SledModels/Builder` | 161 | сборка: `part`/`block`/`cyl`/`rod`/`torus`…, `mesh(имя, цвет, материал, кадр, масштаб)` — MeshPart из `MeshTemplates` с теми же свойствами (без коллизий, `Massless`, приварка), `meshesReady(имена)` (+ `Config.MESH_SLEDS`, `MESH_SLED_FLIP`) |
@@ -218,7 +218,7 @@ RemoteFunction клиент вызывает **только** через `UI.inv
 | `Crash` | Event | клиент → врезался (сервер делает ragdoll) |
 | `Air`, `Trick`, `Smash`, `Crystal`, `CoinGrab` | Event | клиент → время в воздухе, трюки за полёт (`Trick(list { id, count }, airTime)` — сервер проверяет id, count ≤ 5, оборотов ≤ влезающих в серверный полёт), разбил препятствие (`Smash(model)` — модель `Breakable`), кристалл, монета магнитом; проверки — `AntiCheat` |
 | `Restart`, `Back` | Event | клиент → заново / в лобби с рогатки |
-| `RunEnded` | Event | сервер → итог заезда |
+| `RunEnded` | Event | сервер → итог заезда: `reason`, `percent`, `coins`, `bonus`, `distance`, `length`, `level`, `newBest`, `mult`, `gems`, `week`, `parts` — разбивка `coins` для чипов `{ track, air, tricks, bonus }` (сумма = `coins`, #71) |
 | `TaskDone` | Event | сервер → задание выполнено |
 | `Rescue` | Event | сервер → мягкий возврат: `(CFrame на дне куска, доля скорости)`; клиент переставляет свои санки, сбрасывает полёт и трюки (#50) |
 | `SetSetting` | Event | клиент → настройка (Sfx/Music/Snow/Shadows) |
@@ -257,7 +257,7 @@ DevPanel (30) и Reveal (40); каждый эффект держит не бол
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LevelLength`, `ThemeName`, `*Level` (апгрейды), `Sled`, `SledRarity`, `OwnedSleds`, `Trail`, `OwnedTrails`, `Set*` (настройки), `Tutorial` (биты шагов обучения), `Runs` (`Stats.Runs`),
 `Rewards` (JSON: задания, подарки, сундук; `sessionStart`, `big` — индекс большого подарка), в заезде — `InRun`, `Launched`, `RunDistance`,
-`RunCoins`, `RunGems`, `Combo`, `Finished`; лидерборд недели — `Title`, `TitleUntil`, `WeeklyMe` (JSON), у
+`RunLevel` (уровень заезда, с фармом — уровень мира; HUD: баннеры зон по `Profile.build` и аватары тех, кто едет тот же уровень, #71), `RunCoins`, `RunGems`, `Combo`, `Finished`; лидерборд недели — `Title`, `TitleUntil`, `WeeklyMe` (JSON), у
 `ReplicatedStorage` — `WeeklyBoard` (JSON). Только у клиента (ставит сам, не реплицируется):
 `LobbyTheme` (тема витрины лобби, `LobbyScene` → `PostFX`/`Effects`), `GfxChoice` (выбор графики в ⚙:
 0 авто, 1–3; на сессию), `AutoLowFps` (`Effects`: FPS < `GRAPHICS.FPS_LOW`), `GfxTier` (итоговый уровень
