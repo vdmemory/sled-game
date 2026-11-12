@@ -109,6 +109,12 @@ function Islands.coinArc(vmin: number, vmax: number, pitch: number, xFrom: numbe
 	return out
 end
 
+-- Монеты дугой над зазором: от 15 % зазора до четверти пути от края до средней посадки (landRel —
+-- посадка при средней скорости за краем). Развилка (#42) зовёт заново с большим count.
+function Islands.gapArc(vmin: number, vmax: number, pitch: number, gap: number, landRel: number, count: number): { { number } }
+	return Islands.coinArc(vmin, vmax, pitch, gap * 0.15, gap + 0.25 * landRel, count)
+end
+
 -- План цепочки. Ответ: { vmin, vmax, n, gaps = { {gap, drop, from, minLand, maxLand, arc, landMid, final} },
 -- isles = { {len, pitch, rim, landAt, spare} } }. Детерминирован rng (seed уровня).
 function Islands.plan(level: number, rng: Random)
@@ -134,7 +140,7 @@ function Islands.plan(level: number, rng: Random)
 		local maxLand = Islands.landX(vmax, pitch, false, thrust, drop, gap, nextPitch)
 		local midV = (vmin + vmax) / 2
 		local landMid = Islands.landX(midV, pitch, false, 0, drop, gap, nextPitch)
-		local arc = Islands.coinArc(vmin, vmax, pitch, gap * 0.15, gap + 0.25 * ((landMid or gap) - gap), Config.ISLE_COINS)
+		local arc = Islands.gapArc(vmin, vmax, pitch, gap, (landMid or gap) - gap, Config.ISLE_COINS)
 		table.insert(spec.gaps, {
 			gap = gap,
 			drop = drop,
@@ -418,13 +424,20 @@ function Islands.buildGap(track, seg, m: Instance, rng: Random, kit): { any }
 	local laneW = W / Config.LANES
 	local lane = rng:NextInteger(2, Config.LANES - 1)
 	local x = -W / 2 + laneW * (lane - 0.5)
-	for _, p in g.arc do
-		kit.coin(flat * CFrame.new(x, p[2], -p[1]), m)
+	-- рисковая ветка развилки (#42): гем вместо средней монеты дуги (Profile отмечает g.riskGem)
+	local gemAt = if g.riskGem and kit.gem then math.max(1, math.ceil(#g.arc / 2)) else 0
+	for k, p in g.arc do
+		if k == gemAt then
+			kit.gem(flat * CFrame.new(x, p[2], -p[1]), m)
+		else
+			kit.coin(flat * CFrame.new(x, p[2], -p[1]), m)
+		end
 	end
 	clouds(cf, len, rng, m, 3)
 	canyon(track, cf, len, rng, m, clears, kit.dress)
-	-- подвесной мост над пропастью сбоку от коридора (#70, декор; сторона — по номеру куска, без Random)
-	if Config.BRIDGE_GAP_X > 0 then
+	-- подвесной мост над пропастью сбоку от коридора (#70, декор; сторона — по номеру куска, без Random);
+	-- у развилки (#42) вместо него настоящий ледяной мост (Track/Fork)
+	if Config.BRIDGE_GAP_X > 0 and not seg.fork then
 		local side = if math.floor(seg.hStart / 10) % 2 == 0 then -1 else 1
 		local y = -Config.BRIDGE_DROP
 		Props.ropeBridge(flat:PointToWorldSpace(Vector3.new(side * Config.BRIDGE_GAP_X, y, 2)), cf:PointToWorldSpace(Vector3.new(side * Config.BRIDGE_GAP_X, y, -len - 2)), 6, m)

@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Islands = require(ReplicatedStorage.Shared.Islands)
 local Stairs = require(script.Parent.Stairs)
+local Fork = require(script.Parent.Fork)
 
 local Profile = {}
 
@@ -32,6 +33,8 @@ export type Segment = {
 	stair: any?, -- трамплин-лестница (#43): ступень плана Track/Stairs (трамплин в конце куска)
 	spiral: number?, -- вираж-спираль (#44): направление поворота (1 — влево, −1 — вправо)
 	ice: any?, -- ледяной тоннель с кольцами (#44): { half = 1 | 2 } (Track/IceTunnel)
+	fork: any?, -- развилка у островков (#42): план моста (Track/Fork) на разгоне, кусках цепочки и приземлении
+	open: number?, -- развилка: с этой стороны (−1/1) сечение без бортов — пол уходит к мосту
 }
 
 -- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
@@ -134,9 +137,10 @@ local function markValleys(segs: { Segment })
 	local i = 1
 	while i <= #segs do
 		local s = segs[i]
-		if VALLEY_KINDS[s.kind] and not s.tunnel and s.hStart >= Config.VALLEY_FROM_H then
+		-- приземление развилки (#42) — не над долиной: с одной стороны там пол к мосту
+		if VALLEY_KINDS[s.kind] and not s.tunnel and not s.fork and s.hStart >= Config.VALLEY_FROM_H then
 			local j, len = i, 0
-			while j <= #segs and VALLEY_KINDS[segs[j].kind] and not segs[j].tunnel do
+			while j <= #segs and VALLEY_KINDS[segs[j].kind] and not segs[j].tunnel and not segs[j].fork do
 				len += segs[j].hLen
 				j += 1
 			end
@@ -170,12 +174,22 @@ local function markValleys(segs: { Segment })
 	end
 end
 
+-- Развилка у островков (#42): «бросок» для цепочки chainNo уровня — не Random, а равномерная
+-- (низкодисперсная, золотое сечение) последовательность по уровням и цепочкам: доля Config.forkChance
+-- выдерживается и на коротком отрезке уровней (в мире из 5 уровней не выпадет «ни одной развилки»).
+-- Случайные числа не тратятся — цепочки без развилки не меняются.
+function Profile.forkRoll(level: number, chainNo: number): number
+	return (level * 0.6180339887 + chainNo * 0.7548776662) % 1
+end
+
 local function buildProfile(origin: CFrame, level: number): ({ Segment }, number)
 	local rng = Random.new(level * 7919 + 17)
 	local isleRng = Random.new(level * 3571 + 7)
 	-- новые участки (#43 лестница, #44 вираж и ледяной тоннель): свой генератор — уровни, где их нет,
 	-- не меняются
 	local featRng = Random.new(level * 6151 + 29)
+	-- развилка у островков (#42): номер цепочки на уровне (выбор развилки — Profile.forkRoll)
+	local chainNo = 0
 	local lastStair: number? = nil
 	local lastSpiral: number? = nil
 	local curveIndex = 0
@@ -394,13 +408,26 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	-- помещается до финиша. Ответ: построили ли.
 	local function islands(): boolean
 		local spec = Islands.plan(level, isleRng)
-		local total = Config.ISLE_IN[2] + 90
+		-- развилка (#42): ледяной мост сбоку (Track/Fork) — доля цепочек Config.forkChance; мост от конца
+		-- разгона (уклон ISLE_IN[1]) до начала склона приземления (уклон 18°), иначе развилки нет
+		local fork = nil
+		chainNo += 1
+		local intro = Config.FORK_INTRO >= 1 and level == Config.FORK_FROM_LEVEL and chainNo == 1
+		if Profile.forkRoll(level, chainNo) < Config.forkChance(level) or intro then
+			fork = Fork.plan(spec, Config.ISLE_IN[1], 18)
+		end
+		local inLen = if fork then Config.FORK_IN_LEN else Config.ISLE_IN[2]
+		local landLen = if fork then Config.FORK_LAND_LEN else 90
+		local total = inLen + landLen
 		for k, g in spec.gaps do
 			total += g.gap + (if spec.isles[k] then spec.isles[k].len else 0)
 		end
 		-- ледяной тоннель с кольцами-ускорителями перед цепочкой (#44, Track/IceTunnel): разгон перед
 		-- прыжками; скорость вылета всё равно задаёт ускоритель островков (окно LaunchMin…LaunchMax)
 		local ice = level >= Config.ICE_TUNNEL_FROM_LEVEL and featRng:NextNumber() < Config.ICE_TUNNEL_CHANCE
+		if fork then
+			ice = false -- перед развилкой — открытый разгон: вывеска и обе ветки видны издалека
+		end
 		if ice then
 			total += Config.ICE_TUNNEL_LEN
 		end
@@ -408,20 +435,38 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		if h + total > L - 80 then
 			return false
 		end
+		if fork then
+			-- рисковая ветка: монет дугой × FORK_RISK_COINS, FORK_RISK_GEMS гемов; островки уже (зазор до моста)
+			for _, g in spec.gaps do
+				g.arc = Islands.gapArc(spec.vmin, spec.vmax, g.from, g.gap, g.landMid, Config.ISLE_COINS * Config.FORK_RISK_COINS)
+			end
+			local gems = math.floor(Config.FORK_RISK_GEMS)
+			for j = 1, gems do
+				spec.gaps[math.clamp(math.round(j * #spec.gaps / (gems + 1)), 1, #spec.gaps)].riskGem = true
+			end
+			for _, isle in spec.isles do
+				isle.rim = math.min(isle.rim, Config.FORK_ISLE_RIM)
+			end
+		end
 		if ice then
 			local half = Config.ICE_TUNNEL_LEN / 2
 			add("iceTunnel", Config.ICE_TUNNEL_PITCH, half, true, { tunnel = "in", ice = { half = 1 } })
 			add("iceTunnel", Config.ICE_TUNNEL_PITCH, half, true, { tunnel = "out", ice = { half = 2 } })
 		end
-		add("isleIn", Config.ISLE_IN[1], Config.ISLE_IN[2])
+		add("isleIn", Config.ISLE_IN[1], inLen, nil, if fork then { fork = fork, open = fork.side } else nil)
+		if fork then
+			-- система цепочки: конец разгона, курс цепочки (островки идут без поворотов)
+			fork.origin = CFrame.new(pos) * CFrame.Angles(0, yaw, 0)
+			fork.h0 = h
+		end
 		for k, g in spec.gaps do
-			push("gap", math.deg(math.atan2(g.drop, g.gap)), math.sqrt(g.gap * g.gap + g.drop * g.drop), false, { isle = g })
+			push("gap", math.deg(math.atan2(g.drop, g.gap)), math.sqrt(g.gap * g.gap + g.drop * g.drop), false, { isle = g, fork = fork })
 			local isle = spec.isles[k]
 			if isle then
-				push("isle", isle.pitch, isle.len, false, { isle = isle })
+				push("isle", isle.pitch, isle.len, false, { isle = isle, fork = fork })
 			end
 		end
-		push("landing", 18, 90)
+		push("landing", 18, landLen, nil, if fork then { fork = fork, open = fork.side } else nil)
 		lastIsle = h
 		return true
 	end

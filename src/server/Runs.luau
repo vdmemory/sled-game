@@ -546,10 +546,11 @@ end
 local function rescueCheck(player: Player, run: Run, x: number, y: number, step: number): boolean
 	local track = run.track
 	local seg = track.segments[track.hint]
-	local edge = Config.TRACK_WIDTH / 2
-	local outside = seg ~= nil and not seg.chute and seg.kind ~= "lake" and math.abs(x) > edge + Config.WALL_OFFSET + 2
+	-- вбок — от края ходовой части куска (у развилки #42 она шире: до края моста, Track.floorSpan)
+	local out = track:sideOut(x)
+	local outside = seg ~= nil and not seg.chute and seg.kind ~= "lake" and out > Config.WALL_OFFSET + 2
 	run.outside = if outside then (run.outside or 0) + step else 0
-	local need = y < -Config.RESCUE_DEPTH or math.abs(x) > edge + Config.RESCUE_SIDE or (run.outside or 0) >= Config.RESCUE_OUT_TIME
+	local need = y < -Config.RESCUE_DEPTH or out > Config.RESCUE_SIDE or (run.outside or 0) >= Config.RESCUE_OUT_TIME
 	if not need or (run.rescues or 0) >= Config.RESCUE_MAX then
 		return false
 	end

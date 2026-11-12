@@ -47,7 +47,7 @@ end
 -- Арки рубежей на куске: cf — начало куска (ось −Z вдоль трассы), prof — сечение (out — половина
 -- ширины до внешнего края, top — высота кромки). Над пропастью и островками арок нет.
 function Milestones.build(seg: any, cf: CFrame, prof: any, length: number, parent: Instance)
-	if seg.kind == "gap" or seg.kind == "isle" then
+	if seg.kind == "gap" or seg.kind == "isle" or seg.open then -- развилка (#42): столб арки встал бы на пол к мосту
 		return
 	end
 	local cosA = math.cos(math.rad(seg.angle))

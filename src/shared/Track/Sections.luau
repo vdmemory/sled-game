@@ -90,6 +90,9 @@ local function buildCrossSection(cf: CFrame, len: number, prof, chute: boolean, 
 	local road = prof == ROAD_PROFILE
 	local guard = if road then SNOW_PROFILE else prof
 	for _, side in { -1, 1 } do
+		if seg and seg.open == side then
+			continue -- развилка (#42): с этой стороны пол уходит к мосту, борта и обочину строит Track/Fork
+		end
 		local x, y = floorW / 2, 0
 		if bankLen > 0 then
 			for k, b in guard.banks do
