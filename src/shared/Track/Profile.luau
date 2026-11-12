@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Islands = require(ReplicatedStorage.Shared.Islands)
+local Stairs = require(script.Parent.Stairs)
 
 local Profile = {}
 
@@ -28,10 +29,12 @@ export type Segment = {
 	crest: any?, -- волна: номер гребня (подъём) или false (спуск)
 	tunnel: string?, -- кусок под сводом тоннеля (#65): "in" / "mid" / "out"
 	valley: number?, -- трасса по гребню над долиной с островками: −1 слева, 1 справа, 2 с обеих сторон
+	stair: any?, -- трамплин-лестница (#43): ступень плана Track/Stairs (трамплин в конце куска)
 }
 
 -- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
-local BREAK_AFTER = { kicker = true, isleIn = true, isle = true, gap = true }
+-- (лестница #43: сани в полёте над стыком, баллистика считает склон без переходных кусков)
+local BREAK_AFTER = { kicker = true, isleIn = true, isle = true, gap = true, stair = true }
 
 -- Тоннели (#65, владелец 2026-11-12: «как минимум 20% длины трассы»). После постройки профиля
 -- выбираются непрерывные участки «наземных» кусков (повороты, пологие, крутые, скругления — без
@@ -168,6 +171,9 @@ end
 local function buildProfile(origin: CFrame, level: number): ({ Segment }, number)
 	local rng = Random.new(level * 7919 + 17)
 	local isleRng = Random.new(level * 3571 + 7)
+	-- новые участки (#43 лестница): свой генератор — уровни, где их нет, не меняются
+	local featRng = Random.new(level * 6151 + 29)
+	local lastStair: number? = nil
 	local curveIndex = 0
 	local lastIsle: number? = nil
 	local L = Config.levelLength(level)
@@ -311,6 +317,20 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		return true
 	end
 
+	-- Трамплин-лестница (#43): план — Track/Stairs (баллистика); не строим, если не влезает до финиша
+	local function stairs(): boolean
+		local spec = Stairs.plan(level, featRng)
+		if h + spec.total > L - 80 then
+			return false
+		end
+		for _, step in spec.steps do
+			add("stair", step.pitch, step.len, false, { stair = step })
+		end
+		add("stairLand", spec.landPitch, spec.landLen)
+		lastStair = h
+		return true
+	end
+
 	add("start", 7, 110)
 	local nextForced = 1
 	-- островки: свой генератор (не сдвигает раскладку остальных кусков уровня)
@@ -354,8 +374,13 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 			-- доп. цепочка островков (шанс растёт с уровнем, не чаще ISLE_MIN_SPACING)
 			local extraIsle = isleOn and isleRng:NextNumber() < Config.isleChance(level)
 				and lastIsle ~= nil and h - lastIsle >= Config.ISLE_MIN_SPACING
+			local stairOk = level >= Config.STAIR_FROM_LEVEL and h >= Config.STAIR_FROM_H
+				and (lastStair == nil or h - lastStair >= Config.STAIR_MIN_SPACING)
+				and (lastIsle == nil or h - lastIsle >= Config.STAIR_ISLE_SPACING)
 			if extraIsle and islands() then
 				-- построили островки вместо обычного куска
+			elseif stairOk and featRng:NextNumber() < Config.stairChance(level) and stairs() then
+				-- лестница трамплинов вместо обычного куска
 			elseif level >= Config.WAVE_FROM_LEVEL and h > 300 and isleRng:NextNumber() < Config.WAVE_CHANCE then
 				waves()
 			elseif h > 220 and t < Config.CURVE_CHANCE then

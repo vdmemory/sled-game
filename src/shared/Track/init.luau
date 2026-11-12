@@ -21,6 +21,7 @@ local Dress = require(script.Dress)
 local Items = require(script.Items)
 local Tunnel = require(script.Tunnel)
 local Valley = require(script.Valley)
+local Stairs = require(script.Stairs)
 
 local part, deco = Props.part, Props.deco
 local W = Sections.W
@@ -144,10 +145,13 @@ function Track:buildSegment(i: number)
 		}
 		self.clears[i] = if seg.kind == "isle" then Islands.buildIsle(self, seg, m, rng, kit) else Islands.buildGap(self, seg, m, rng, kit)
 	else
-		buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme, seg.kind == "landing", seg)
+		buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme, seg.kind == "landing" or seg.kind == "stairLand", seg)
 	end
 	if seg.kind == "isleIn" then
 		Islands.buildIn(self, seg, m)
+	end
+	if seg.stair then
+		Stairs.build(self.theme, seg, m, { coin = makeCoin, x2 = makeX2 }) -- трамплин-лестница (#43)
 	end
 	dressTrack(self.theme, Random.new(self.level * 7907 + i * 13), seg, m)
 
@@ -357,6 +361,11 @@ function Track:buildSegment(i: number)
 			local look = cf.LookVector
 			local flat = CFrame.lookAt(cf.Position, cf.Position + Vector3.new(look.X, 0, look.Z))
 			return flat * CFrame.new(0, (if p then p[2] else 8) + y - 3, -(if p then p[1] else len / 2))
+		elseif seg.stair then
+			local at = Stairs.bonusAt(seg, y)
+			if at then
+				return at
+			end
 		end
 		return cf * CFrame.new(laneX(rng:NextInteger(2, Config.LANES - 1)), y, -z)
 	end

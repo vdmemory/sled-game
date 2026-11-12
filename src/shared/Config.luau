@@ -215,6 +215,48 @@ Config.WAVE_COUNT = { 3, 4 } -- гребней в серии
 Config.WAVE_DOWN = { 10, 14 } -- спуск: уклон, длина
 Config.WAVE_UP = { -3, 10 } -- подъём: уклон (минус — вверх), длина
 
+-- Трамплин-лестница (#43, Track/Stairs): 3–4 нарастающих трамплина по пологому склону без обрыва,
+-- последний — большой (как у кикера); монеты по дугам полёта, x2 в вершине последней дуги.
+-- Скорость вылета — окно [stairSpeed, × STAIR_SPREAD] (атрибуты LaunchMin/LaunchMax/Lift у Ramp, как у
+-- ускорителей островков): медленного подбрасывает, быстрого придерживает — дуги монет ловятся, а
+-- при верхней скорости с ракетой садимся до следующего трамплина − STAIR_END_MARGIN.
+Config.STAIR_FROM_LEVEL = 4 -- первый уровень с лестницей
+Config.STAIR_FROM_H = 300 -- не раньше этой дистанции от старта (studs по горизонтали)
+Config.STAIR_CHANCE_BASE = 0.06 -- шанс лестницы вместо обычного куска на STAIR_FROM_LEVEL…
+Config.STAIR_CHANCE_STEP = 0.002 -- …+ за уровень…
+Config.STAIR_CHANCE_MAX = 0.08 -- …до этого
+Config.STAIR_MIN_SPACING = 1500 -- studs между лестницами
+Config.STAIR_ISLE_SPACING = 250 -- и от конца цепочки островков
+Config.STAIR_FOUR_LEVEL = 10 -- с этого уровня лестница иногда из 4 трамплинов (раньше — из 3)
+Config.STAIR_PITCH = 7 -- уклон склона лестницы, градусы
+Config.STAIR_HEIGHT = { 2.5, 5 } -- высота первого / последнего трамплина (между — поровну), studs
+Config.STAIR_RAMP_RATIO = 3.6 -- длина трамплина = высота × это (5 → 18, как у кикера)
+Config.STAIR_LIFT = { 0.25, 0.45 } -- подброс первого / последнего (последний — как RAMP_LIFT)
+Config.STAIR_RUNUP = 40 -- разгон до первого трамплина, studs
+Config.STAIR_GAP = { 55, 70 } -- между трамплинами не меньше (если баллистика не требует больше), studs
+Config.STAIR_END_MARGIN = 8 -- при верхней скорости + ракета садимся до следующего трамплина − это
+Config.STAIR_SPEED = { 75, 115 } -- скорость вылета: на STAIR_FROM_LEVEL / потолок
+Config.STAIR_SPEED_STEP = 2 -- + studs/с за уровень
+Config.STAIR_SPREAD = 1.15 -- окно скорости: [v, v · это]
+Config.STAIR_LAND_PITCH = 14 -- склон приземления после последнего трамплина
+Config.STAIR_LAND_LEN = 90 -- его длина не меньше этого…
+Config.STAIR_LAND_MARGIN = 25 -- …и дальности при верхней скорости + ракета + это
+Config.STAIR_COINS = 5 -- монет на дуге маленького трамплина (остаются те, что ловят все траектории окна)
+Config.STAIR_COINS_TOP = 9 -- на дуге последнего
+Config.STAIR_COIN_STEP = 5 -- монеты на дуге не чаще, studs
+Config.STAIR_COIN_PROBE = 40 -- точек выборки дуги (где монету ловят все траектории окна)
+Config.STAIR_X2_HIT = 16 -- высота датчика x2 в вершине последней дуги (полоса траекторий ≤ 9 + запас)
+function Config.stairChance(level: number): number
+	if level < Config.STAIR_FROM_LEVEL then
+		return 0
+	end
+	return math.min(Config.STAIR_CHANCE_MAX, Config.STAIR_CHANCE_BASE + Config.STAIR_CHANCE_STEP * (level - Config.STAIR_FROM_LEVEL))
+end
+function Config.stairSpeed(level: number): (number, number)
+	local v = math.min(Config.STAIR_SPEED[2], Config.STAIR_SPEED[1] + Config.STAIR_SPEED_STEP * math.max(0, level - Config.STAIR_FROM_LEVEL))
+	return v, v * Config.STAIR_SPREAD
+end
+
 -- Оформление обычных кусков (#40, art): цветные кромки дна, флажки-слалом по бортам, ледяные арки
 Config.EDGE_STRIPES = true -- цветные полосы вдоль края дна (цвет мира)
 Config.SLALOM_CHANCE = 0.45 -- флажки-слалом на бортах пологого/крутого куска
@@ -1150,6 +1192,17 @@ Config.TUNABLES = {
 	{ "DECOR_ROCKS_CHANCE", "Оформление: скалы и кристаллы мира (#67)", "Графика", 0, 2, 0.05 },
 	{ "WAVE_CHANCE", "Волны-бугры: шанс серии", "Трасса", 0, 1, 0.01 },
 	{ "WAVE_FROM_LEVEL", "Волны-бугры: с уровня", "Трасса", 1, 50, 1 },
+	{ "STAIR_FROM_LEVEL", "Лестница трамплинов: с уровня", "Трасса", 1, 50, 1 },
+	{ "STAIR_CHANCE_BASE", "Лестница: шанс", "Трасса", 0, 0.5, 0.005 },
+	{ "STAIR_CHANCE_STEP", "Лестница: + шанс за уровень", "Трасса", 0, 0.05, 0.001 },
+	{ "STAIR_CHANCE_MAX", "Лестница: макс. шанс", "Трасса", 0, 0.5, 0.005 },
+	{ "STAIR_MIN_SPACING", "Лестница: не чаще, studs", "Трасса", 100, 5000, 50 },
+	{ "STAIR_GAP.1", "Лестница: мин. шаг трамплинов, studs", "Трасса", 20, 200, 5 },
+	{ "STAIR_SPEED.1", "Лестница: скорость вылета на 1-м уровне", "Трасса", 40, 200, 5 },
+	{ "STAIR_SPEED.2", "Лестница: потолок скорости вылета", "Трасса", 40, 200, 5 },
+	{ "STAIR_SPEED_STEP", "Лестница: + скорость за уровень", "Трасса", 0, 10, 0.5 },
+	{ "STAIR_SPREAD", "Лестница: окно скорости ×", "Трасса", 1, 1.5, 0.01 },
+	{ "STAIR_END_MARGIN", "Лестница: запас до след. трамплина", "Трасса", 0, 40, 1 },
 	{ "ISLE_FROM_LEVEL", "Островки: с уровня", "Острова", 1, 50, 1 },
 	{ "ISLE_AT", "Островки: обязательная цепочка на доле уровня", "Острова", 0.2, 0.9, 0.01 },
 	{ "ISLE_CHANCE_BASE", "Островки: шанс доп. цепочки", "Острова", 0, 0.5, 0.005 },

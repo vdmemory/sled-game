@@ -60,6 +60,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/Track/Dress` | 324 | оформление миров вдоль трассы и разметка на ней |
 | `shared/Track/Items` | 189 | монеты, гемы, магнит, бонусы, кристалл, `tagObstacle` |
 | `shared/Track/Valley` | 150 | гребень над долиной: `build` — обрыв, дно, островки по миру; `prune` — убрать декор обочины над обрывом; участки помечает `Profile` (`seg.valley`) |
+| `shared/Track/Stairs` | 171 | трамплин-лестница (#43): `plan` — ступени, длины кусков, дуги монет (баллистика `Islands` со своим трамплином), `build` — трамплин с окном скорости, флажки, монеты, x2; `bonusAt` — гем/кристалл в дуге; куски `stair`/`stairLand` ставит `Profile` |
 | `shared/Track/Tunnel` | 140 | тоннель над поворотом (#65): `build` — кольцо свода (меш `tunnel_vault` или блоки), порталы, свет, вид по миру; куски помечает `Profile` (`seg.tunnel`) |
 | `shared/Props/init` | 16 | фасад: подключает модули категорий, отдаёт таблицу `Props` |
 | `shared/Props/Base` | 103 | `part`, `deco`, `pick`, надписи, колёса, общие цвета |
@@ -164,6 +165,10 @@ GitHub Actions публикует его в Roblox через Open Cloud.
   `Track:destroy` стирается `FillBlock(Air)` (`Islands.clear`). Луч античита (`Include` папки
   трассы) Terrain не видит; луч санок видит, но скалы ниже траекторий. Пропасть без коллизий —
   падение заканчивает заезд как `fell` (`y < −60`).
+- Трамплин-лестница (#43): `Profile` → `Stairs.plan` → куски `stair` (у каждого `seg.stair` — ступень
+  плана, трамплин в конце куска) и `stairLand`; `Islands.takeoff/yAt/landX/coinArc(…, ramp?)` считают
+  баллистику для любого трамплина `{ длина, высота, подброс }`. Новые участки берут случайные числа из
+  своего `featRng` (seed уровня) — уровни, где их нет, не сдвигаются.
 - `Track:progressOf` ищет кусок в окне hint −8…+40 (куски пола поворота и переходы короткие).
 - `SafeLine.plan` пропускает `fillet` при проверке «после приземления первые 60 studs чистые».
 - `SledController`: «подсадка» на ступеньку ≤ `STEP_UP_MAX` впереди (луч из `STEP_PROBE`, та же
@@ -171,6 +176,10 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 - Проверки (luau CLI + шимы Roblox-API с настоящей CFrame-математикой): `scratchpad/smooth/` —
   `check_tail.luau` (стыки ур. 1–30), `isle_tail.luau` (баллистика ур. 1–50), `parts_tail.luau`
   (Part-ы на кусок и в окне стриминга); сборка `python3 build.py <src/shared> <tail>`.
+- В репозитории: `scripts/stand/track_levels.luau` (`python3 scripts/stand/run.py scripts/stand/track_levels.luau
+  [--meshes]`) — все куски уровней 1–45 строятся без ошибок, лестница не перелетается, гладкость стыков;
+  статистика новых участков по уровням. Шимы копят инстансы — за один запуск ≈ 25 уровней, диапазон
+  задаётся глобалами `ARGS_FROM`/`ARGS_TO` (строкой перед сценарием).
 
 ### Лобби и витрина
 

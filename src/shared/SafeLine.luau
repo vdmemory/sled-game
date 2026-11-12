@@ -72,7 +72,7 @@ function SafeLine.plan(segs: { any }, level: number): { [number]: { Row } }
 				back -= 1
 			end
 			local prev = segs[back]
-			local safeUntil = if prev and prev.kind == "landing" then 60 else 0
+			local safeUntil = if prev and (prev.kind == "landing" or prev.kind == "stairLand") then 60 else 0
 			local rows = {}
 			for row = 1, Config.OBSTACLE_ROWS do
 				local z = seg.length * (row - 0.5) / Config.OBSTACLE_ROWS

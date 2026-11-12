@@ -116,8 +116,9 @@ local function makeShield(at: CFrame, parent: Instance)
 	light.Range = 12
 	light.Parent = plate
 end
-local function makeX2(at: CFrame, parent: Instance)
-	powerHit("x2", at, Vector3.new(4.5, 4.5, 4.5), parent)
+-- hit — свой размер датчика (x2 в воздухе над трамплин-лестницей #43: накрывает все траектории окна)
+local function makeX2(at: CFrame, parent: Instance, hit: Vector3?)
+	powerHit("x2", at, hit or Vector3.new(4.5, 4.5, 4.5), parent)
 	local coin = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, 3.8, 3.8), CFrame = at * CFrame.Angles(0, math.rad(90), 0), Material = Enum.Material.SmoothPlastic, Color = Color3.fromRGB(255, 200, 40), Reflectance = 0.2 }, parent)
 	local bb = Instance.new("BillboardGui")
 	bb.Size = UDim2.fromOffset(90, 60)
