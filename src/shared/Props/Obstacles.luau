@@ -7,7 +7,8 @@ local Base = require(script.Parent.Base)
 local Props = Base.Props
 local Meshes = Base.Meshes
 local part, deco, pick, label, wheels = Base.part, Base.deco, Base.pick, Base.label, Base.wheels
-local SNOW, BLACK, GLASS = Base.SNOW, Base.BLACK, Base.GLASS
+local SNOW, BLACK = Base.SNOW, Base.BLACK
+local softBox, lamp, snowCap, WINDOW = Base.softBox, Base.lamp, Base.snowCap, Base.WINDOW
 
 ------------------------------------------------------------------ уличные препятствия
 function Props.hydrant(base: CFrame, parent: Instance)
@@ -164,18 +165,39 @@ function Props.signpost(rng: Random, base: CFrame, parent: Instance, collide: bo
 end
 
 ------------------------------------------------------------------ ещё препятствия из оригинала
--- Грузовик-фургон
+-- Грузовик (#68, референс владельца): красная кабина с крупным лобовым, чёрная решётка, круглые
+-- фары; серая будка с рёбрами; задние колёса сдвоенные. Коллизия — прежние Part (будка 7 × 8 × 14,
+-- кабина 6.8 × 5.4 × 5, 6 шин r 1.5), будка и кабина невидимы — вид рисует декор (Base.softBox).
+-- ~42 части (было 19), коллизия 8. rng — один pick, как раньше.
 function Props.truck(rng: Random, base: CFrame, parent: Instance)
-	local cab = pick(rng, { Color3.fromRGB(60, 110, 200), Color3.fromRGB(210, 60, 50), Color3.fromRGB(240, 240, 240) })
-	part("Part", { Size = Vector3.new(7, 8, 14), CFrame = base * CFrame.new(0, 5.6, 2.5), Color = Color3.fromRGB(235, 235, 240) }, parent) -- будка
-	part("Part", { Size = Vector3.new(6.8, 5.4, 5), CFrame = base * CFrame.new(0, 3.9, -7), Color = cab }, parent)
-	deco({ Size = Vector3.new(6, 2, 0.3), CFrame = base * CFrame.new(0, 5, -9.55), Material = Enum.Material.Glass, Color = GLASS, Reflectance = 0.3 }, parent)
-	deco({ Size = Vector3.new(6.9, 1.8, 3.2), CFrame = base * CFrame.new(0, 5, -7.2), Material = Enum.Material.Glass, Color = GLASS }, parent)
+	local cab = pick(rng, { Color3.fromRGB(215, 55, 50), Color3.fromRGB(230, 90, 45), Color3.fromRGB(60, 110, 200) })
+	local grey, rib = Color3.fromRGB(175, 180, 190), Color3.fromRGB(145, 150, 162)
+	part("Part", { Size = Vector3.new(7, 8, 14), CFrame = base * CFrame.new(0, 5.6, 2.5), Transparency = 1, CastShadow = false }, parent) -- будка
+	part("Part", { Size = Vector3.new(6.8, 5.4, 5), CFrame = base * CFrame.new(0, 3.9, -7), Transparency = 1, CastShadow = false }, parent) -- кабина
+	-- кабина: скруглён только верх носа (сзади к ней примыкает будка)
+	softBox(base * CFrame.new(0, 3.9, -7), Vector3.new(6.8, 5.4, 5), 1.2, cab, parent, { back = false, shadow = true })
+	deco({ Size = Vector3.new(5.8, 1.6, 0.15), CFrame = base * CFrame.new(0, 4.5, -9.55), Color = WINDOW, Reflectance = 0.15 }, parent) -- лобовое
+	deco({ Size = Vector3.new(6.9, 1.6, 2.6), CFrame = base * CFrame.new(0, 4.5, -7.2), Color = WINDOW, Reflectance = 0.15 }, parent) -- боковые окна насквозь
+	deco({ Size = Vector3.new(3.6, 1.4, 0.15), CFrame = base * CFrame.new(0, 2.4, -9.55), Color = BLACK }, parent) -- решётка
 	for _, side in { -1, 1 } do
-		deco({ Size = Vector3.new(0.15, 2.4, 10), CFrame = base * CFrame.new(side * 3.55, 6, 2.5), Color = cab }, parent) -- полоса на будке
+		lamp(base * CFrame.new(side * 2.6, 2.4, -9.55), 1, Color3.fromRGB(255, 245, 200), parent, true)
+		lamp(base * CFrame.new(side * 2.8, 2.4, 9.56), 0.8, Color3.fromRGB(255, 70, 60), parent, true)
 	end
-	deco({ Size = Vector3.new(6.8, 0.5, 13.8), CFrame = base * CFrame.new(0, 9.85, 2.5), Material = Enum.Material.Snow, Color = SNOW }, parent)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(6.6, 0.8, 0.8), CFrame = base * CFrame.new(0, 1.4, -9.45), Color = Color3.fromRGB(95, 100, 112) }, parent) -- бампер
+	snowCap(base * CFrame.new(0, 6.6, -7.3), Vector3.new(5.8, 0.6, 3.6), parent)
+	-- будка: мягкий серый короб + рёбра насквозь по ширине (видны на обоих бортах), снег сверху
+	softBox(base * CFrame.new(0, 5.6, 2.5), Vector3.new(7, 8, 14), 0.7, grey, parent, { shadow = true })
+	for _, z in { -2.9, -0.2, 2.5, 5.2, 7.9 } do
+		deco({ Size = Vector3.new(7.12, 7.2, 0.35), CFrame = base * CFrame.new(0, 5.4, z), Color = rib }, parent)
+	end
+	snowCap(base * CFrame.new(0, 9.6, 2.5), Vector3.new(6.4, 0.8, 12.6), parent)
+	deco({ Size = Vector3.new(6, 0.6, 18.4), CFrame = base * CFrame.new(0, 1.4, -0.2), Color = Color3.fromRGB(55, 58, 66) }, parent) -- рама
 	wheels(base, 3.4, { -6.5, 4, 7.5 }, 1.5, parent)
+	for _, z in { 4, 7.5 } do -- сдвоенные задние: внутренняя шина видна сзади и снизу
+		for _, side in { -1, 1 } do
+			deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(1, 3, 3), CFrame = base * CFrame.new(side * 2.3, 1.5, z), Color = BLACK }, parent)
+		end
+	end
 end
 
 -- Автобусная остановка: навес со стеклянной стенкой и табличкой

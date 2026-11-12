@@ -70,6 +70,9 @@ local function label(p: BasePart, face: Enum.NormalId, text: string, color: Colo
 	t.Parent = sg
 end
 
+-- Колёса: шина — Part с коллизией (как раньше), белый колпак на ~60% диаметра — «игрушечное» колесо
+-- из референсов (#68)
+local HUB = Color3.fromRGB(245, 245, 240)
 local function wheels(base: CFrame, halfW: number, zs: { number }, r: number, parent: Instance)
 	for _, z in zs do
 		for _, side in { -1, 1 } do
@@ -81,12 +84,68 @@ local function wheels(base: CFrame, halfW: number, zs: { number }, r: number, pa
 			}, parent)
 			deco({ -- колпак
 				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(1.2, r, r),
+				Size = Vector3.new(1.2, r * 1.2, r * 1.2),
 				CFrame = base * CFrame.new(side * halfW, r, z),
-				Color = Color3.fromRGB(190, 195, 205),
+				Color = HUB,
 			}, parent)
 		end
 	end
+end
+
+------------------------------------------------------------------ «мягкий» транспорт (#68)
+-- Кузова трафика в стиле «пластилин»: коллизию несут прежние Part (их делаем невидимыми), вид —
+-- декор без коллизии. Окна крупные светло-голубые, решётка чёрная, фары круглые.
+local WINDOW = Color3.fromRGB(150, 205, 240)
+
+-- Короб со скруглёнными верхними рёбрами поперёк машины (переднее/заднее — их видно сбоку, а
+-- трафик проезжает поперёк трассы). 4 части: низ во всю длину, верхний слой короче на r,
+-- 2 цилиндра-скругления. opts: front/back = false — ребро не скруглять; top — цвет верха (крыша);
+-- shadow — отбрасывать тень (только крупным).
+local function softBox(cf: CFrame, size: Vector3, r: number, color: Color3, parent: Instance, opts: { [string]: any }?)
+	local o = opts or {}
+	local front, back = o.front ~= false, o.back ~= false
+	local top = o.top or color
+	local hy = size.Y / 2
+	deco({ Size = Vector3.new(size.X, size.Y - r, size.Z), CFrame = cf * CFrame.new(0, -r / 2, 0), Color = color, CastShadow = o.shadow == true }, parent)
+	local z0 = -size.Z / 2 + (if front then r else 0)
+	local z1 = size.Z / 2 - (if back then r else 0)
+	deco({ Size = Vector3.new(size.X, r, z1 - z0), CFrame = cf * CFrame.new(0, hy - r / 2, (z0 + z1) / 2), Color = top, CastShadow = o.shadow == true }, parent)
+	-- цилиндры чуть утоплены, чтобы их нижняя половина не мерцала на гранях низа
+	local ends = {}
+	if front then
+		table.insert(ends, z0 + 0.02)
+	end
+	if back then
+		table.insert(ends, z1 - 0.02)
+	end
+	for _, z in ends do
+		deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(size.X - 0.04, r * 2, r * 2), CFrame = cf * CFrame.new(0, hy - r, z), Color = top }, parent)
+	end
+end
+
+-- «Пилюля» вдоль Z: брусок + полукруглые торцы (багажник на крыше, мигалка). size.Y — диаметр торцов.
+local function pill(cf: CFrame, size: Vector3, color: Color3, parent: Instance, material: Enum.Material?)
+	local d = size.Y
+	deco({ Size = Vector3.new(size.X, d, size.Z - d), CFrame = cf, Color = color, Material = material }, parent)
+	for _, s in { -1, 1 } do
+		deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(size.X, d, d), CFrame = cf * CFrame.new(0, 0, s * (size.Z - d) / 2), Color = color, Material = material }, parent)
+	end
+end
+
+-- Круглая фара/фонарь, смотрит по оси Z base (диск-цилиндр, повернутый на 90° по Y)
+local function lamp(cf: CFrame, d: number, color: Color3, parent: Instance, neon: boolean?)
+	deco({
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.25, d, d),
+		CFrame = cf * CFrame.Angles(0, math.rad(90), 0),
+		Color = color,
+		Material = if neon then Enum.Material.Neon else nil,
+	}, parent)
+end
+
+-- Снежная «подушка» на крыше: приплюснутый эллипсоид, утоплен наполовину
+local function snowCap(cf: CFrame, size: Vector3, parent: Instance)
+	deco({ Shape = Enum.PartType.Ball, Size = size, CFrame = cf, Material = Enum.Material.Snow, Color = SNOW }, parent)
 end
 
 return {
@@ -97,6 +156,11 @@ return {
 	pick = pick,
 	label = label,
 	wheels = wheels,
+	softBox = softBox,
+	pill = pill,
+	lamp = lamp,
+	snowCap = snowCap,
+	WINDOW = WINDOW,
 	SNOW = SNOW,
 	BLACK = BLACK,
 	GLASS = GLASS,
