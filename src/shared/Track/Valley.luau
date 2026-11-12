@@ -100,6 +100,11 @@ function Valley.build(theme: number, seg, cf: CFrame, visLen: number, prof, pare
 				CastShadow = true,
 			}, parent)
 			if look.cap then
+				-- снежный карниз с каплями-сосульками по кромке обрыва (#70, без Random)
+				for k = 1, math.floor(visLen / 5) do
+					local l = 1.5 + (k * 5 % 4) * 0.8
+					deco({ Size = Vector3.new(0.6, l, 0.6), CFrame = cf * CFrame.new(side * (x0 + 2.6), yTop - 1 - l / 2, -k * 5 + 2.5), Material = Enum.Material.Ice, Color = Color3.fromRGB(205, 232, 252), Transparency = 0.1 }, parent)
+				end
 				deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(len, 4, 4), CFrame = cf * CFrame.new(side * (x0 + 1), yTop + 0.6, -visLen / 2) * CFrame.Angles(0, math.rad(90), 0), Material = look.capMat or Enum.Material.Snow, Color = look.cap }, parent)
 			end
 			-- выступы скалы на стене (неровный обрыв)

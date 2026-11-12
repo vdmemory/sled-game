@@ -1,5 +1,11 @@
 # Журнал изменений
 
+## Обвязка трассы: заборчик, подвесной мост, снежные карнизы (#70; track-architect, art-director)
+- `Props.fenceRun` — заборчик на кромке обрыва долины и на каждом 4-м куске снежных прямых
+  (`Config.FENCE_EVERY`/`FENCE_STEP`), `Props.ropeBridge` — подвесной мост сбоку над пропастью между
+  островками (`BRIDGE_GAP_X`/`BRIDGE_DROP`), снежный карниз с сосульками по кромке обрыва долины.
+  Всё без Random — раскладка не меняется. Развилка «мост или островки» (#44) — отдельной задачей.
+
 ## Скалы, кристаллы, ёлки и льдины по мирам (#67; art-director, track-architect)
 - Новые Part-модели (`Props/Worlds`): `snowBoulder`, `tierPine`, `fluffyPine`, `hoodoo`, `tableRock`,
   `lavaSpire`, `crystalSpire` — по референсам владельца. Ставятся на средний план обочин

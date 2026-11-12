@@ -204,6 +204,18 @@ function Track:buildSegment(i: number)
 	if seg.valley and not special and visLen > 0 then
 		Valley.build(self.theme, seg, cf, visLen, prof, m)
 	end
+	-- Заборчик (#70): на кромке обрыва долины — всегда, вдоль снежных прямых — каждый FENCE_EVERY-й
+	-- кусок (по номеру, без Random); не в тоннеле, не в жёлобе, не в городе
+	if not special and not seg.chute and not seg.tunnel and visLen > 0 and self.theme ~= 2 and (seg.kind == "gentle" or seg.kind == "steep" or seg.kind == "landing") then
+		local every = math.floor(Config.FENCE_EVERY)
+		for _, side in { -1, 1 } do
+			local onCliff = seg.valley == side or seg.valley == 2
+			if onCliff or (every > 0 and (i + (if side > 0 then 1 else 0)) % every == 0) then
+				local x = if onCliff then prof.out + Config.VALLEY_SHOULDER - 2 else prof.out + 6
+				Props.fenceRun(cf * CFrame.new(0, prof.top - 0.2, 0), side * x, visLen, Config.FENCE_STEP, m)
+			end
+		end
+	end
 
 	-- Канатная дорога над местом приземления: кабинки едут поперёк трассы
 	if seg.kind == "landing" and self.theme ~= 2 and rng:NextNumber() < Config.GONDOLA_CHANCE then

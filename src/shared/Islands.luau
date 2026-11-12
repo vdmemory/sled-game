@@ -420,6 +420,12 @@ function Islands.buildGap(track, seg, m: Instance, rng: Random, kit): { any }
 	end
 	clouds(cf, len, rng, m, 3)
 	canyon(track, cf, len, rng, m, clears, kit.dress)
+	-- подвесной мост над пропастью сбоку от коридора (#70, декор; сторона — по номеру куска, без Random)
+	if Config.BRIDGE_GAP_X > 0 then
+		local side = if math.floor(seg.hStart / 10) % 2 == 0 then -1 else 1
+		local y = -Config.BRIDGE_DROP
+		Props.ropeBridge(flat:PointToWorldSpace(Vector3.new(side * Config.BRIDGE_GAP_X, y, 2)), cf:PointToWorldSpace(Vector3.new(side * Config.BRIDGE_GAP_X, y, -len - 2)), 6, m)
+	end
 	if g.final then
 		-- край склона приземления: скала уходит вниз из-под снега
 		local edge = cf * CFrame.new(0, 0, -len)

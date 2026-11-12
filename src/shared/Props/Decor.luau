@@ -306,4 +306,68 @@ function Props.balloon(rng: Random, base: CFrame, parent: Instance)
 end
 
 
+------------------------------------------------------------------ Обвязка трассы (#70, референсы 2026-11-11)
+local FENCE_WOOD = Color3.fromRGB(176, 122, 72)
+local FENCE_SNOW = Color3.fromRGB(250, 252, 255)
+
+-- Деревянный заборчик вдоль трассы: столбики со снежной «шапкой»-шаром и две жерди. cf — начало
+-- куска (−Z вдоль трассы), x — смещение от оси, len — длина, step — шаг столбиков. Без Random.
+function Props.fenceRun(cf: CFrame, x: number, len: number, step: number, parent: Instance)
+	local n = math.max(1, math.floor(len / step))
+	for k = 0, n do
+		local z = -len * k / n
+		deco({ Size = Vector3.new(0.9, 3.4, 0.9), CFrame = cf * CFrame.new(x, 1.5, z), Material = Enum.Material.Wood, Color = FENCE_WOOD }, parent)
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(1.4, 0.8, 1.4), CFrame = cf * CFrame.new(x, 3.35, z), Material = Enum.Material.Snow, Color = FENCE_SNOW }, parent)
+	end
+	for _, y in { 1.3, 2.5 } do
+		deco({ Size = Vector3.new(0.45, 0.45, len), CFrame = cf * CFrame.new(x, y, -len / 2), Material = Enum.Material.Wood, Color = FENCE_WOOD:Lerp(Color3.new(0, 0, 0), 0.12) }, parent)
+	end
+	deco({ Size = Vector3.new(0.7, 0.25, len), CFrame = cf * CFrame.new(x, 2.85, -len / 2), Material = Enum.Material.Snow, Color = FENCE_SNOW }, parent)
+end
+
+-- Подвесной мост из досок и каната (декор над пропастью). a, b — точки опор (центр настила),
+-- width — ширина настила; провис — SAG от длины. Без Random.
+function Props.ropeBridge(a: Vector3, b: Vector3, width: number, parent: Instance)
+	local d = b - a
+	local flat = Vector3.new(d.X, 0, d.Z)
+	if flat.Magnitude < 1 then
+		return
+	end
+	local frame = CFrame.lookAt(a, a + flat.Unit)
+	local len = d.Magnitude
+	local sag = len * 0.08
+	local n = math.max(4, math.floor(len / 2.4))
+	local function at(t: number): Vector3
+		return a + d * t - Vector3.new(0, sag * 4 * t * (1 - t), 0)
+	end
+	for k = 0, n do
+		local t = k / n
+		local p = at(t)
+		local cfp = CFrame.lookAt(p, p + flat.Unit)
+		deco({ Size = Vector3.new(width + (k % 3) * 0.4, 0.4, 1.7), CFrame = cfp * CFrame.Angles(0, 0, (k % 2 - 0.5) * 0.06), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(200, 150, 100):Lerp(Color3.fromRGB(150, 100, 60), k % 2 * 0.4) }, parent)
+	end
+	-- канаты-перила и подвесы
+	for _, sx in { -1, 1 } do
+		local prev = at(0) + frame.RightVector * sx * (width / 2) + Vector3.new(0, 3, 0)
+		for k = 1, n do
+			local t = k / n
+			local p = at(t) + frame.RightVector * sx * (width / 2) + Vector3.new(0, 3 + sag * 4 * t * (1 - t) * 0.5, 0)
+			local mid, dd = (prev + p) / 2, p - prev
+			deco({ Size = Vector3.new(0.25, 0.25, dd.Magnitude + 0.1), CFrame = CFrame.lookAt(mid, p), Color = Color3.fromRGB(215, 180, 120) }, parent)
+			if k % 2 == 0 then
+				local deck = at(t) + frame.RightVector * sx * (width / 2)
+				deco({ Size = Vector3.new(0.15, (p - deck).Magnitude, 0.15), CFrame = CFrame.lookAt((p + deck) / 2, p) * CFrame.Angles(math.rad(90), 0, 0), Color = Color3.fromRGB(215, 180, 120) }, parent)
+			end
+			prev = p
+		end
+		-- столбы на концах с канатными кольцами
+		for _, e in { a, b } do
+			local post = e + frame.RightVector * sx * (width / 2 + 0.6)
+			deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(9, 1.3, 1.3), CFrame = CFrame.new(post + Vector3.new(0, 1, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Wood, Color = FENCE_WOOD }, parent)
+			deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, 1.7, 1.7), CFrame = CFrame.new(post + Vector3.new(0, 3, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(215, 180, 120) }, parent)
+			deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(1.6, 0.8, 1.6), CFrame = CFrame.new(post + Vector3.new(0, 5.6, 0)), Material = Enum.Material.Snow, Color = FENCE_SNOW }, parent)
+		end
+	end
+end
+
 return Props
