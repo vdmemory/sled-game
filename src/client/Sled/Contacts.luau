@@ -21,6 +21,12 @@ local overlapParams = st.overlapParams
 
 local Contacts = {}
 
+-- Потеря скорости без аварии с учётом устойчивости «Саней» (#60, Config.keepSpeed): keep — множитель
+-- скорости на 0-м уровне (TNT_SLOW, SMASH_SLOW, SHIELD_HIT_SLOW)
+local function keep(k: number): number
+	return Config.keepSpeed(k, st.player:GetAttribute("SledLevel") or 0)
+end
+
 ------------------------------------------------------------------ столкновения
 -- Тряска камеры (краш, TNT): смещение Humanoid.CameraOffset с затуханием
 local function shake(duration: number, power: number)
@@ -129,7 +135,8 @@ local function breakableOf(hit: BasePart): Model?
 	end
 	return nil
 end
-local function smash(model: Model, popup: string?)
+-- slow — множитель скорости на 0-м уровне «Саней» (по умолчанию SMASH_SLOW; у TNT — TNT_SLOW)
+local function smash(model: Model, popup: string?, slow: number?)
 	if smashed[model] then
 		return
 	end
@@ -158,7 +165,7 @@ local function smash(model: Model, popup: string?)
 			end
 		end
 	end
-	st.speed *= 0.92
+	st.speed *= keep(slow or Config.SMASH_SLOW)
 	trickPopup:Fire(popup or ("💥 Удар!  +" .. Config.SMASH_COINS))
 	sfx:Fire("smash")
 	Remotes.Smash:FireServer(model) -- сервер проверит: Breakable своей трассы, рядом, один раз
@@ -166,11 +173,11 @@ end
 
 -- Ящик TNT (#66): взрыв от любого удара. Не авария: обломки и монеты как у разбитого (сервер
 -- проверит Smash и начислит TNT_COINS), огненный шар (визуальный Explosion без урона), сани
--- подбрасывает вверх (полёт — можно сделать трюк), скорость × TNT_SLOW (щит гасит потерю и
--- остаётся), камера трясётся.
+-- подбрасывает вверх (полёт — можно сделать трюк), скорость × TNT_SLOW (щит гасит потерю сверх
+-- обычного разбивания и остаётся; устойчивость «Саней» уменьшает потерю), камера трясётся.
 local function explode(model: Model)
 	local pos = model:GetPivot().Position
-	smash(model, "💥 БАБАХ! TNT  +" .. Config.TNT_COINS)
+	smash(model, "💥 БАБАХ! TNT  +" .. Config.TNT_COINS, if shieldOn.Value then Config.SMASH_SLOW else Config.TNT_SLOW)
 	local e = Instance.new("Explosion")
 	e.Position = pos + Vector3.new(0, 2, 0)
 	e.BlastRadius = 0 -- только вид: без толчка и урона
@@ -178,9 +185,6 @@ local function explode(model: Model)
 	e.DestroyJointRadiusPercent = 0
 	e.ExplosionType = Enum.ExplosionType.NoCraters
 	e.Parent = workspace
-	if not shieldOn.Value then
-		st.speed *= Config.TNT_SLOW / 0.92 -- smash уже снял 8%
-	end
 	local sled = st.sled
 	if sled then
 		local v = sled.AssemblyLinearVelocity
@@ -334,7 +338,7 @@ local function onTouched(hit: BasePart)
 			if model:IsA("BasePart") then
 				hideLocal(model)
 			end
-			st.speed *= 0.75
+			st.speed *= keep(Config.SHIELD_HIT_SLOW)
 			trickPopup:Fire("🛡 Щит спас!")
 			sfx:Fire("shieldhit")
 			return

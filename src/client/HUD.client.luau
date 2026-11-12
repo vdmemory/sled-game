@@ -265,6 +265,9 @@ local function makeCard(name: string, parent: Instance, size: UDim2, order: numb
 		if msg then
 			-- новый тир → большая анимация (Reveal.client)
 			upgradeReveal:Fire(name, msg)
+		elseif name == "Sled" and Config.stability(newLvl) > Config.stability(oldLvl) then
+			-- устойчивость (#60) входит в «Сани»: цифра карточки — скорость, а про удары — сообщением
+			notice(string.format("🛡 Устойчивость: удары −%d%% потери", math.round(Config.stability(newLvl) * 100)))
 		end
 	end)
 	return c

@@ -138,7 +138,10 @@ Config.GONDOLA_CHANCE = 0.6 -- канатка над приземлением п
 Config.SMASH_COINS = 5 -- за разбитое препятствие (ракетой или на ускорителе)
 -- Ящик TNT (#66): взрыв от любого удара — не авария (client/Sled/Contacts.explode)
 Config.TNT_COINS = 8 -- монет за взрыв (вместо SMASH_COINS)
-Config.TNT_SLOW = 0.7 -- скорость после взрыва (щит гасит потерю)
+Config.TNT_SLOW = 0.7 -- скорость после взрыва (щит гасит потерю); потерю уменьшает устойчивость «Саней» (#60)
+-- Потери скорости без аварии (client/Sled/Contacts; все уменьшает устойчивость «Саней», Config.keepSpeed):
+Config.SMASH_SLOW = 0.92 -- скорость × это, когда разбил лёгкое препятствие (ракетой / после ускорителя)
+Config.SHIELD_HIT_SLOW = 0.75 -- скорость × это, когда щит принял удар
 Config.TNT_POP = 38 -- подброс вверх, studs/с
 Config.TNT_SHAKE = 1.2 -- сила тряски камеры, studs
 Config.TNT_SHAKE_TIME = 0.45 -- длительность тряски, с
@@ -557,7 +560,7 @@ function Config.steerSpeed(speed: number): number
 end
 Config.WALL_PULL = 140 -- борта жёлоба скатывают обратно к центру
 Config.STEER_TILT = 18 -- наклон ватрушки в повороте (градусы)
-Config.OBSTACLE_SLOWDOWN = 0.6 -- скорость × это при ударе
+Config.OBSTACLE_SLOWDOWN = 0.6 -- скорость × это при «Падении» (недокрученный ручной трюк); потерю уменьшает устойчивость «Саней»
 Config.BOOST_ADD = 18 -- ускоритель на льду
 Config.RAMP_MIN_SPEED = 30 -- на трамплине не медленнее этого (не застрянешь)
 Config.RAMP_LIFT = 0.45 -- подброс с трамплина (доля скорости вверх)
@@ -723,6 +726,11 @@ Config.F = {
 	frictionBase = 9.5, frictionDecay = 0.965, -- трение = база × спад^уровень
 	speedBase = 100, speedStep = 5, -- потолок скорости: наклон на 0-м уровне (studs/с за уровень)
 	speedSoftCap = 200, -- асимптота потолка: выше него потолок не поднимется ни на каком уровне
+	-- Устойчивость «Саней» (#60): потеря скорости от TNT, разбитого препятствия, щита и «Падения»
+	-- меньше на stabilityStep за уровень, но не больше чем на stabilityMax (0.025 / 0.5 → потолок на 20-м
+	-- уровне = тир «Золотой бампер»). Расчёт и таблица — docs/GAME_DESIGN.md → «Устойчивость».
+	stabilityStep = 0.025,
+	stabilityMax = 0.5,
 	incomeStep = 0.15, -- множитель монет = 1 + шаг × уровень
 	finishPerLevel = 100, -- бонус за финиш = это × уровень
 	rewardGrowth = 0.25, -- рост монетных наград с уровнем
@@ -746,6 +754,15 @@ function Config.maxSpeed(level: number): number
 		return base -- кап ниже базы или нулевой шаг: потолок не растёт
 	end
 	return cap - span * math.exp(-step * level / span)
+end
+-- Доля потери скорости, которую гасят сани уровня level (0 … stabilityMax)
+function Config.stability(level: number): number
+	return math.clamp(Config.F.stabilityStep * math.max(0, level), 0, math.max(0, Config.F.stabilityMax))
+end
+-- Множитель скорости после удара с учётом устойчивости: потеря (1 − keep) × (1 − stability).
+-- keepSpeed(0.7, 0) = 0.7; keepSpeed(0.7, 20) = 0.85 (TNT); keepSpeed(0.6, 20) = 0.8 («Падение»).
+function Config.keepSpeed(keep: number, level: number): number
+	return 1 - (1 - keep) * (1 - Config.stability(level))
 end
 function Config.incomeMult(level: number): number
 	return 1 + Config.F.incomeStep * level
@@ -1046,6 +1063,8 @@ Config.TUNABLES = {
 	{ "F.speedSoftCap", "Сани: асимптота потолка", "Прокачка", 100, 400, 5 },
 	{ "F.frictionBase", "Сани: трение на 0 ур.", "Прокачка", 1, 30, 0.5 },
 	{ "F.frictionDecay", "Сани: спад трения за ур.", "Прокачка", 0.8, 1, 0.005 },
+	{ "F.stabilityStep", "Сани: устойчивость за ур. (доля потери)", "Прокачка", 0, 0.1, 0.005 },
+	{ "F.stabilityMax", "Сани: устойчивость, потолок", "Прокачка", 0, 0.9, 0.05 },
 	{ "UPGRADES.Sled.BaseCost", "Сани: цена 1-го ур.", "Прокачка", 5, 1000, 5 },
 	{ "UPGRADES.Sled.Growth", "Сани: рост цены ×", "Прокачка", 1.01, 1.5, 0.01 },
 	{ "F.incomeStep", "Доход: + множителя за ур.", "Прокачка", 0.01, 1, 0.01 },
@@ -1079,6 +1098,8 @@ Config.TUNABLES = {
 	{ "SMASH_COINS", "Разбил препятствие: монет", "Экономика", 0, 100, 1 },
 	{ "TNT_COINS", "TNT: монет за взрыв", "Бонусы", 0, 50, 1 },
 	{ "TNT_SLOW", "TNT: скорость после взрыва (доля)", "Бонусы", 0.3, 1, 0.05 },
+	{ "SMASH_SLOW", "Разбил препятствие: скорость ×", "Бонусы", 0.5, 1, 0.01 },
+	{ "SHIELD_HIT_SLOW", "Щит принял удар: скорость ×", "Бонусы", 0.3, 1, 0.05 },
 	{ "TNT_POP", "TNT: подброс вверх", "Бонусы", 0, 80, 2 },
 	{ "TRICKS.flip.coins", "Сальто: монет", "Экономика", 0, 200, 1 },
 	{ "TRICKS.frontflip.coins", "Переднее сальто: монет", "Экономика", 0, 200, 1 },
@@ -1154,7 +1175,7 @@ Config.TUNABLES = {
 	{ "STEER_SPEED", "Руль: боковая скорость", "Трасса", 10, 120, 1 },
 	{ "STEER_REF_SPEED", "Руль: растёт со скорости выше", "Трасса", 30, 400, 5 },
 	{ "STEER_RESPONSE", "Руль: отзывчивость", "Трасса", 2, 20, 0.5 },
-	{ "OBSTACLE_SLOWDOWN", "Удар/падение: скорость ×", "Трасса", 0, 1, 0.05 },
+	{ "OBSTACLE_SLOWDOWN", "«Падение» (трюк): скорость ×", "Трасса", 0, 1, 0.05 },
 	{ "JUMP_ENABLED", "Прыжок с земли (0 — выкл)", "Трасса", 0, 1, 1 },
 	{ "JUMP_SPEED", "Прыжок: скорость вверх", "Трасса", 10, 80, 1 },
 	{ "JUMP_COOLDOWN", "Прыжок: пауза, с", "Трасса", 0, 3, 0.1 },

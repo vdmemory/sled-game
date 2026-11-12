@@ -271,7 +271,7 @@ end
 
 tabs["Сани"] = function()
 	heading("Сани — модели, редкости и " .. tierCount("Sled") .. " тиров обвеса")
-	note("Скорость: потолок = (" .. Config.F.speedBase .. " + " .. Config.F.speedStep .. " × уровень) × (1 + бонус модели + бонус редкости), трение = " .. Config.F.frictionBase .. " × " .. Config.F.frictionDecay .. "^уровень. Обвес по тиру — Shared/SledModels.extras; у каждой модели свои точки крепления (MOUNTS, SPOILER, SHIELD, BUMPER).")
+	note("Скорость: потолок = (" .. Config.F.speedBase .. " + " .. Config.F.speedStep .. " × уровень) × (1 + бонус модели + бонус редкости), трение = " .. Config.F.frictionBase .. " × " .. Config.F.frictionDecay .. "^уровень. Устойчивость: потеря скорости от TNT/разбивания/щита/«Падения» меньше на " .. math.round(Config.F.stabilityStep * 1000) / 10 .. "% за уровень, потолок " .. math.round(Config.F.stabilityMax * 100) .. "%. Обвес по тиру — Shared/SledModels.extras; у каждой модели свои точки крепления (MOUNTS, SPOILER, SHIELD, BUMPER).")
 	-- выбор модели
 	local rowModels = {}
 	for _, mdl in Config.SLEDS do

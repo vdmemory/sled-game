@@ -16,7 +16,8 @@
   • обрыв — баллистика (RAMP_LIFT, KICKER_DROP, склон 18°, g = 196.2): время в воздухе → монеты
     AIR_COINS_PER_SEC и авто-трюки AUTO_TRICK_PLANS (монеты, буст скорости);
   • авария: в каждом ряду препятствий (OBSTACLE_ROWS на прямой, занятость как SafeLine.plan) и на
-    дороге (carsPerLane) — шанс промаха профиля игрока × (v/100)^1.5; авария = конец заезда.
+    дороге (carsPerLane) — шанс промаха профиля игрока × (v/100)^1.5; авария = конец заезда;
+  • «мягкие» удары (#60): щит/TNT — CALIB soft_share на аварию, скорость × keepSpeed (устойчивость Саней).
 Экономика: монеты = (путь/STUDS_PER_COIN + монеты на трассе/полёт/трюки/кристалл + finishBonus) ×
 incomeMult × след; гемы — финиш/рекорд/на трассе/кристалл; подарки за время, сундук лобби, задания
 дня + сундук заданий, стрик. Игрок жадный: после заезда покупает доступную покупку с лучшим
@@ -29,6 +30,7 @@ incomeMult × след; гемы — финиш/рекорд/на трассе/�
          python3 scripts/sim_economy.py --summary --set F.finishPerLevel=60 --set UPGRADE_PRICE_POW=2.4
                                                       — сценарий «что если» (Config не меняется)
          python3 scripts/sim_economy.py --summary --decel 5 --miss 2   — чувствительность к калибровке
+         python3 scripts/sim_economy.py --summary --soft 1 --set F.stabilityMax=0      — без устойчивости (#60)
 """
 from __future__ import annotations
 
@@ -308,6 +310,13 @@ class Rules:
     def income(self, l):
         return 1 + self.F["incomeStep"] * l
 
+    # Config.stability / keepSpeed (#60): потеря скорости от удара × (1 − устойчивость Саней)
+    def stability(self, l):
+        return min(max(self.F.get("stabilityStep", 0) * max(0, l), 0), max(0, self.F.get("stabilityMax", 0)))
+
+    def keep(self, k, l):
+        return 1 - (1 - k) * (1 - self.stability(l))
+
     def finish_bonus(self, lv):
         return self.F["finishPerLevel"] * lv
 
@@ -364,7 +373,11 @@ G_WORLD = 196.2  # workspace.Gravity по умолчанию (баллистик
 # поэтому без поправки она доезжает уровень 1 уже с 2/2 апгрейдами. extra_decel — добавка к трению
 # (studs/с²), подобранная под ориентир Config/GAME_DESIGN «уровень 1 без апгрейдов ≈ 35–40 %, с ~6–8
 # покупками каждого ≈ финиш» (средний игрок). Перекалибровать по RunPercent/RunFinished из аналитики.
-CALIB = {"extra_decel": 3.0}
+CALIB = {"extra_decel": 3.0, "soft_share": 0.25}
+# soft_share (#60) — сколько «касаний» ряда (тот же шанс, что у аварии) на каждую аварию ещё и не
+# смертельны: щит принял удар (SHIELD_HIT_SLOW), TNT (TNT_SLOW). Скорость × 1 − p·soft·потеря, где
+# потерю уменьшает устойчивость «Саней» (Config.keepSpeed). Не откалибровано — оценка: щит в ~7 %
+# рядов, TNT — 8 из ~40 весов препятствий в 3 мирах. «Падение» (ручной трюк) модель не крутит.
 
 
 # ============================================================== профили игроков
@@ -509,6 +522,8 @@ def simulate_run(R: Rules, lv, up, sled_bonus, prof, variant=0, track_cache={}):
     v = R.launch(lL) * prof["power"]
     fuel = R.fuel(rL)
     pick, miss = prof["pick"], prof["miss"]
+    # средняя потеря «мягкого» удара (щит / TNT) с устойчивостью Саней
+    soft_loss = 1 - R.keep((c["TNT_SLOW"] + c["SHIELD_HIT_SLOW"]) / 2, sL)
     cv = c["COIN_PICKUP_VALUE"] * 1.15  # среднее комбо (линия 5 монет: comboMult ≈ 1–2)
     h = t = air_total = 0.0
     surv = 1.0
@@ -614,7 +629,9 @@ def simulate_run(R: Rules, lv, up, sled_bonus, prof, variant=0, track_cache={}):
             while row_at and s >= row_at[0]:
                 row_at.pop(0)
                 # ряд препятствий: E[занятых полос] / полос × промах × скорость
-                risk(ex["blocked"] / c["LANES"] * miss * (v / 100) ** 1.5)
+                p_row = ex["blocked"] / c["LANES"] * miss * (v / 100) ** 1.5
+                risk(p_row)
+                v *= 1 - min(1.0, p_row * CALIB["soft_share"]) * soft_loss  # щит / TNT (#60)
             while gi < len(gem_marks) and h >= gem_marks[gi]:
                 is_crystal = abs(gem_marks[gi] - L * c["CRYSTAL_AT"]) < 1e-6
                 if is_crystal:
@@ -1064,6 +1081,7 @@ def main():
                     help="подменить число Config только в модели (можно несколько): F.finishPerLevel=60")
     ap.add_argument("--decel", type=float, help=f"калибровка: добавка к трению, studs/с² (сейчас {CALIB['extra_decel']})")
     ap.add_argument("--miss", type=float, default=1.0, help="множитель шанса аварии всех профилей")
+    ap.add_argument("--soft", type=float, help=f"калибровка: «мягких» ударов (щит/TNT) на одну аварию (сейчас {CALIB['soft_share']})")
     ap.add_argument("--summary", action="store_true", help="только короткая сводка (сравнение сценариев)")
     a = ap.parse_args()
     cfg = load_config()
@@ -1071,15 +1089,17 @@ def main():
         apply_set(cfg, e)
     if a.decel is not None:
         CALIB["extra_decel"] = a.decel
+    if a.soft is not None:
+        CALIB["soft_share"] = a.soft
     for p in PROFILES.values():
         p["miss"] *= a.miss
     R = Rules(cfg)
     if a.summary:
         print(summary(R, a.levels, a.variants))
         return
-    if a.set or a.decel is not None or a.miss != 1.0:
+    if a.set or a.decel is not None or a.soft is not None or a.miss != 1.0:
         if a.write:
-            raise SystemExit("--write только с числами Config как есть (без --set/--decel/--miss)")
+            raise SystemExit("--write только с числами Config как есть (без --set/--decel/--soft/--miss)")
     text, _ = report(R, a.levels, a.variants)
     print(text)
     if a.write:

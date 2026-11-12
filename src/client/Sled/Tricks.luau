@@ -197,7 +197,7 @@ function Tricks.land(s: BasePart, n: Vector3)
 		end
 	end
 	if fell then
-		st.speed *= Config.OBSTACLE_SLOWDOWN
+		st.speed *= Config.keepSpeed(Config.OBSTACLE_SLOWDOWN, st.player:GetAttribute("SledLevel") or 0) -- устойчивость «Саней» (#60)
 		trickPopup:Fire("😵 Падение!")
 		sfx:Fire("wipe")
 	elseif #airTrickOrder > 0 then
