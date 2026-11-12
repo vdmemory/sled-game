@@ -1,5 +1,19 @@
 # Журнал изменений
 
+## Рубежи на трассе: награды за 250 / 500 / 750 м (#61; game-designer, вид арки — за art-director)
+- `Config.MILESTONES` (`STEP` 250, `COINS` 10, каждый `BIG_EVERY` 4-й — `BIG_COINS` 30, `FINISH_GAP` 60, `CONFETTI`
+  14; TUNABLES «Экономика»).
+- Новый `shared/Track/Milestones`: арка-маркер «N м» (столбы по краю сечения, табличка с SurfaceGui, флажки,
+  большой рубеж — золотой) из `Props.deco` — без коллизий, касаний и лучей, без Random; вызывается в конце
+  `Track:buildSegment`, над пропастью/островками не ставится. Новый стенд `scripts/stand/track_fp.luau` (уровни
+  1–12, все куски по стримингу, модели `Milestone` пропущены) — отпечаток до/после совпадает
+  (`3857132498-1495965061`), арок 4…22 на уровень.
+- `server/Runs`: `milestoneCheck` в Heartbeat по засчитанному античитом пути — один раз за рубеж за заезд,
+  монеты в `bonusCoins` (+ `run.bonusMilestones`), атрибут игрока `RunMilestone` (м). Итог:
+  `RunEnded.parts.milestones` (чип «🚩 рубежи», сумма чипов = `coins`) и `RunEnded.milestones`.
+- HUD: на `RunMilestone` — всплывашка «🚩 500 м!» (большой — «🎉»), мини-конфетти (`confetti(n)`), звук
+  `milestone` (`ring` + `coin` выше тоном, без нового ассета).
+
 ## Бонус +15 % монет за новый рекорд дистанции (#59; game-designer)
 - `server/Runs.endRun`: заезд улучшил рекорд уровня (% трассы, то же условие, что «НОВЫЙ РЕКОРД» и +1 💎) —
   к монетам заезда + (`Config.NEW_BEST_COIN_MULT` − 1) = 15 % (поверх «Дохода», следа и x2). Не на финише, не в

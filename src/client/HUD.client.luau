@@ -595,9 +595,9 @@ airTimeValue.Changed:Connect(function(t)
 end)
 
 -- Конфетти «НОВЫЙ РЕКОРД!» (#57): цветные бумажки падают сверху и крутятся, ~1.6 с
-local function confetti()
+local function confetti(count: number?)
 	local colors = { Color3.fromRGB(255, 90, 90), Color3.fromRGB(255, 205, 60), Color3.fromRGB(90, 210, 255), Color3.fromRGB(120, 230, 120), Color3.fromRGB(230, 120, 255) }
-	for k = 1, Config.CONFETTI_COUNT do
+	for k = 1, count or Config.CONFETTI_COUNT do
 		local f = UI.new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new(math.random(), 0, 0, -20),
@@ -900,6 +900,19 @@ player:GetAttributeChangedSignal("Finished"):Connect(function()
 end)
 controller:WaitForChild("TrickPopup").Event:Connect(function(text)
 	showToast(text, 1)
+end)
+-- Рубеж дистанции (#61): сервер засчитал рубеж (атрибут RunMilestone, м) — всплывашка, мини-салют, звук;
+-- монеты прилетают обычным «+N» по RunCoins
+player:GetAttributeChangedSignal("RunMilestone"):Connect(function()
+	local m = player:GetAttribute("RunMilestone")
+	if typeof(m) ~= "number" or m <= 0 or not player:GetAttribute("InRun") then
+		return
+	end
+	local M = Config.MILESTONES
+	local big = M.STEP > 0 and M.BIG_EVERY > 0 and math.round(m / M.STEP) % M.BIG_EVERY == 0
+	showToast(string.format(if big then "🚩 %d м! 🎉" else "🚩 %d м!", m), 1.2)
+	confetti(if big then M.CONFETTI * 2 else M.CONFETTI)
+	controller.Sfx:Fire("milestone", if big then 2 else 1)
 end)
 
 ------------------------------------------------------------------ зоны трассы (#71)
@@ -1211,6 +1224,7 @@ local CHIPS = {
 	{ key = "air", icon = "parachute", caption = "воздух" },
 	{ key = "tricks", icon = "flip", caption = "трюки" },
 	{ key = "bonus", icon = "star", caption = "бонусы" },
+	{ key = "milestones", icon = "flag", caption = "рубежи" }, -- #61: монеты за рубежи дистанции
 	{ key = "record", icon = "trophy", caption = "рекорд" }, -- #59: + NEW_BEST_COIN_MULT за новый рекорд
 }
 local chipSet: { [string]: (string, string?) -> () } = {}

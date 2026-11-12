@@ -56,6 +56,8 @@ export type Run = {
 	bonusAir: number?,
 	bonusTricks: number?,
 	bonusExtra: number?,
+	bonusMilestones: number?, -- монеты за рубежи дистанции (#61), тоже часть bonusCoins
+	milestones: number?, -- сколько рубежей Config.MILESTONES засчитано в этом заезде
 	lastTrick: number,
 	slowTime: number,
 	startTime: number,
@@ -137,7 +139,7 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 	local cheat = reason == "cheat" -- античит: заезд не засчитан, наград нет
 	local clean = not run.crashedOnTrack and reason ~= "fell" -- заезд без аварии
 	local mult, earned = 1, 0
-	local parts = { track = 0, air = 0, tricks = 0, bonus = 0, record = 0 } -- разбивка earned чипами (#71)
+	local parts = { track = 0, air = 0, tricks = 0, bonus = 0, milestones = 0, record = 0 } -- разбивка earned чипами (#71)
 	local newBest = false
 	local gems = 0
 
@@ -155,12 +157,13 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 		earned = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + run.bonusCoins + finishCoins) * mult)
 		-- Разбивка только для показа (#71): сумма чипов = earned, сам earned считается как раньше.
 		-- «Трасса» = дистанция + подобранные монеты, «Бонусы» = финиш + разбил/кольца/кристалл + округление.
-		local air, tricks, extra = run.bonusAir or 0, run.bonusTricks or 0, run.bonusExtra or 0
-		local pickups = math.max(0, run.bonusCoins - air - tricks - extra)
+		local air, tricks, extra, miles = run.bonusAir or 0, run.bonusTricks or 0, run.bonusExtra or 0, run.bonusMilestones or 0
+		local pickups = math.max(0, run.bonusCoins - air - tricks - extra - miles)
 		parts.track = math.floor((math.floor(dist / Config.STUDS_PER_COIN) + pickups) * mult)
 		parts.air = math.floor(air * mult)
 		parts.tricks = math.floor(tricks * mult)
-		parts.bonus = math.max(0, earned - parts.track - parts.air - parts.tricks)
+		parts.milestones = math.floor(miles * mult) -- рубежи дистанции (#61)
+		parts.bonus = math.max(0, earned - parts.track - parts.air - parts.tricks - parts.milestones)
 		-- Новый рекорд уровня (#59): + (NEW_BEST_COIN_MULT − 1) от монет заезда, только при улучшении
 		-- рекорда % (то же условие, что newBest ниже); свой чип «рекорд», сумма чипов = earned
 		if d and not run.farm and not finished and not quiet and pct > d.LevelBest then
@@ -301,7 +304,8 @@ local function endRun(player: Player, reason: string, leaving: boolean?)
 			mult = math.floor(mult * 100 + 0.5) / 100,
 			gems = gems,
 			week = week,
-			parts = parts, -- { track, air, tricks, bonus, record }: чипы итога (#71, #59), в сумме = coins
+			parts = parts, -- { track, air, tricks, bonus, milestones, record }: чипы итога (#71, #61, #59), в сумме = coins
+			milestones = run.milestones or 0, -- рубежей пройдено (#61)
 		})
 	end
 
@@ -429,6 +433,7 @@ startRun = function(player: Player)
 	player:SetAttribute("Launched", false)
 	player:SetAttribute("RunDistance", 0)
 	player:SetAttribute("RunCoins", 0)
+	player:SetAttribute("RunMilestone", 0) -- последний пройденный рубеж, м (#61)
 	player:SetAttribute("Finished", false)
 	player:SetAttribute("RunGems", 0)
 	player:SetAttribute("Combo", 0)
@@ -556,6 +561,27 @@ local function rescueCheck(player: Player, run: Run, x: number, y: number, step:
 	return true
 end
 
+-- Рубежи дистанции (#61, Config.MILESTONES): путь, засчитанный античитом (run.distance), прошёл
+-- очередной рубеж — один раз за заезд монеты в bonusCoins (чип «рубежи»), атрибут RunMilestone (м) —
+-- клиенту на всплывашку и звук. Рубеж ближе FINISH_GAP к финишу не считается (как и арка в Track/Milestones).
+-- Вызывать внутри Tuning.forPlayer.
+local function milestoneCheck(player: Player, run: Run, length: number)
+	local M = Config.MILESTONES
+	if M.STEP <= 0 then
+		return
+	end
+	local k = (run.milestones or 0) + 1
+	while run.distance >= k * M.STEP and length - k * M.STEP >= M.FINISH_GAP do
+		local add = if M.BIG_EVERY > 0 and k % M.BIG_EVERY == 0 then M.BIG_COINS else M.COINS
+		run.milestones = k
+		run.bonusCoins += add
+		run.bonusMilestones = (run.bonusMilestones or 0) + add
+		player:SetAttribute("RunCoins", (player:GetAttribute("RunCoins") or 0) + add)
+		player:SetAttribute("RunMilestone", k * M.STEP)
+		k += 1
+	end
+end
+
 ------------------------------------------------------------------ Цикл: прогресс, остановка, финиш
 function Runs.startLoop()
 	local acc = 0
@@ -627,6 +653,9 @@ function Runs.startLoop()
 			if run.crashed then
 				continue
 			end
+			Tuning.forPlayer(player, function()
+				milestoneCheck(player, run, track.length)
+			end)
 			if run.distance >= track.length and not run.finishedAt then
 				-- Финишная арка пройдена: дальше скользим по ледяному озеру до остановки
 				run.finishedAt = os.clock()

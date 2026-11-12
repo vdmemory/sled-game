@@ -250,6 +250,12 @@ local function onEvent(name: string, arg: any?)
 		play("boost")
 		play("ring", 2 ^ (4 / 12))
 		return
+	elseif name == "milestone" then
+		-- рубеж дистанции (#61): звон кольца на квинту выше + монета; большой рубеж (arg 2) — ещё на кварту
+		local up = if arg == 2 then 5 else 0
+		play("ring", 2 ^ ((7 + up) / 12))
+		play("coin", 2 ^ ((12 + up) / 12))
+		return
 	end
 	play(name)
 	local hold = DUCK_ON[name]
