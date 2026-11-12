@@ -66,6 +66,9 @@ local function makeSled(player: Player, cf: CFrame): VehicleSeat
 	if trail.id ~= "white" then
 		seat:SetAttribute("TrailColor", trail.color)
 		seat:SetAttribute("Rainbow", trail.rainbow == true)
+		if trail.color2 then
+			seat:SetAttribute("TrailColor2", trail.color2) -- градиент эксклюзивного следа (#56)
+		end
 	end
 	-- Боковые ракеты (дизайн по тиру «Ракеты») + обвес по тиру «Саней» — Shared/SledModels
 	local rocketTier = Config.tierOf(d and d.RocketLevel or 0)

@@ -758,7 +758,8 @@ class Player:
                 continue
             gain = self.value(sb=nb) - base
             out.append(("C", s["prices"][owned], gain, ("sled", s["id"], owned + 1)))
-        if self.trail + 1 < len(c["TRAILS"]):
+        # эксклюзивные следы (#56) не продаются — только наградой задания недели (модель их не выдаёт)
+        if self.trail + 1 < len(c["TRAILS"]) and not c["TRAILS"][self.trail + 1].get("exclusive"):
             t = c["TRAILS"][self.trail + 1]
             out.append(("C", t["price"], self.value(trail=self.trail + 1) - base, ("trail", self.trail + 1)))
         return out

@@ -46,6 +46,10 @@ local DEFAULT = {
 	TitleUntil = 0,
 	TitleWeek = "",
 	WeekPlay = { key = "", worlds = {}, clean = false },
+	-- задание недели (#56, server/Rewards): key — неделя (W<год>-<нед>, shared/Week), id/target/trail —
+	-- цель и след, зафиксированные при первом входе в неделю; progress — накоплено; step — пройдено этапов
+	-- (тосты 25/50/75 %); done — награда выдана (раз за неделю). Новая неделя — всё заново.
+	WeekQuest = { key = "", id = "", target = 0, trail = "", progress = 0, step = 0, done = false },
 }
 
 local function deepCopy(t: any): any
@@ -163,7 +167,7 @@ local function migrate(data: { [string]: any })
 	if type(data.TitleWeek) ~= "string" then
 		data.TitleWeek = ""
 	end
-	for _, f in { "Settings", "Streak", "WeekPlay" } do
+	for _, f in { "Settings", "Streak", "WeekPlay", "WeekQuest" } do
 		if type(data[f]) ~= "table" then
 			data[f] = deepCopy(DEFAULT[f])
 		end

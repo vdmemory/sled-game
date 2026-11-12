@@ -95,6 +95,10 @@ function DevTools.start()
 			Rewards.devStreakShift(player, 1)
 		elseif action == "streakSkip" then
 			Rewards.devStreakShift(player, 2)
+		elseif action == "weekQuestAdd" then
+			Rewards.devWeekAdd(player) -- задание недели +25 % (#56)
+		elseif action == "weekQuestReset" then
+			Rewards.devWeekReset(player)
 		elseif action == "weeklyTitle" and typeof(a) == "number" then
 			Weekly.devTitle(player, a) -- титул себе на неделю (1..3, 0 — снять)
 		elseif action == "weeklyRefresh" then

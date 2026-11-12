@@ -99,6 +99,7 @@ local function addSnowTrail(sled: Instance)
 				ColorSequenceKeypoint.new(0.75, Color3.fromRGB(70, 150, 255)),
 				ColorSequenceKeypoint.new(1, Color3.fromRGB(190, 90, 255)),
 			})
+			elseif typeof(sled:GetAttribute("TrailColor2")) == "Color3" then ColorSequence.new(tc, sled:GetAttribute("TrailColor2") :: Color3) -- эксклюзивный след (#56)
 			else ColorSequence.new(tc)
 		ct.Transparency = NumberSequence.new(0.1, 1)
 		ct.Lifetime = 0.9
