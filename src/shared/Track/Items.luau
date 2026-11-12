@@ -116,8 +116,9 @@ local function makeShield(at: CFrame, parent: Instance)
 	light.Range = 12
 	light.Parent = plate
 end
-local function makeX2(at: CFrame, parent: Instance)
-	powerHit("x2", at, Vector3.new(4.5, 4.5, 4.5), parent)
+-- hit — свой размер датчика (x2 в воздухе над трамплин-лестницей #43: накрывает все траектории окна)
+local function makeX2(at: CFrame, parent: Instance, hit: Vector3?)
+	powerHit("x2", at, hit or Vector3.new(4.5, 4.5, 4.5), parent)
 	local coin = deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, 3.8, 3.8), CFrame = at * CFrame.Angles(0, math.rad(90), 0), Material = Enum.Material.SmoothPlastic, Color = Color3.fromRGB(255, 200, 40), Reflectance = 0.2 }, parent)
 	local bb = Instance.new("BillboardGui")
 	bb.Size = UDim2.fromOffset(90, 60)
@@ -152,6 +153,28 @@ local function makeRing(at: CFrame, parent: Instance)
 	end
 end
 
+-- Кольцо-ускоритель (#44, ледяной тоннель): светящийся голубой обод над полосой, датчик в проёме —
+-- обычный ускоритель (тег Boost, имя Boost: +BOOST_ADD в client/Sled/Contacts, учёт и предел скорости —
+-- server/Pickups → AntiCheat.onBoost). at — точка на дне под центром кольца, r — радиус обода.
+local function makeBoostRing(at: CFrame, r: number, parent: Instance)
+	local cy = r + 0.4
+	local hit = part("Part", {
+		Name = "Boost",
+		Size = Vector3.new(r * 1.6, r * 1.6, 6),
+		CFrame = at * CFrame.new(0, cy, 0),
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+	}, parent)
+	CollectionService:AddTag(hit, "Boost")
+	local n = 20
+	for k = 0, n - 1 do
+		local a = k / n * math.pi * 2
+		deco({ Size = Vector3.new(0.7, r * 2 * math.pi / n + 0.2, 0.7), CFrame = at * CFrame.new(math.cos(a) * r, math.sin(a) * r + cy, 0) * CFrame.Angles(0, 0, a), Material = Enum.Material.Neon, Color = if k % 5 == 0 then Color3.new(1, 1, 1) else Color3.fromRGB(80, 230, 255) }, parent)
+	end
+	return hit
+end
+
 local function makeCrystal(at: CFrame, rng: Random, parent: Instance)
 	local m = Instance.new("Model")
 	m.Name = "Crystal"
@@ -184,6 +207,7 @@ Items.shield = makeShield
 Items.x2 = makeX2
 Items.fuel = makeFuel
 Items.ring = makeRing
+Items.boostRing = makeBoostRing
 Items.crystal = makeCrystal
 
 return Items

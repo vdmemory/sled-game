@@ -22,6 +22,8 @@ local Items = require(script.Items)
 local Tunnel = require(script.Tunnel)
 local Valley = require(script.Valley)
 local Milestones = require(script.Milestones)
+local Stairs = require(script.Stairs)
+local IceTunnel = require(script.IceTunnel)
 
 local part, deco = Props.part, Props.deco
 local W = Sections.W
@@ -123,7 +125,8 @@ function Track:buildSegment(i: number)
 	end
 	local rng = Random.new(self.level * 104729 + i * 31)
 	local cf, len = seg.cf, seg.length
-	local prof = if seg.chute then CHUTE_PROFILE
+	local prof = if seg.kind == "spiral" then Sections.SPIRAL_PROFILE
+		elseif seg.chute then CHUTE_PROFILE
 		elseif seg.kind == "road" or seg.kind == "rail" then ROAD_PROFILE
 		elseif seg.kind == "lake" then LAKE_PROFILE
 		else SNOW_PROFILE
@@ -145,10 +148,21 @@ function Track:buildSegment(i: number)
 		}
 		self.clears[i] = if seg.kind == "isle" then Islands.buildIsle(self, seg, m, rng, kit) else Islands.buildGap(self, seg, m, rng, kit)
 	else
-		buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme, seg.kind == "landing", seg)
+		buildCrossSection(cf, len, prof, seg.chute, m, i % 2, self.theme, seg.kind == "landing" or seg.kind == "stairLand", seg)
 	end
 	if seg.kind == "isleIn" then
 		Islands.buildIn(self, seg, m)
+	end
+	if seg.stair then
+		Stairs.build(self.theme, seg, m, { coin = makeCoin, x2 = makeX2 }) -- трамплин-лестница (#43)
+	end
+	if seg.ice then
+		IceTunnel.build(seg, cf, len, prof, m, { coin = makeCoin, boostRing = Items.boostRing }) -- кольца-ускорители (#44)
+	end
+	if seg.spiral and visLen > 0 and (seg.ci or 0) % math.max(1, Config.SPIRAL_SIGN_EVERY) == 0 then
+		-- вираж (#44): стрелка-шеврон на внешнем краю, указывает в сторону поворота
+		local side = -seg.spiral
+		Props.arrowSign(cf * CFrame.new(side * (prof.out + 3), prof.top, -visLen / 2) * CFrame.Angles(0, math.pi, 0), -seg.spiral, m)
 	end
 	dressTrack(self.theme, Random.new(self.level * 7907 + i * 13), seg, m)
 
@@ -239,7 +253,7 @@ function Track:buildSegment(i: number)
 
 	-- Тоннель (#65): участки под сводом (≥ TUNNEL_SHARE пути) — вид по миру, порталы (Track/Tunnel)
 	if seg.tunnel and visLen > 0 then
-		Tunnel.build(self.theme, seg, cf, visLen, prof, m, i)
+		Tunnel.build(if seg.ice then Tunnel.ICE else self.theme, seg, cf, visLen, prof, m, i)
 	end
 
 	-- Флаг рекорда: где игрок остановился в лучшей попытке
@@ -338,7 +352,7 @@ function Track:buildSegment(i: number)
 		for k = 1, 3 do
 			makeCoin(cf * CFrame.new(laneX(lane), 3.5, -(len * 0.35 + k * 4)), m)
 		end
-	elseif seg.kind == "curve" and visLen > 0 and (seg.ci or 0) % 2 == 0 then
+	elseif (seg.kind == "curve" or seg.kind == "spiral") and visLen > 0 and (seg.ci or 0) % 2 == 0 then
 		-- В жёлобе — дорожка монет, которая «едет» по дуге
 		makeCoin(cf * CFrame.new(laneX(3 + ((seg.ci or 0) // 2) % 2), 3, -visLen / 2), m)
 	end
@@ -359,6 +373,11 @@ function Track:buildSegment(i: number)
 			local look = cf.LookVector
 			local flat = CFrame.lookAt(cf.Position, cf.Position + Vector3.new(look.X, 0, look.Z))
 			return flat * CFrame.new(0, (if p then p[2] else 8) + y - 3, -(if p then p[1] else len / 2))
+		elseif seg.stair then
+			local at = Stairs.bonusAt(seg, y)
+			if at then
+				return at
+			end
 		end
 		return cf * CFrame.new(laneX(rng:NextInteger(2, Config.LANES - 1)), y, -z)
 	end

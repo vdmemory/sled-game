@@ -27,7 +27,10 @@ local LOOKS: { [number]: Look } = {
 	[5] = { mat = Enum.Material.Ice, col = Color3.fromRGB(150, 205, 240), light = Color3.fromRGB(120, 255, 200), icicles = true, transp = 0.05 },
 	[6] = { mat = Enum.Material.Basalt, col = Color3.fromRGB(62, 58, 66), light = Color3.fromRGB(255, 120, 40), icicles = false, lava = true },
 	[7] = { mat = Enum.Material.Ice, col = Color3.fromRGB(255, 195, 228), light = Color3.fromRGB(255, 160, 220), icicles = true, transp = 0.05 },
+	-- ледяной тоннель с кольцами-ускорителями (#44) — во всех мирах ледяной
+	[0] = { mat = Enum.Material.Glacier, col = Color3.fromRGB(120, 195, 245), light = Color3.fromRGB(110, 230, 255), icicles = true, transp = 0.05 },
 }
+Tunnel.ICE = 0 -- «тема» вида ледяного тоннеля для Tunnel.build
 
 -- Кольцо из блоков (фолбэк без меша): полуэллипс от ног (±r, 0) до верха (0, h) в кадре base
 local function ringParts(base: CFrame, r: number, h: number, depth: number, look: Look, parent: Instance)

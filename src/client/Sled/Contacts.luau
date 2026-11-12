@@ -239,6 +239,7 @@ local function breakCrystal(hit: BasePart)
 	Remotes.Crystal:FireServer(hit)
 end
 
+local lastBoostHit: BasePart? = nil -- последний засчитанный ускоритель
 local function onTouched(hit: BasePart)
 	local now = os.clock()
 	if CollectionService:HasTag(hit, "Crystal") then
@@ -345,9 +346,12 @@ local function onTouched(hit: BasePart)
 		end
 		crash()
 	elseif CollectionService:HasTag(hit, "Boost") then
-		if now - st.lastBoost < 0.4 then
+		-- повтор касания той же полосы гасим 0.4 с; другое кольцо-ускоритель ледяного тоннеля (#44)
+		-- идёт раньше — засчитываем (сервер считает каждую полосу/кольцо один раз, server/Pickups)
+		if hit == lastBoostHit and now - st.lastBoost < 0.4 then
 			return
 		end
+		lastBoostHit = hit
 		st.lastBoost = now
 		Remotes.PowerUp:FireServer(hit) -- для заданий дня
 		st.speed += Config.BOOST_ADD

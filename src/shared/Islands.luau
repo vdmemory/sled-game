@@ -31,11 +31,14 @@ local Islands = {}
 
 -- Точка и скорость отрыва. early = оторвались в начале трамплина (ниже и раньше), иначе на его
 -- верхнем краю. Скорость — как в SledController на Ramp: d·v + n·max(vn, v·lift).
-function Islands.takeoff(v: number, pitch: number, early: boolean): (number, number, number, number)
-	local RL, RH = Config.ISLE_RAMP[1], Config.ISLE_RAMP[2]
+-- ramp — свой трамплин { длина, высота, подброс } (трамплин-лестница #43); без него — ускоритель островков.
+export type Ramp = { number }
+function Islands.takeoff(v: number, pitch: number, early: boolean, ramp: Ramp?): (number, number, number, number)
+	local RL = if ramp then ramp[1] else Config.ISLE_RAMP[1]
+	local RH = if ramp then ramp[2] else Config.ISLE_RAMP[2]
 	local p = math.rad(pitch)
 	local theta = math.atan2(RH, RL) - p -- угол поверхности трамплина над горизонтом
-	local lift = Config.ISLE_LIFT
+	local lift = if ramp then ramp[3] else Config.ISLE_LIFT
 	local vx = v * (math.cos(theta) - lift * math.sin(theta))
 	local vy = v * (math.sin(theta) + lift * math.cos(theta))
 	if early then
@@ -45,8 +48,8 @@ function Islands.takeoff(v: number, pitch: number, early: boolean): (number, num
 end
 
 -- Высота траектории над точкой x (без ракеты); nil — до точки отрыва
-function Islands.yAt(v: number, pitch: number, early: boolean, x: number): number?
-	local x0, y0, vx, vy = Islands.takeoff(v, pitch, early)
+function Islands.yAt(v: number, pitch: number, early: boolean, x: number, ramp: Ramp?): number?
+	local x0, y0, vx, vy = Islands.takeoff(v, pitch, early, ramp)
 	if x < x0 then
 		return nil
 	end
@@ -57,8 +60,8 @@ end
 -- Где сядем: следующая поверхность начинается через gap, ниже на drop и уходит вниз под углом
 -- slope. thrust — ракета по горизонтали весь полёт. Ответ: x посадки (nil — врезались в торец
 -- или не долетели) и время полёта.
-function Islands.landX(v: number, pitch: number, early: boolean, thrust: number, drop: number, gap: number, slope: number): (number?, number)
-	local x0, y0, vx, vy = Islands.takeoff(v, pitch, early)
+function Islands.landX(v: number, pitch: number, early: boolean, thrust: number, drop: number, gap: number, slope: number, ramp: Ramp?): (number?, number)
+	local x0, y0, vx, vy = Islands.takeoff(v, pitch, early, ramp)
 	local g = workspace.Gravity
 	local k = math.tan(math.rad(slope))
 	local t, dt = 0, 0.002
@@ -82,7 +85,7 @@ end
 
 -- Монеты дугой: точки, где все крайние траектории окна (vmin/vmax × ранний/поздний отрыв)
 -- проходят в окне подбора монеты (SledController: монета от −3 до +7 по высоте от саней).
-function Islands.coinArc(vmin: number, vmax: number, pitch: number, xFrom: number, xTo: number, count: number): { { number } }
+function Islands.coinArc(vmin: number, vmax: number, pitch: number, xFrom: number, xTo: number, count: number, ramp: Ramp?): { { number } }
 	local out = {}
 	for k = 1, count do
 		local x = xFrom + (xTo - xFrom) * (k - 1) / math.max(1, count - 1)
@@ -90,7 +93,7 @@ function Islands.coinArc(vmin: number, vmax: number, pitch: number, xFrom: numbe
 		local ok = true
 		for _, v in { vmin, vmax } do
 			for _, early in { true, false } do
-				local y = Islands.yAt(v, pitch, early, x)
+				local y = Islands.yAt(v, pitch, early, x, ramp)
 				if not y then
 					ok = false
 					break

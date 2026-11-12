@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Islands = require(ReplicatedStorage.Shared.Islands)
+local Stairs = require(script.Parent.Stairs)
 
 local Profile = {}
 
@@ -28,10 +29,14 @@ export type Segment = {
 	crest: any?, -- волна: номер гребня (подъём) или false (спуск)
 	tunnel: string?, -- кусок под сводом тоннеля (#65): "in" / "mid" / "out"
 	valley: number?, -- трасса по гребню над долиной с островками: −1 слева, 1 справа, 2 с обеих сторон
+	stair: any?, -- трамплин-лестница (#43): ступень плана Track/Stairs (трамплин в конце куска)
+	spiral: number?, -- вираж-спираль (#44): направление поворота (1 — влево, −1 — вправо)
+	ice: any?, -- ледяной тоннель с кольцами (#44): { half = 1 | 2 } (Track/IceTunnel)
 }
 
 -- После этих кусков стык намеренно разрывный (обрыв, вылет с ускорителя): без скругления
-local BREAK_AFTER = { kicker = true, isleIn = true, isle = true, gap = true }
+-- (лестница #43: сани в полёте над стыком, баллистика считает склон без переходных кусков)
+local BREAK_AFTER = { kicker = true, isleIn = true, isle = true, gap = true, stair = true }
 
 -- Тоннели (#65, владелец 2026-11-12: «как минимум 20% длины трассы»). После постройки профиля
 -- выбираются непрерывные участки «наземных» кусков (повороты, пологие, крутые, скругления — без
@@ -168,6 +173,11 @@ end
 local function buildProfile(origin: CFrame, level: number): ({ Segment }, number)
 	local rng = Random.new(level * 7919 + 17)
 	local isleRng = Random.new(level * 3571 + 7)
+	-- новые участки (#43 лестница, #44 вираж и ледяной тоннель): свой генератор — уровни, где их нет,
+	-- не меняются
+	local featRng = Random.new(level * 6151 + 29)
+	local lastStair: number? = nil
+	local lastSpiral: number? = nil
 	local curveIndex = 0
 	local lastIsle: number? = nil
 	local L = Config.levelLength(level)
@@ -237,7 +247,9 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 	local function curve()
 		local drift = origin:PointToObjectSpace(pos).X
 		local dir
-		if math.abs(drift) > Config.MAX_DRIFT then
+		-- после виража (#44) курс шире MAX_HEADING: сначала возвращаем курс, потом смотрим на снос
+		local wide = math.abs(math.deg(yaw)) > Config.MAX_HEADING + 1
+		if not wide and math.abs(drift) > Config.MAX_DRIFT then
 			dir = if drift > 0 then 1 else -1 -- поворачиваем обратно к центру (yaw > 0 — влево)
 		elseif math.abs(math.deg(yaw)) > Config.MAX_HEADING * 0.5 then
 			dir = if yaw > 0 then -1 else 1
@@ -251,14 +263,15 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		local step = total / pieces * dir
 		local pitch = rng:NextNumber(Config.CURVE_PITCH[1], Config.CURVE_PITCH[2])
 		local last = segs[#segs]
-		if last and last.kind == "curve" then
+		if last and (last.kind == "curve" or last.kind == "spiral") then
 			pitch = last.angle -- поворот сразу за поворотом — тот же уклон (излом + доворот на одном стыке)
 		end
 		-- Пол куска поворота — из CURVE_SUBSTEPS частей, каждая довёрнута на шаг / n: ступенька
 		-- на краю дна x·sin(шаг/n)·tg(уклон) ≤ 0.2 stud. Борта и декор строит первая часть на весь кусок.
 		local sub = math.max(1, Config.CURVE_SUBSTEPS)
 		for piece = 1, pieces do
-			local turn = math.abs(yaw + step) <= maxYaw
+			-- за пределом MAX_HEADING (после виража) поворот к оси разрешён
+			local turn = math.abs(yaw + step) <= maxYaw or math.abs(yaw + step) < math.abs(yaw)
 			curveIndex += 1
 			for k = 1, sub do
 				-- первая часть поворота не доворачивает: на стыке, где меняется уклон, направление
@@ -274,6 +287,40 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 				end
 			end
 		end
+	end
+
+	-- Вираж-спираль (#44): поворот 120–150° по широкому жёлобу с высокими бортами. Трасса уже смотрит
+	-- вбок (|курс| ≥ SPIRAL_MIN_YAW) — поворачиваем через ось в другую сторону не дальше SPIRAL_MAX_HEADING
+	-- (назад трасса не уходит), сразу за виражом — обычный поворот обратно к оси. Пол — как у поворота:
+	-- CURVE_SUBSTEPS частей на кусок, первая часть не доворачивает (излом уклона и доворот не на одном стыке).
+	local function spiral()
+		local dir = if yaw > 0 then -1 else 1
+		local want = math.rad(featRng:NextNumber(Config.SPIRAL_ANGLE[1], Config.SPIRAL_ANGLE[2]))
+		local total = math.min(want, math.abs(yaw) + math.rad(Config.SPIRAL_MAX_HEADING))
+		local pieces = math.max(3, math.floor(math.deg(total) / Config.SPIRAL_STEP + 0.5))
+		local step = total / pieces * dir
+		local pitch = featRng:NextNumber(Config.SPIRAL_PITCH[1], Config.SPIRAL_PITCH[2])
+		local last = segs[#segs]
+		if last and last.kind == "curve" then
+			pitch = last.angle -- сразу за поворотом — тот же уклон (как поворот за поворотом)
+		end
+		local sub = math.max(1, Config.CURVE_SUBSTEPS)
+		for piece = 1, pieces do
+			curveIndex += 1
+			for k = 1, sub do
+				if not (piece == 1 and k == 1) then
+					yaw += step / sub
+				end
+				local extra = { vis = if k == 1 then Config.CURVE_PIECE else 0, ci = curveIndex, spiral = dir }
+				if k == 1 then
+					add("spiral", pitch, Config.CURVE_PIECE / sub, true, extra)
+				else
+					push("spiral", pitch, Config.CURVE_PIECE / sub, true, extra)
+				end
+			end
+		end
+		lastSpiral = h
+		lastTurn = dir
 	end
 
 	-- Волны-бугры (#40): серия «вниз → вверх» — сани ныряют и на гребне слегка подлетают; переходы
@@ -295,8 +342,19 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		for k, g in spec.gaps do
 			total += g.gap + (if spec.isles[k] then spec.isles[k].len else 0)
 		end
+		-- ледяной тоннель с кольцами-ускорителями перед цепочкой (#44, Track/IceTunnel): разгон перед
+		-- прыжками; скорость вылета всё равно задаёт ускоритель островков (окно LaunchMin…LaunchMax)
+		local ice = level >= Config.ICE_TUNNEL_FROM_LEVEL and featRng:NextNumber() < Config.ICE_TUNNEL_CHANCE
+		if ice then
+			total += Config.ICE_TUNNEL_LEN
+		end
 		if h + total > L - 80 then
 			return false
+		end
+		if ice then
+			local half = Config.ICE_TUNNEL_LEN / 2
+			add("iceTunnel", Config.ICE_TUNNEL_PITCH, half, true, { tunnel = "in", ice = { half = 1 } })
+			add("iceTunnel", Config.ICE_TUNNEL_PITCH, half, true, { tunnel = "out", ice = { half = 2 } })
 		end
 		add("isleIn", Config.ISLE_IN[1], Config.ISLE_IN[2])
 		for k, g in spec.gaps do
@@ -308,6 +366,20 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 		end
 		push("landing", 18, 90)
 		lastIsle = h
+		return true
+	end
+
+	-- Трамплин-лестница (#43): план — Track/Stairs (баллистика); не строим, если не влезает до финиша
+	local function stairs(): boolean
+		local spec = Stairs.plan(level, featRng)
+		if h + spec.total > L - 80 then
+			return false
+		end
+		for _, step in spec.steps do
+			add("stair", step.pitch, step.len, false, { stair = step })
+		end
+		add("stairLand", spec.landPitch, spec.landLen)
+		lastStair = h
 		return true
 	end
 
@@ -354,8 +426,27 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 			-- доп. цепочка островков (шанс растёт с уровнем, не чаще ISLE_MIN_SPACING)
 			local extraIsle = isleOn and isleRng:NextNumber() < Config.isleChance(level)
 				and lastIsle ~= nil and h - lastIsle >= Config.ISLE_MIN_SPACING
+			local stairOk = level >= Config.STAIR_FROM_LEVEL and h >= Config.STAIR_FROM_H
+				and (lastStair == nil or h - lastStair >= Config.STAIR_MIN_SPACING)
+				and (lastIsle == nil or h - lastIsle >= Config.STAIR_ISLE_SPACING)
 			if extraIsle and islands() then
 				-- построили островки вместо обычного куска
+			elseif stairOk and featRng:NextNumber() < Config.stairChance(level) and stairs() then
+				-- лестница трамплинов вместо обычного куска
+			elseif level >= Config.SPIRAL_FROM_LEVEL and h >= Config.SPIRAL_FROM_H and h < L - 600
+				and math.abs(math.deg(yaw)) >= Config.SPIRAL_MIN_YAW
+				-- вираж ведёт трассу к оси, а не от неё (yaw > 0 — влево, к −X): снос не растёт
+				and origin:PointToObjectSpace(pos).X * (if yaw > 0 then -1 else 1) >= 0
+				and (lastSpiral == nil or h - lastSpiral >= Config.SPIRAL_MIN_SPACING)
+				and featRng:NextNumber() < Config.spiralChance(level) then
+				spiral()
+				-- и сразу обратно: поворотами, пока курс не станет ≤ MAX_HEADING / 2 (не больше трёх)
+				for _ = 1, 3 do
+					curve()
+					if math.abs(math.deg(yaw)) <= Config.MAX_HEADING * 0.5 then
+						break
+					end
+				end
 			elseif level >= Config.WAVE_FROM_LEVEL and h > 300 and isleRng:NextNumber() < Config.WAVE_CHANCE then
 				waves()
 			elseif h > 220 and t < Config.CURVE_CHANCE then
