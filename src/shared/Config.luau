@@ -116,6 +116,44 @@ Config.COIN_LINE_CHANCE = 0.5
 Config.SAFE_LINE_REACTION = 0.3 -- реакция игрока, с
 Config.SAFE_LINE_MARGIN = 1.2 -- запас ×: время манёвра берётся с запасом (габарит препятствия, неточность)
 Config.SAFE_LINE_MAX_SHIFT = 2 -- больше этого полос между рядами линия не смещается
+-- Класс препятствия читается по виду и виды вводятся по уровням мира (#30, Props.obstacle). У каждого
+-- вида поле from — с какого уровня мира он встречается (1–3); на 1-м уровне мира — лёгкие + 1 тяжёлый вид.
+-- До OBSTACLE_COMBO_FROM в одном ряду препятствия одного класса (только лёгкие или только тяжёлые).
+-- Со 2-го круга миров («Снежный лес II» …) открыто всё — виды игрок уже знает.
+Config.OBSTACLE_COMBO_FROM = 3
+Config.SNOWMAN_OBSTACLE_SCALE = 0.5 -- снеговик-препятствие (лёгкое): 15.8 → 7.9 studs, ниже тяжёлых
+-- Маркер тяжёлого: красно-белый пояс-бордюр по контуру основания (SEGMENTS кусков чередуются)
+Config.OBSTACLE_MARK = {
+	SEGMENTS = 8,
+	HEIGHT = 0.6, -- studs над дном
+	WIDTH = 0.6, -- толщина бордюра
+	PAD = 1.2, -- × габарита коллизии (контур чуть шире препятствия)
+	MAX = 15, -- studs: не шире полосы (TRACK_WIDTH / LANES ≈ 13.3) с небольшим заходом
+	MIN = 2, -- studs: полуось не меньше (тонкие — трость, столб — тоже получают заметный пояс)
+}
+-- Читаемость на светлом дне и в дымке (#36). Под каждым препятствием — тёмное пятно-тень: 1 плоский
+-- Part-эллипс (SpecialMesh), без коллизий и CastShadow; тяжёлое — темнее (плотнее), лёгкое — мягче.
+Config.OBSTACLE_SHADOW = {
+	COLOR = Color3.fromRGB(20, 28, 52), -- тёмно-синий: контрастен голубому и розовому дну
+	LIGHT = 0.6, -- прозрачность под лёгким
+	HEAVY = 0.3, -- прозрачность под тяжёлым
+	PAD = 1.35, -- × габарита коллизии
+	MIN = 2.2, -- полуось, studs
+	MAX = 16, -- диаметр, studs (≈ полоса + заход)
+}
+-- Препятствие должно читаться за OBSTACLE_READ_TIME до него на OBSTACLE_READ_SPEED (потолок саней 200 ×
+-- (1 + бонус 27 %) ≈ 254 studs/с, ракета на земле ≈ 217): 2 с × 254 ≈ 510 studs < BUILD_AHEAD 650.
+-- Сам манёвр (SAFE_LINE_REACTION + MARGIN · смена 2 полос) на 254 studs/с занимает ≈ 0.74 с ≈ 190 studs.
+-- В заезде (client/PostFX): дымка не плотнее FOG_RUN (Density/Haze), резкость DOF — не ближе этой дистанции.
+Config.OBSTACLE_READ_TIME = 2
+Config.OBSTACLE_READ_SPEED = 254
+Config.FOG_RUN = {
+	DENSITY_MAX = 0.3, -- пещеры 0.40 и вулкан 0.38 в заезде → 0.30 (лобби — пресет мира)
+	HAZE_MAX = 1.4, -- пещеры 1.7, вулкан 1.9 → 1.4
+}
+function Config.obstacleReadDistance(): number
+	return Config.OBSTACLE_READ_TIME * Config.OBSTACLE_READ_SPEED
+end
 
 -- Дороги поперёк трассы с движущимися машинами (как в оригинале)
 Config.ROAD_AT = { 0.12, 0.42, 0.72 } -- доли уровня, где могут быть дороги
@@ -330,6 +368,15 @@ Config.WORLD_COLORS = {
 }
 function Config.worldOf(level: number): number
 	return (level - 1) // Config.LEVELS_PER_WORLD + 1
+end
+-- Ступень ввода препятствий (#30): номер уровня внутри мира 1…LEVELS_PER_WORLD на первом круге
+-- миров; со второго круга — LEVELS_PER_WORLD (все виды и комбинации открыты)
+function Config.obstacleStage(level: number): number
+	local per = Config.LEVELS_PER_WORLD
+	if level > per * #Config.THEMES then
+		return per
+	end
+	return (level - 1) % per + 1
 end
 function Config.themeOfWorld(world: number): number
 	return ((world - 1) % #Config.THEMES) + 1
@@ -1206,6 +1253,16 @@ Config.TUNABLES = {
 	{ "SAFE_LINE_REACTION", "Безопасная линия: реакция, с", "Трасса", 0, 1, 0.05 },
 	{ "SAFE_LINE_MARGIN", "Безопасная линия: запас времени ×", "Трасса", 1, 3, 0.05 },
 	{ "SAFE_LINE_MAX_SHIFT", "Безопасная линия: макс. сдвиг, полос", "Трасса", 0, 4, 1 },
+	{ "OBSTACLE_COMBO_FROM", "Препятствия: лёгкое+тяжёлое в ряду с уровня мира", "Трасса", 1, 6, 1 },
+	{ "SNOWMAN_OBSTACLE_SCALE", "Снеговик-препятствие: масштаб", "Трасса", 0.3, 1, 0.05 },
+	{ "OBSTACLE_MARK.SEGMENTS", "Маркер тяжёлого: кусков пояса (0 — выкл)", "Трасса", 0, 16, 2 },
+	{ "OBSTACLE_MARK.HEIGHT", "Маркер тяжёлого: высота, studs", "Трасса", 0.1, 2, 0.05 },
+	{ "OBSTACLE_SHADOW.LIGHT", "Пятно-тень лёгкого: прозрачность", "Трасса", 0, 1, 0.05 },
+	{ "OBSTACLE_SHADOW.HEAVY", "Пятно-тень тяжёлого: прозрачность", "Трасса", 0, 1, 0.05 },
+	{ "OBSTACLE_SHADOW.PAD", "Пятно-тень: × габарита", "Трасса", 0.5, 3, 0.05 },
+	{ "OBSTACLE_READ_TIME", "Читаемость препятствия: за сколько с", "Графика", 0.5, 4, 0.1 },
+	{ "FOG_RUN.DENSITY_MAX", "Дымка в заезде: Density не выше", "Графика", 0, 1, 0.01 },
+	{ "FOG_RUN.HAZE_MAX", "Дымка в заезде: Haze не выше", "Графика", 0, 3, 0.05 },
 	{ "CURVE_CHANCE", "Шанс поворота", "Трасса", 0, 1, 0.05 },
 	{ "KICKER_CHANCE", "Шанс обрыва с трамплином", "Трасса", 0, 1, 0.01 },
 	{ "GRAVITY_ALONG", "Гравитация вдоль склона", "Трасса", 10, 200, 1 },

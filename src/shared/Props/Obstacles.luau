@@ -3,6 +3,7 @@
 -- Часть shared/Props (см. Props/init).
 
 local Base = require(script.Parent.Base)
+local Config = require(script.Parent.Parent.Config)
 
 local Props = Base.Props
 local Meshes = Base.Meshes
@@ -59,31 +60,37 @@ function Props.barrier(base: CFrame, parent: Instance)
 end
 
 ------------------------------------------------------------------ природа
-function Props.snowman(rng: Random, base: CFrame, parent: Instance)
+-- Снеговик. scale — масштаб модели (препятствие: Config.SNOWMAN_OBSTACLE_SCALE, #30: лёгкое не выше
+-- тяжёлых; декор лобби — 1). Random-вызовы те же при любом масштабе (поворот и цвет шарфа).
+function Props.snowman(rng: Random, base: CFrame, parent: Instance, scale: number?)
+	local S = scale or 1
 	local face = base * CFrame.Angles(0, math.rad(rng:NextNumber(-25, 25)), 0)
+	local function at(x: number, y: number, z: number): CFrame
+		return face * CFrame.new(x * S, y * S, z * S)
+	end
 	local rs, ys = { 3.4, 2.5, 1.8 }, { 3.2, 8.2, 12.1 }
 	for k = 1, 3 do
-		part("Part", { Shape = Enum.PartType.Ball, Size = Vector3.one * rs[k] * 2, CFrame = face * CFrame.new(0, ys[k], 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
+		part("Part", { Shape = Enum.PartType.Ball, Size = Vector3.one * rs[k] * 2 * S, CFrame = at(0, ys[k], 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
 	end
 	-- Пуговицы и глаза
 	for _, y in { 7.4, 8.6 } do
-		deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.6, CFrame = face * CFrame.new(0, y, -2.4), Color = BLACK }, parent)
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.6 * S, CFrame = at(0, y, -2.4), Color = BLACK }, parent)
 	end
 	for _, x in { -0.6, 0.6 } do
-		deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.45, CFrame = face * CFrame.new(x, 12.6, -1.6), Color = BLACK }, parent)
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.45 * S, CFrame = at(x, 12.6, -1.6), Color = BLACK }, parent)
 	end
 	-- Морковка
-	deco({ Size = Vector3.new(0.5, 0.5, 2.2), CFrame = face * CFrame.new(0, 12.1, -2.6), Color = Color3.fromRGB(255, 130, 30) }, parent)
+	deco({ Size = Vector3.new(0.5, 0.5, 2.2) * S, CFrame = at(0, 12.1, -2.6), Color = Color3.fromRGB(255, 130, 30) }, parent)
 	-- Шарф
 	local scarf = pick(rng, { Color3.fromRGB(220, 50, 50), Color3.fromRGB(60, 120, 220), Color3.fromRGB(60, 170, 90) })
-	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.9, 3.9, 3.9), CFrame = face * CFrame.new(0, 10.4, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = scarf }, parent)
-	deco({ Size = Vector3.new(0.9, 2.4, 0.3), CFrame = face * CFrame.new(1, 9.3, -1.9) * CFrame.Angles(0, 0, math.rad(-12)), Color = scarf }, parent)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.9, 3.9, 3.9) * S, CFrame = at(0, 10.4, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = scarf }, parent)
+	deco({ Size = Vector3.new(0.9, 2.4, 0.3) * S, CFrame = at(1, 9.3, -1.9) * CFrame.Angles(0, 0, math.rad(-12)), Color = scarf }, parent)
 	-- Шляпа-цилиндр
-	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 3.2, 3.2), CFrame = face * CFrame.new(0, 13.7, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = BLACK }, parent)
-	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 2.2, 2.2), CFrame = face * CFrame.new(0, 14.8, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = BLACK }, parent)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 3.2, 3.2) * S, CFrame = at(0, 13.7, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = BLACK }, parent)
+	deco({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 2.2, 2.2) * S, CFrame = at(0, 14.8, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = BLACK }, parent)
 	-- Руки-веточки
 	for _, side in { -1, 1 } do
-		deco({ Size = Vector3.new(3, 0.3, 0.3), CFrame = face * CFrame.new(side * 3.4, 9, 0) * CFrame.Angles(0, 0, math.rad(side * 25)), Color = Color3.fromRGB(110, 75, 45) }, parent)
+		deco({ Size = Vector3.new(3, 0.3, 0.3) * S, CFrame = at(side * 3.4, 9, 0) * CFrame.Angles(0, 0, math.rad(side * 25)), Color = Color3.fromRGB(110, 75, 45) }, parent)
 	end
 end
 
@@ -238,9 +245,10 @@ function Props.cones(rng: Random, base: CFrame, parent: Instance)
 	end
 end
 
--- Бочки (по 2–3, иногда одна на боку)
+-- Бочки (по 2–3). Лёгкое (#30): тёплая палитра — оранжевая, медово-деревянная, жёлтая (было
+-- красная/синяя/зелёная — красная читалась как «опасно»); pick тот же, Random-вызовов столько же.
 function Props.barrels(rng: Random, base: CFrame, parent: Instance)
-	local col = pick(rng, { Color3.fromRGB(200, 60, 45), Color3.fromRGB(60, 110, 190), Color3.fromRGB(80, 140, 80) })
+	local col = pick(rng, { Color3.fromRGB(235, 125, 45), Color3.fromRGB(185, 125, 70), Color3.fromRGB(240, 190, 60) })
 	for k = 1, rng:NextInteger(2, 3) do
 		local c = base * CFrame.new((k - 2) * 3.2, 0, rng:NextNumber(-1.2, 1.2))
 		part("Part", { Shape = Enum.PartType.Cylinder, Size = Vector3.new(4, 3, 3), CFrame = c * CFrame.new(0, 2, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = col }, parent)
@@ -312,105 +320,265 @@ function Props.tnt(base: CFrame, parent: Instance)
 end
 
 ------------------------------------------------------------------ препятствия по мирам
--- Возвращает модель-препятствие (все детали потом получают тег Obstacle)
-function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instance): Model
+-- Визуальный код класса (#30, docs/ART_REFERENCES.md «Класс препятствия»):
+--  • лёгкое (Breakable: разбивается ракетой/на ускорении) — светлое дерево, снег, картон, тёплые
+--    оранжево-жёлтые акценты, округлые формы, не выше тяжёлых соседей мира;
+--  • тяжёлое (авария) — тёмное: камень, металл, базальт, шоколад, транспорт + общий маркер —
+--    красно-белый пояс-бордюр по контуру основания (Props.heavyMark). Красно-белое у лёгких не
+--    используем (бочки и т. п. — тёплые цвета).
+-- Пояс — декор (без коллизий, касаний и лучей, без Random): раскладка трассы не меняется.
+local MARK_RED, MARK_WHITE = Color3.fromRGB(215, 40, 45), Color3.fromRGB(250, 250, 250)
+
+-- Габарит коллизии модели в осях base (полуширины по X и Z): по деталям с CanCollide (part, не deco)
+local function footprint(m: Model, base: CFrame): (number, number)
+	local hx, hz = 0, 0
+	for _, d in m:GetChildren() do
+		if d:IsA("BasePart") and d.CanCollide then
+			local c = d.CFrame
+			local p = base:PointToObjectSpace(c.Position)
+			local ax, ay, az = base:VectorToObjectSpace(c.RightVector), base:VectorToObjectSpace(c.UpVector), base:VectorToObjectSpace(-c.LookVector)
+			local s = d.Size / 2
+			local ex = math.abs(ax.X) * s.X + math.abs(ay.X) * s.Y + math.abs(az.X) * s.Z
+			local ez = math.abs(ax.Z) * s.X + math.abs(ay.Z) * s.Y + math.abs(az.Z) * s.Z
+			hx = math.max(hx, math.abs(p.X) + ex)
+			hz = math.max(hz, math.abs(p.Z) + ez)
+		end
+	end
+	return hx, hz
+end
+Props.obstacleFootprint = footprint
+
+-- Маркер тяжёлого: эллипс-бордюр из Config.OBSTACLE_MARK.SEGMENTS кусков, красный/белый через один
+function Props.heavyMark(m: Model, base: CFrame, hx: number, hz: number)
+	local M = Config.OBSTACLE_MARK
+	local n = math.floor(M.SEGMENTS)
+	if n < 2 or hx <= 0 or hz <= 0 then
+		return
+	end
+	local a = math.clamp(hx * M.PAD, M.MIN, M.MAX / 2)
+	local b = math.clamp(hz * M.PAD, M.MIN, M.MAX / 2)
+	-- периметр эллипса (Рамануджан) → длина куска с зазором 10 %
+	local per = math.pi * (3 * (a + b) - math.sqrt((3 * a + b) * (a + 3 * b)))
+	local len = per / n * 0.9
+	for k = 0, n - 1 do
+		local t = (k + 0.5) / n * math.pi * 2
+		local tx, tz = -a * math.sin(t), b * math.cos(t)
+		deco({
+			Size = Vector3.new(len, M.HEIGHT, M.WIDTH),
+			CFrame = base * CFrame.new(a * math.cos(t), M.HEIGHT / 2, b * math.sin(t)) * CFrame.Angles(0, math.atan2(-tz, tx), 0),
+			Color = if k % 2 == 0 then MARK_RED else MARK_WHITE,
+		}, m)
+	end
+end
+
+-- Пятно-тень (#36): тёмный плоский эллипс под препятствием — контраст на светлом дне и в дымке.
+-- 1 Part 1 × 0.1 × 1 + SpecialMesh Sphere со Scale до габарита: маленький Size — Contacts.smash не
+-- делает из пятна обломок (порог Size.Magnitude > 1.5) и прячет его вместе с моделью. Без Random.
+function Props.obstacleShadow(m: Model, base: CFrame, hx: number, hz: number, heavy: boolean)
+	local S = Config.OBSTACLE_SHADOW
+	local w = math.clamp(hx * S.PAD, S.MIN, S.MAX / 2) * 2
+	local d = math.clamp(hz * S.PAD, S.MIN, S.MAX / 2) * 2
+	local pad = deco({
+		Name = "ObstacleShadow",
+		Size = Vector3.new(1, 0.1, 1),
+		CFrame = base * CFrame.new(0, 0.06, 0),
+		Color = S.COLOR,
+		Transparency = if heavy then S.HEAVY else S.LIGHT,
+	}, m)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Scale = Vector3.new(w, 1, d)
+	mesh.Parent = pad
+end
+
+-- Карточки видов (#30): вид — роль · класс · высота · цвет · с какого уровня мира (from).
+-- Лёгкое = Breakable (ракета/ускоритель разбивают, +SMASH_COINS), тяжёлое = авария.
+--  1 Снежный лес:  снеговик — частый «мягкий» блок · лёгкое · 7.9 · снег, тёплый шарф · 1
+--                  бревно — низкий барьер поперёк · лёгкое · 3 · дерево · 1
+--                  козлы-барьер — заметный блок полосы · лёгкое · 5 · оранжево-жёлтые доски · 1
+--                  валун — первое тяжёлое · тяжёлое · 5–7 · серый сланец + пояс · 1
+--                  поленница · лёгкое · 4.5 · дерево · 2;  указатель · лёгкое · 9 (тонкий) · дерево · 2
+--                  бочки · лёгкое · 4 · оранжевые/жёлтые · 3;  легковушка · тяжёлое · 5 · цветной кузов + пояс · 3
+--  2 Ледяной город: гидрант · лёгкое · 4 · красный металл (узкий) · 1;  STOP · лёгкое · 10 (тонкий) · 1
+--                  конусы · лёгкое · 4 · оранжевые · 1;  остановка — первое тяжёлое · тяжёлое · 8 · тёмная рама + пояс · 1
+--                  барьер, бочки · лёгкие · 2;  легковушка · тяжёлое · 2;  фургон, грузовик · тяжёлые · 3;
+--                  TNT — риск-награда (взрыв, не авария) · 3
+--  3 Каньон:       кактус · лёгкое · 7–11 · зелёный · 1;  указатель · лёгкое · 1;  валун (песчаник) · тяжёлое · 1
+--                  бочки, поленница · лёгкие · 2;  бревно, TNT · 3;  джип · тяжёлое · 3
+--  4 Ледяные пещеры: ледяная глыба · лёгкое · 4.5–6 · синий лёд · 1;  снеговик · лёгкое · 1
+--                  сталагмит · тяжёлое · 7–11 · тёмный лёд + пояс · 1;  бочки · лёгкое · 2;
+--                  валун · тяжёлое · 2;  легковушка · тяжёлое · 3
+--  5 Северное сияние: снеговик, ящики · лёгкие · 1;  валун · тяжёлое · 1;  ледяная глыба, бревно · 2;  легковушка · 3
+--  6 Снежный вулкан: бревно, бочки · лёгкие · 1;  лавовый камень · тяжёлое · 4–6 · базальт + лава · 1
+--                  базальт · тяжёлое · 2;  ящики · лёгкое · 2;  TNT · 3;  джип · тяжёлое · 3
+--  7 Конфетная гора: мармеладка · лёгкое (мягкая, была тяжёлым) · 6–8 · пастель · 1;  капкейк · лёгкое · 1
+--                  шоколад · тяжёлое (было лёгким: тёмная плитка) · 4 · 1;  снеговик · лёгкое · 2
+--                  леденцовая трость · тяжёлое (твёрдая карамель, сама красно-белая) · 7 · 2
+-- Веса — прежние: выбор по весам идёт по полному списку (тот же бросок rng, что раньше), поэтому на
+-- уровнях, где вид открыт, стоит то же, что и до #30.
+
+-- Возвращает модель-препятствие (все детали потом получают тег Obstacle).
+-- stage — ступень ввода видов (Config.obstacleStage(level), nil — всё открыто); row — общая таблица
+-- ряда (Track создаёт на каждый ряд): до OBSTACLE_COMBO_FROM ряд держит один класс.
+-- Детерминизм: rng — общий Random куска. Вызовы rng те же, что до #30: поворот, разворот, бросок
+-- по полному списку и Random-вызовы выбранного вида. Если выбранный вид ещё закрыт, он строится
+-- «вхолостую» в модель-черновик (расходует rng ровно как раньше, затем удаляется), а замена
+-- строится своим Random от броска — дальнейшие x-сдвиги, ускорители и монеты куска не меняются.
+function Props.obstacle(theme: number, rng: Random, base: CFrame, parent: Instance, stage: number?, row: { [string]: any }?): Model
 	local m = Instance.new("Model")
 	m.Name = "Obstacle"
-	-- Машины стоят вдоль или поперёк; остальное слегка развёрнуто
 	-- Машины стоят вдоль трассы (носом вверх или вниз): поперёк грузовик перекрывал 2–3 полосы сразу
 	local turned = base * CFrame.Angles(0, if rng:NextNumber() < 0.5 then 0 else math.pi, 0)
 	local twisted = base * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0)
-	-- Взвешенный выбор: { вес, функция }
+	local snowS = Config.SNOWMAN_OBSTACLE_SCALE
+	-- { вес, функция(r, p), лёгкое (true | "tnt" | nil = тяжёлое), с уровня мира }
 	local options
 	if theme == 1 then
 		options = {
-			{ 24, function() Props.snowman(rng, base, m) end , true },
-			{ 18, function() Props.boulder(rng, base, m) end },
-			{ 14, function() Props.log(rng, base, m) end , true },
-			{ 10, function() Props.woodpile(twisted, m) end , true },
-			{ 10, function() Props.barrier(twisted, m) end , true },
-			{ 12, function() Props.car(rng, turned, m) end },
-			{ 6, function() Props.signpost(rng, base, m, true) end , true },
-			{ 6, function() Props.barrels(rng, twisted, m) end , true },
+			{ 24, function(r, p) Props.snowman(r, base, p, snowS) end, true, 1 },
+			{ 18, function(r, p) Props.boulder(r, base, p) end, nil, 1 },
+			{ 14, function(r, p) Props.log(r, base, p) end, true, 1 },
+			{ 10, function(_, p) Props.woodpile(twisted, p) end, true, 2 },
+			{ 10, function(_, p) Props.barrier(twisted, p) end, true, 1 },
+			{ 12, function(r, p) Props.car(r, turned, p) end, nil, 3 },
+			{ 6, function(r, p) Props.signpost(r, base, p, true) end, true, 2 },
+			{ 6, function(r, p) Props.barrels(r, twisted, p) end, true, 3 },
 		}
 	elseif theme == 2 then
 		options = {
-			{ 24, function() Props.car(rng, turned, m) end },
-			{ 10, function() Props.van(rng, turned, m, rng:NextNumber() < 0.5) end },
-			{ 8, function() Props.truck(rng, turned, m) end },
-			{ 8, function() Props.busStop(twisted, m) end },
-			{ 10, function() Props.hydrant(base, m) end , true },
-			{ 10, function() Props.stopSign(base, m) end , true },
-			{ 12, function() Props.cones(rng, twisted, m) end , true },
-			{ 8, function() Props.barrier(twisted, m) end , true },
-			{ 10, function() Props.barrels(rng, twisted, m) end , true },
-			{ 8, function() Props.tnt(twisted, m) end , "tnt" },
+			{ 24, function(r, p) Props.car(r, turned, p) end, nil, 2 },
+			{ 10, function(r, p) Props.van(r, turned, p, r:NextNumber() < 0.5) end, nil, 3 },
+			{ 8, function(r, p) Props.truck(r, turned, p) end, nil, 3 },
+			{ 8, function(_, p) Props.busStop(twisted, p) end, nil, 1 },
+			{ 10, function(_, p) Props.hydrant(base, p) end, true, 1 },
+			{ 10, function(_, p) Props.stopSign(base, p) end, true, 1 },
+			{ 12, function(r, p) Props.cones(r, twisted, p) end, true, 1 },
+			{ 8, function(_, p) Props.barrier(twisted, p) end, true, 2 },
+			{ 10, function(r, p) Props.barrels(r, twisted, p) end, true, 2 },
+			{ 8, function(_, p) Props.tnt(twisted, p) end, "tnt", 3 },
 		}
 	elseif theme == 4 then
 		options = {
-			{ 24, function() Props.iceBlock(rng, base, m) end , true },
-			{ 18, function() Props.stalagmite(rng, base, m) end },
-			{ 14, function() Props.snowman(rng, base, m) end , true },
-			{ 12, function() Props.boulder(rng, base, m) end },
-			{ 10, function() Props.barrels(rng, twisted, m) end , true },
-			{ 8, function() Props.car(rng, turned, m) end },
+			{ 24, function(r, p) Props.iceBlock(r, base, p) end, true, 1 },
+			{ 18, function(r, p) Props.stalagmite(r, base, p) end, nil, 1 },
+			{ 14, function(r, p) Props.snowman(r, base, p, snowS) end, true, 1 },
+			{ 12, function(r, p) Props.boulder(r, base, p) end, nil, 2 },
+			{ 10, function(r, p) Props.barrels(r, twisted, p) end, true, 2 },
+			{ 8, function(r, p) Props.car(r, turned, p) end, nil, 3 },
 		}
 	elseif theme == 5 then
 		options = {
-			{ 22, function() Props.snowman(rng, base, m) end , true },
-			{ 18, function() Props.crates(rng, twisted, m) end , true },
-			{ 16, function() Props.iceBlock(rng, base, m) end , true },
-			{ 12, function() Props.log(rng, base, m) end , true },
-			{ 10, function() Props.boulder(rng, base, m) end },
-			{ 8, function() Props.car(rng, turned, m) end },
+			{ 22, function(r, p) Props.snowman(r, base, p, snowS) end, true, 1 },
+			{ 18, function(r, p) Props.crates(r, twisted, p) end, true, 1 },
+			{ 16, function(r, p) Props.iceBlock(r, base, p) end, true, 2 },
+			{ 12, function(r, p) Props.log(r, base, p) end, true, 2 },
+			{ 10, function(r, p) Props.boulder(r, base, p) end, nil, 1 },
+			{ 8, function(r, p) Props.car(r, turned, p) end, nil, 3 },
 		}
 	elseif theme == 6 then
 		options = {
-			{ 26, function() Props.lavaRock(rng, base, m) end },
-			{ 16, function() Props.basalt(rng, base, m) end },
-			{ 14, function() Props.log(rng, base, m) end , true },
-			{ 12, function() Props.barrels(rng, twisted, m) end , true },
-			{ 10, function() Props.crates(rng, twisted, m) end , true },
-			{ 8, function() Props.tnt(twisted, m) end , "tnt" },
-			{ 8, function() Props.jeep(rng, turned, m) end },
+			{ 26, function(r, p) Props.lavaRock(r, base, p) end, nil, 1 },
+			{ 16, function(r, p) Props.basalt(r, base, p) end, nil, 2 },
+			{ 14, function(r, p) Props.log(r, base, p) end, true, 1 },
+			{ 12, function(r, p) Props.barrels(r, twisted, p) end, true, 1 },
+			{ 10, function(r, p) Props.crates(r, twisted, p) end, true, 2 },
+			{ 8, function(_, p) Props.tnt(twisted, p) end, "tnt", 3 },
+			{ 8, function(r, p) Props.jeep(r, turned, p) end, nil, 3 },
 		}
 	elseif theme == 7 then
 		options = {
-			{ 22, function() Props.gumdrop(rng, base, m) end },
-			{ 18, function() Props.cupcake(rng, base, m) end , true },
-			{ 16, function() Props.chocolate(rng, base, m) end , true },
-			{ 14, function() Props.candyCane(rng, base, m, 7, true) end , true },
-			{ 10, function() Props.snowman(rng, base, m) end , true },
+			{ 22, function(r, p) Props.gumdrop(r, base, p) end, true, 1 },
+			{ 18, function(r, p) Props.cupcake(r, base, p) end, true, 1 },
+			{ 16, function(r, p) Props.chocolate(r, base, p) end, nil, 1 },
+			{ 14, function(r, p) Props.candyCane(r, base, p, 7, true) end, nil, 2 },
+			{ 10, function(r, p) Props.snowman(r, base, p, snowS) end, true, 2 },
 		}
 	else
 		options = {
-			{ 22, function() Props.boulder(rng, base, m, true) end },
-			{ 18, function() Props.cactus(rng, base, m, true) end , true },
-			{ 16, function() Props.jeep(rng, turned, m) end },
-			{ 10, function() Props.signpost(rng, base, m, true) end , true },
-			{ 12, function() Props.barrels(rng, twisted, m) end , true },
-			{ 10, function() Props.woodpile(twisted, m) end , true },
-			{ 8, function() Props.log(rng, base, m) end , true },
-			{ 8, function() Props.tnt(twisted, m) end , "tnt" },
+			{ 22, function(r, p) Props.boulder(r, base, p, true) end, nil, 1 },
+			{ 18, function(r, p) Props.cactus(r, base, p, true) end, true, 1 },
+			{ 16, function(r, p) Props.jeep(r, turned, p) end, nil, 3 },
+			{ 10, function(r, p) Props.signpost(r, base, p, true) end, true, 1 },
+			{ 12, function(r, p) Props.barrels(r, twisted, p) end, true, 2 },
+			{ 10, function(_, p) Props.woodpile(twisted, p) end, true, 2 },
+			{ 8, function(r, p) Props.log(r, base, p) end, true, 3 },
+			{ 8, function(_, p) Props.tnt(twisted, p) end, "tnt", 3 },
 		}
+	end
+	local lvl = stage or Config.LEVELS_PER_WORLD
+	local rowClass = if row and lvl < Config.OBSTACLE_COMBO_FROM then row.class else nil
+	local function heavy(o): boolean
+		return o[3] == nil
+	end
+	local function open(o, keepRow: boolean): boolean
+		return o[4] <= lvl and (not keepRow or rowClass == nil or heavy(o) == rowClass)
 	end
 	local total = 0
 	for _, o in options do
 		total += o[1]
 	end
 	local roll = rng:NextNumber() * total
+	local chosen
+	local left = roll
 	for _, o in options do
-		roll -= o[1]
-		if roll <= 0 then
-			o[2]()
-			-- Лёгкое можно разбить ракетой или на ускорении (o[3] = true)
-			if o[3] then
-				m:SetAttribute("Breakable", true)
-			end
-			if o[3] == "tnt" then
-				m:SetAttribute("Explosive", true) -- взрывается от любого удара (Contacts.explode)
-			end
+		left -= o[1]
+		if left <= 0 then
+			chosen = o
 			break
+		end
+	end
+	if chosen and not open(chosen, true) then
+		-- холостая сборка: rng расходуется как у выбранного вида до #30
+		local scrap = Instance.new("Model")
+		chosen[2](rng, scrap)
+		scrap:Destroy()
+		-- замена — среди открытых видов (того же класса ряда, если он есть), по весам, своим Random
+		local list = {}
+		local sum = 0
+		for _, o in options do
+			if open(o, true) then
+				table.insert(list, o)
+				sum += o[1]
+			end
+		end
+		if #list == 0 then
+			for _, o in options do
+				if open(o, false) then
+					table.insert(list, o)
+					sum += o[1]
+				end
+			end
+		end
+		local sub = Random.new(math.floor(roll * 1000003) + theme * 7919 + lvl)
+		local pickRoll = sub:NextNumber() * sum
+		chosen = list[#list]
+		for _, o in list do
+			pickRoll -= o[1]
+			if pickRoll <= 0 then
+				chosen = o
+				break
+			end
+		end
+		chosen[2](sub, m)
+	elseif chosen then
+		chosen[2](rng, m)
+	end
+	if chosen then
+		-- Лёгкое можно разбить ракетой или на ускорении
+		if chosen[3] then
+			m:SetAttribute("Breakable", true)
+		end
+		if chosen[3] == "tnt" then
+			m:SetAttribute("Explosive", true) -- взрывается от любого удара (Contacts.explode)
+		end
+		m:SetAttribute("Heavy", heavy(chosen)) -- класс для подсказок/аналитики (#30)
+		local hx, hz = footprint(m, base)
+		Props.obstacleShadow(m, base, hx, hz, heavy(chosen))
+		if heavy(chosen) then
+			Props.heavyMark(m, base, hx, hz)
+		end
+		if row and row.class == nil then
+			row.class = heavy(chosen)
 		end
 	end
 	m.Parent = parent

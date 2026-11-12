@@ -11,11 +11,17 @@ local SNOW, BLACK = Base.SNOW, Base.BLACK
 ------------------------------------------------------------------ Мир 4: Ледяные пещеры
 local ICE = Color3.fromRGB(170, 225, 250)
 local ICE_DEEP = Color3.fromRGB(90, 170, 230)
+-- Препятствия пещер (#36): темнее и насыщеннее дна (THEMES[4].floor 150,215,245) — светлый лёд ICE
+-- сливался с дном. Декор (сталагмиты обочин) — прежние светлые тона.
+local ICE_OBST = Color3.fromRGB(60, 140, 210)
+local ICE_OBST_CORE = Color3.fromRGB(30, 85, 160)
+local ICE_HEAVY = Color3.fromRGB(55, 90, 135) -- сталагмит-препятствие (тяжёлое): тёмный «каменный» лёд
+local ICE_HEAVY_TOP = Color3.fromRGB(95, 140, 190)
 -- Ледяная глыба (препятствие, разбивается)
 function Props.iceBlock(rng: Random, base: CFrame, parent: Instance)
 	local s = rng:NextNumber(4.5, 6)
-	part("Part", { Size = Vector3.new(s * 1.2, s, s), CFrame = base * CFrame.new(0, s / 2, 0) * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), Material = Enum.Material.Glass, Color = ICE, Transparency = 0.25 }, parent)
-	deco({ Size = Vector3.new(s * 0.7, s * 0.6, s * 0.55), CFrame = base * CFrame.new(0, s / 2, 0), Material = Enum.Material.Ice, Color = ICE_DEEP }, parent)
+	part("Part", { Size = Vector3.new(s * 1.2, s, s), CFrame = base * CFrame.new(0, s / 2, 0) * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), Material = Enum.Material.Glass, Color = ICE_OBST, Transparency = 0.15 }, parent)
+	deco({ Size = Vector3.new(s * 0.7, s * 0.6, s * 0.55), CFrame = base * CFrame.new(0, s / 2, 0), Material = Enum.Material.Ice, Color = ICE_OBST_CORE }, parent)
 	deco({ Size = Vector3.new(s * 1.1, 0.4, s * 0.9), CFrame = base * CFrame.new(0, s + 0.1, 0), Material = Enum.Material.Snow, Color = SNOW }, parent)
 end
 -- Сталагмит: сужающаяся ледяная колонна
@@ -24,7 +30,8 @@ function Props.stalagmite(rng: Random, base: CFrame, parent: Instance, collide: 
 	local maker = if collide == false then deco else function(pr, pa) return part("Part", pr, pa) end
 	for k = 0, 3 do
 		local w = (4 - k) * 0.9
-		maker({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(h / 4 + 0.2, w, w), CFrame = base * CFrame.new(0, h / 8 + k * h / 4, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Ice, Color = ICE:Lerp(ICE_DEEP, k * 0.2) }, parent)
+		local col = if collide == false then ICE:Lerp(ICE_DEEP, k * 0.2) else ICE_HEAVY:Lerp(ICE_HEAVY_TOP, k / 3)
+		maker({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(h / 4 + 0.2, w, w), CFrame = base * CFrame.new(0, h / 8 + k * h / 4, 0) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Ice, Color = col }, parent)
 	end
 end
 -- Друза кристаллов: светящиеся остроконечные призмы. Меш (#45): шестигранная друза одним MeshPart
