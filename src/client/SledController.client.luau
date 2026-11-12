@@ -394,11 +394,13 @@ RunService.Heartbeat:Connect(function(dt)
 			clearAirTricks()
 		end
 		st.airTime = 0
+		st.airTimeValue.Value = 0
 	else
 		-- В воздухе: летим по физике, немного рулим, ракета толкает вперёд
 		st.airborne = true
 		airborneValue.Value = true
 		st.airTime += dt
+		st.airTimeValue.Value = st.airTime
 		local rightH = st.fwd:Cross(Vector3.yAxis)
 		local along = vel:Dot(st.fwd)
 		st.speed = math.max(0, along)

@@ -60,6 +60,7 @@ Lobby.PLAN = {
 	stall = { 22.8, 36.6 }, -- лавка «Сани» (#69)
 	fire = { -22.8, 36.6 },
 	tent = { -29, 42 }, -- палатка за костром
+	season = { -63, 12 }, -- сезонная ёлка с подарками (Config.SEASON_DECOR): между табло и порталом
 	accent = { 0, 40 },
 	flags = { -14, -35, 14, -35, -9.4, 39.5, 9.4, 39.5 },
 	lamps = { -7.5, -8, 7.5, -8, -7.5, -28, 7.5, -28, -8.2, -51, 8.2, -51 },
@@ -78,6 +79,7 @@ Lobby.STATIONS = {
 	{ PLAN_KEY = "fire", r = 9 },
 	{ PLAN_KEY = "tent", r = 6 },
 	{ PLAN_KEY = "accent", r = 6 },
+	{ PLAN_KEY = "season", r = 6 },
 	{ PLAN_KEY = "gate", r = 12 },
 }
 local PLAN = Lobby.PLAN
@@ -413,6 +415,21 @@ function Lobby.furnish(lobby: Instance)
 	gateSign(Props.shopStall(facingSpawn(PLAN.stall), stallM), "🛷 САНИ", Enum.NormalId.Front)
 	zoneDisc(facingSpawn(PLAN.stall) * CFrame.new(0, 0, -5.5), 5, Color3.fromRGB(120, 220, 255), stallM)
 	stallM.Parent = lobby
+	-- Сезонный декор (эпик E11, Config.SEASON_DECOR): 1 — Новый год: ёлка с огоньками и звездой,
+	-- подарки вокруг неё и у подиумов
+	if Config.SEASON_DECOR == 1 then
+		local tree = facingSpawn(PLAN.season)
+		Props.newYearTree(tree, furniture)
+		local giftCols = { Color3.fromRGB(220, 60, 70), Color3.fromRGB(60, 140, 230), Color3.fromRGB(80, 190, 110), Color3.fromRGB(240, 170, 50) }
+		for k = 1, 4 do
+			local a = k * 1.7
+			Props.giftBox(tree * CFrame.new(math.cos(a) * 5.5, 0, math.sin(a) * 5.5 - 1) * CFrame.Angles(0, a, 0), 1.6 + (k % 2) * 0.8, giftCols[k], furniture)
+		end
+		for i, key in { "podiumL", "podiumR" } do
+			local c = PLAN[key]
+			Props.giftBox(facingSpawn({ c[1] + (if i == 1 then 7.5 else -7.5), c[2] + 3 }), 2, giftCols[i + 1], furniture)
+		end
+	end
 	-- фонари-«виселицы» между станциями, фонарём к центру
 	local rl = PLAN.ringLamps
 	for i = 1, #rl, 2 do

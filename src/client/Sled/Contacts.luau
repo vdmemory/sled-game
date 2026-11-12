@@ -22,6 +22,45 @@ local overlapParams = st.overlapParams
 local Contacts = {}
 
 ------------------------------------------------------------------ столкновения
+-- Тряска камеры (краш, TNT): смещение Humanoid.CameraOffset с затуханием
+local function shake(duration: number, power: number)
+	local hum = st.humanoid
+	if not hum then
+		return
+	end
+	local t0 = os.clock()
+	local conn: RBXScriptConnection
+	conn = game:GetService("RunService").RenderStepped:Connect(function()
+		local k = 1 - (os.clock() - t0) / duration
+		if k <= 0 or not hum.Parent then
+			hum.CameraOffset = Vector3.zero
+			conn:Disconnect()
+			return
+		end
+		hum.CameraOffset = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * power * k
+	end)
+end
+-- «Замедление» при краше (#57): 0.5 с кадр обесцвечивается и размывается, затем возвращается —
+-- ощущение слоу-мо без замедления физики (Roblox не замедляет время)
+local function crashSlowmo()
+	local Lighting = game:GetService("Lighting")
+	local TweenService = game:GetService("TweenService")
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Name = "CrashSlowmo"
+	cc.Saturation = -0.5
+	cc.Contrast = 0.15
+	cc.Parent = Lighting
+	local blur = Instance.new("BlurEffect")
+	blur.Name = "CrashBlur"
+	blur.Size = Config.CRASH_BLUR
+	blur.Parent = Lighting
+	local info = TweenInfo.new(Config.CRASH_SLOWMO, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	TweenService:Create(cc, info, { Saturation = 0, Contrast = 0 }):Play()
+	TweenService:Create(blur, info, { Size = 0 }):Play()
+	game:GetService("Debris"):AddItem(cc, Config.CRASH_SLOWMO + 0.1)
+	game:GetService("Debris"):AddItem(blur, Config.CRASH_SLOWMO + 0.1)
+end
+
 -- Удар о препятствие: ватрушка кувыркается вперёд и останавливается, заезд окончен
 local function crash()
 	local s, a = st.sled, st.align
@@ -73,6 +112,8 @@ local function crash()
 	speedValue.Value = 0
 	trickPopup:Fire("💥 Врезался!")
 	sfx:Fire("crash")
+	shake(Config.CRASH_SHAKE_TIME, Config.CRASH_SHAKE)
+	crashSlowmo()
 	Remotes.Crash:FireServer()
 end
 
@@ -127,23 +168,6 @@ end
 -- проверит Smash и начислит TNT_COINS), огненный шар (визуальный Explosion без урона), сани
 -- подбрасывает вверх (полёт — можно сделать трюк), скорость × TNT_SLOW (щит гасит потерю и
 -- остаётся), камера трясётся.
-local function shake(duration: number, power: number)
-	local hum = st.humanoid
-	if not hum then
-		return
-	end
-	local t0 = os.clock()
-	local conn: RBXScriptConnection
-	conn = game:GetService("RunService").RenderStepped:Connect(function()
-		local k = 1 - (os.clock() - t0) / duration
-		if k <= 0 or not hum.Parent then
-			hum.CameraOffset = Vector3.zero
-			conn:Disconnect()
-			return
-		end
-		hum.CameraOffset = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * power * k
-	end)
-end
 local function explode(model: Model)
 	local pos = model:GetPivot().Position
 	smash(model, "💥 БАБАХ! TNT  +" .. Config.TNT_COINS)

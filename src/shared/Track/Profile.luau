@@ -326,7 +326,11 @@ local function buildProfile(origin: CFrame, level: number): ({ Segment }, number
 			-- в городе одна из дорог — железнодорожный переезд
 			local theme = Config.themeOf(level)
 			if theme == 2 and not railDone and nextRoad == 2 then
+				-- переезд с обязательным трамплином перед ним (эпик E2): прыжок через пути и поезд,
+				-- приземление — сразу за переездом
+				add("kicker", 6, 100)
 				add("rail", 3, 60)
+				forceNext = "landing"
 				railDone = true
 			else
 				add("road", 3, 60)

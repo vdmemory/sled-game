@@ -294,4 +294,44 @@ function Props.hangLamp(at: CFrame, parent: Instance)
 	light.Parent = glow
 end
 
+------------------------------------------------------------------ Сезонный декор (эпик E11)
+-- Новогодняя ёлка: ярусы-шестигранники, снег на «юбках», шары-огоньки по кругу ярусов, звезда
+function Props.newYearTree(base: CFrame, parent: Instance)
+	local h = 26
+	local green = Color3.fromRGB(40, 120, 70)
+	deco({ Size = Vector3.new(2.4, 5, 2.4), CFrame = base * CFrame.new(0, 2.5, 0), Material = Enum.Material.Wood, Color = Color3.fromRGB(95, 65, 40) }, parent)
+	local bulbs = { Color3.fromRGB(255, 70, 70), Color3.fromRGB(255, 210, 60), Color3.fromRGB(80, 200, 255), Color3.fromRGB(120, 240, 120), Color3.fromRGB(240, 120, 255) }
+	for t = 0, 3 do
+		local w = h * (0.62 - t * 0.13)
+		local y = h * (0.28 + t * 0.18)
+		for k = 0, 2 do
+			deco({ Size = Vector3.new(w, h * 0.16, w * 0.58), CFrame = base * CFrame.new(0, y, 0) * CFrame.Angles(0, k * math.pi / 3, 0), Color = green, CastShadow = t == 0 }, parent)
+		end
+		snowCap(base * CFrame.new(0, y + h * 0.08, 0), w * 0.6, w * 0.5, parent)
+		local n = 7 - t
+		for k = 1, n do
+			local a = 2 * math.pi * k / n + t
+			deco({ Shape = Enum.PartType.Ball, Size = Vector3.one * 1.1, CFrame = base * CFrame.new(math.cos(a) * w * 0.45, y - h * 0.05, math.sin(a) * w * 0.45), Material = Enum.Material.Neon, Color = bulbs[(k + t) % #bulbs + 1] }, parent)
+		end
+	end
+	local star = deco({ Size = Vector3.new(2.6, 2.6, 0.6), CFrame = base * CFrame.new(0, h * 0.98, 0) * CFrame.Angles(0, 0, math.rad(45)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 215, 80) }, parent)
+	deco({ Size = Vector3.new(2.6, 2.6, 0.6), CFrame = base * CFrame.new(0, h * 0.98, 0), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 215, 80) }, parent)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 220, 140)
+	light.Range = 20
+	light.Brightness = 1.5
+	light.Parent = star
+end
+
+-- Коробка-подарок с лентой крест-накрест и бантом
+function Props.giftBox(base: CFrame, size: number, color: Color3, parent: Instance)
+	local ribbon = Color3.fromRGB(255, 230, 120)
+	deco({ Size = Vector3.one * size, CFrame = base * CFrame.new(0, size / 2, 0), Color = color, CastShadow = true }, parent)
+	deco({ Size = Vector3.new(size * 0.2, size + 0.05, size + 0.05), CFrame = base * CFrame.new(0, size / 2, 0), Color = ribbon }, parent)
+	deco({ Size = Vector3.new(size + 0.05, size + 0.05, size * 0.2), CFrame = base * CFrame.new(0, size / 2, 0), Color = ribbon }, parent)
+	for _, a in { -0.6, 0.6 } do
+		deco({ Shape = Enum.PartType.Ball, Size = Vector3.new(size * 0.35, size * 0.25, size * 0.2), CFrame = base * CFrame.new(0, size + size * 0.1, 0) * CFrame.Angles(0, 0, a), Color = ribbon }, parent)
+	end
+end
+
 return Props

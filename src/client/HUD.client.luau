@@ -508,6 +508,53 @@ local controlsHint = UI.text({
 	Parent = runUi,
 })
 
+-- Счётчик полёта (#57): «✈ 1.2 с» справа от спидометра, пока сани в воздухе дольше AIR_COUNTER_MIN
+local airLabel = UI.text({
+	Text = "",
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 168, 1, -150),
+	Size = UDim2.fromOffset(170, 40),
+	TextColor3 = Color3.fromRGB(150, 225, 255),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Visible = false,
+	Parent = runUi,
+})
+UI.outline(airLabel, 2.5)
+local airTimeValue = state:WaitForChild("AirTime") :: NumberValue
+airTimeValue.Changed:Connect(function(t)
+	local show = t >= Config.AIR_COUNTER_MIN
+	airLabel.Visible = show
+	if show then
+		airLabel.Text = string.format("✈ %.1f с", t)
+	end
+end)
+
+-- Конфетти «НОВЫЙ РЕКОРД!» (#57): цветные бумажки падают сверху и крутятся, ~1.6 с
+local function confetti()
+	local colors = { Color3.fromRGB(255, 90, 90), Color3.fromRGB(255, 205, 60), Color3.fromRGB(90, 210, 255), Color3.fromRGB(120, 230, 120), Color3.fromRGB(230, 120, 255) }
+	for k = 1, Config.CONFETTI_COUNT do
+		local f = UI.new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(math.random(), 0, 0, -20),
+			Size = UDim2.fromOffset(math.random(10, 18), math.random(6, 10)),
+			BackgroundColor3 = colors[(k % #colors) + 1],
+			BackgroundTransparency = 0,
+			Rotation = math.random(0, 360),
+			ZIndex = 9,
+			Parent = runUi,
+		})
+		local t = 1.2 + math.random() * 0.8
+		TweenService:Create(f, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Position = UDim2.new(f.Position.X.Scale + (math.random() - 0.5) * 0.2, 0, 0.75 + math.random() * 0.25, 0),
+			Rotation = f.Rotation + math.random(-540, 540),
+			BackgroundTransparency = 0.6,
+		}):Play()
+		task.delay(t, function()
+			f:Destroy()
+		end)
+	end
+end
+
 -- Крупные всплывашки в заезде («Удар!», «Флип!», «НОВЫЙ РЕКОРД!»)
 local toast = UI.text(UI.at(L.runToast, {
 	Text = "",
@@ -767,6 +814,7 @@ local function updateRun()
 	elseif not recordShown and best > 0 and dist > best and player:GetAttribute("Launched") then
 		recordShown = true
 		showToast("🏆 НОВЫЙ РЕКОРД!", 1.6)
+		confetti()
 		controller.Sfx:Fire("record")
 	end
 end

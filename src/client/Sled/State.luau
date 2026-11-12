@@ -82,6 +82,7 @@ function State.init(controller: Instance)
 	local shieldOn = value("ShieldOn", "BoolValue") -- щит: одно столкновение без аварии
 	local x2Left = value("X2Left") -- сек до конца «x2 монеты»
 	local airborneValue = value("Airborne", "BoolValue") -- в полёте (client/Tutorial)
+	local airTimeValue = value("AirTime") -- секунды текущего полёта (HUD: счётчик ✈, #57)
 	state.Parent = controller
 
 	-- Звуковые события для Sounds-скрипта: sfx:Fire(имя, [число]) — список в docs/GAME_DESIGN.md → «Звук»
@@ -122,6 +123,7 @@ function State.init(controller: Instance)
 	State.shieldOn = shieldOn
 	State.x2Left = x2Left
 	State.airborneValue = airborneValue
+	State.airTimeValue = airTimeValue
 	State.sfx = sfx
 	State.requestLaunch = requestLaunch
 	State.rocketInput = rocketInput
