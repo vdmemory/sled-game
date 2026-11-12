@@ -289,9 +289,10 @@ function Track:buildSegment(i: number)
 		local rows = self.rowPlan[i] or {}
 		for r, plan in rows do
 			local z = plan.z
+			local rowCtx = {} -- класс ряда до OBSTACLE_COMBO_FROM (#30)
 			for _, lane in plan.blocked do
 				local base = cf * CFrame.new(laneX(lane) + rng:NextNumber(-1.5, 1.5), 0, -z)
-				tagObstacle(Props.obstacle(self.theme, rng, base, m))
+				tagObstacle(Props.obstacle(self.theme, rng, base, m, Config.obstacleStage(self.level), rowCtx))
 			end
 			-- свободные полосы ряда, кроме безопасной (её держим под линию монет)
 			local free = {}

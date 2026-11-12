@@ -116,6 +116,21 @@ Config.COIN_LINE_CHANCE = 0.5
 Config.SAFE_LINE_REACTION = 0.3 -- реакция игрока, с
 Config.SAFE_LINE_MARGIN = 1.2 -- запас ×: время манёвра берётся с запасом (габарит препятствия, неточность)
 Config.SAFE_LINE_MAX_SHIFT = 2 -- больше этого полос между рядами линия не смещается
+-- Класс препятствия читается по виду и виды вводятся по уровням мира (#30, Props.obstacle). У каждого
+-- вида поле from — с какого уровня мира он встречается (1–3); на 1-м уровне мира — лёгкие + 1 тяжёлый вид.
+-- До OBSTACLE_COMBO_FROM в одном ряду препятствия одного класса (только лёгкие или только тяжёлые).
+-- Со 2-го круга миров («Снежный лес II» …) открыто всё — виды игрок уже знает.
+Config.OBSTACLE_COMBO_FROM = 3
+Config.SNOWMAN_OBSTACLE_SCALE = 0.5 -- снеговик-препятствие (лёгкое): 15.8 → 7.9 studs, ниже тяжёлых
+-- Маркер тяжёлого: красно-белый пояс-бордюр по контуру основания (SEGMENTS кусков чередуются)
+Config.OBSTACLE_MARK = {
+	SEGMENTS = 8,
+	HEIGHT = 0.6, -- studs над дном
+	WIDTH = 0.6, -- толщина бордюра
+	PAD = 1.2, -- × габарита коллизии (контур чуть шире препятствия)
+	MAX = 15, -- studs: не шире полосы (TRACK_WIDTH / LANES ≈ 13.3) с небольшим заходом
+	MIN = 2, -- studs: полуось не меньше (тонкие — трость, столб — тоже получают заметный пояс)
+}
 
 -- Дороги поперёк трассы с движущимися машинами (как в оригинале)
 Config.ROAD_AT = { 0.12, 0.42, 0.72 } -- доли уровня, где могут быть дороги
@@ -327,6 +342,15 @@ Config.WORLD_COLORS = {
 }
 function Config.worldOf(level: number): number
 	return (level - 1) // Config.LEVELS_PER_WORLD + 1
+end
+-- Ступень ввода препятствий (#30): номер уровня внутри мира 1…LEVELS_PER_WORLD на первом круге
+-- миров; со второго круга — LEVELS_PER_WORLD (все виды и комбинации открыты)
+function Config.obstacleStage(level: number): number
+	local per = Config.LEVELS_PER_WORLD
+	if level > per * #Config.THEMES then
+		return per
+	end
+	return (level - 1) % per + 1
 end
 function Config.themeOfWorld(world: number): number
 	return ((world - 1) % #Config.THEMES) + 1
@@ -1148,6 +1172,10 @@ Config.TUNABLES = {
 	{ "SAFE_LINE_REACTION", "Безопасная линия: реакция, с", "Трасса", 0, 1, 0.05 },
 	{ "SAFE_LINE_MARGIN", "Безопасная линия: запас времени ×", "Трасса", 1, 3, 0.05 },
 	{ "SAFE_LINE_MAX_SHIFT", "Безопасная линия: макс. сдвиг, полос", "Трасса", 0, 4, 1 },
+	{ "OBSTACLE_COMBO_FROM", "Препятствия: лёгкое+тяжёлое в ряду с уровня мира", "Трасса", 1, 6, 1 },
+	{ "SNOWMAN_OBSTACLE_SCALE", "Снеговик-препятствие: масштаб", "Трасса", 0.3, 1, 0.05 },
+	{ "OBSTACLE_MARK.SEGMENTS", "Маркер тяжёлого: кусков пояса (0 — выкл)", "Трасса", 0, 16, 2 },
+	{ "OBSTACLE_MARK.HEIGHT", "Маркер тяжёлого: высота, studs", "Трасса", 0.1, 2, 0.05 },
 	{ "CURVE_CHANCE", "Шанс поворота", "Трасса", 0, 1, 0.05 },
 	{ "KICKER_CHANCE", "Шанс обрыва с трамплином", "Трасса", 0, 1, 0.01 },
 	{ "GRAVITY_ALONG", "Гравитация вдоль склона", "Трасса", 10, 200, 1 },
