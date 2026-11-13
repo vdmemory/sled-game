@@ -66,6 +66,66 @@ function Meshes.waitFor(names: { string }, timeout: number): boolean
 	return #want == #names
 end
 
+-- Загрузить шаблоны из MeshIds через InsertService в ReplicatedStorage.MeshTemplates (каждый меш —
+-- в своём потоке, 3 попытки). Вызывают MeshAssets.server (при старте сервера) и StudioTrack (режим
+-- редактирования Studio, wait = true — дождаться всех, не дольше timeout секунд). Повторный вызов
+-- догружает только недостающие. Возвращает папку шаблонов.
+function Meshes.load(wait: boolean?, timeout: number?): Folder
+	local InsertService = game:GetService("InsertService")
+	local ids = Ids :: { [string]: number }
+	local folder = ReplicatedStorage:FindFirstChild(Meshes.FOLDER) :: Folder?
+	if not folder then
+		local f = Instance.new("Folder")
+		f.Name = Meshes.FOLDER
+		f.Parent = ReplicatedStorage
+		folder = f
+	end
+	local into = folder :: Folder
+	local pending = 0
+	for name, assetId in ids do
+		if into:FindFirstChild(name) then
+			continue
+		end
+		pending += 1
+		task.spawn(function()
+			local lastErr = ""
+			for attempt = 1, 3 do
+				local ok, model = pcall(InsertService.LoadAsset, InsertService, assetId)
+				if ok and model then
+					local mp = model:FindFirstChildWhichIsA("MeshPart", true)
+					if mp then
+						mp.Name = name
+						mp.Anchored = true
+						mp.CanCollide = false
+						mp.CanQuery = false
+						mp.CanTouch = false
+						mp.CastShadow = false
+						mp.Parent = into
+						model:Destroy()
+						pending -= 1
+						return
+					end
+					lastErr = "в модели нет MeshPart"
+					model:Destroy()
+				else
+					lastErr = tostring(model)
+				end
+				task.wait(attempt * 5)
+			end
+			pending -= 1
+			warn("[MeshAssets] меш " .. name .. " (ассет " .. assetId .. ") не загружен, остаётся модель из Part: " .. lastErr)
+			into:SetAttribute("_err", name .. ": " .. string.sub(lastErr, 1, 200))
+		end)
+	end
+	if wait then
+		local t0 = os.clock()
+		while pending > 0 and os.clock() - t0 < (timeout or 30) do
+			task.wait(0.25)
+		end
+	end
+	return into
+end
+
 -- Поставить меш объекта: base — основание объекта на земле (кадр объекта из gen_meshes.py),
 -- scale — масштаб по осям объекта (1 = габариты из MeshSpecs). Декор: без коллизий, лучей, касаний.
 -- props — свойства поверх (Color, Material, Transparency, CastShadow …). Нет шаблона — nil.

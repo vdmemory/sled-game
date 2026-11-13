@@ -503,7 +503,9 @@ function Track:setMover(model: Model, path: CFrame, laneZ: number, dir: number, 
 	model:SetAttribute("Speed", speed)
 	model:SetAttribute("Loop", loop)
 	model:SetAttribute("Phase", phase)
-	local t = workspace:GetServerTimeNow()
+	-- в режиме редактирования Studio (StudioTrack) серверного времени может не быть
+	local okT, now = pcall(workspace.GetServerTimeNow, workspace)
+	local t = if okT then now else os.clock()
 	local sPos = ((t * speed + phase) % loop) - loop / 2
 	model:PivotTo(path * CFrame.new(sPos * dir, 0, laneZ) * CFrame.Angles(0, yaw, 0))
 	CollectionService:AddTag(model, "Mover")
