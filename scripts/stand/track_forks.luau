@@ -15,8 +15,8 @@
 --   • статистика по уровням: сколько новых участков и какая доля пути.
 --   python3 scripts/stand/run.py scripts/stand/track_forks.luau [--meshes] [--from N --to M]
 -- STAND_MESHES — шаблоны MeshTemplates на все имена MeshSpecs (как после загрузки мешей).
--- --from/--to → глобалы ARGS_FROM/ARGS_TO (без них 1–45). Шимы копят инстансы — за один запуск
--- ≈ 25 уровней, полный прогон делать двумя: --from 1 --to 25 и --from 26 --to 45.
+-- --from/--to → глобалы ARGS_FROM/ARGS_TO (без них 1–45). Шимы копят инстансы: если полный прогон
+-- падает по памяти — гонять двумя: --from 1 --to 25 и --from 26 --to 45.
 
 local RS = game:GetService("ReplicatedStorage")
 RS.FindFirstChild = function(self, n) return rawget(self, n) end
@@ -223,10 +223,15 @@ end
 ------------------------------------------------------------------ развилка-мост (#42)
 -- Для каждой развилки: настил моста от разгона до склона приземления по трём линиям (центр и ±(w/2−3)):
 -- без дыр, ступенек > 0.2 stud и изломов > 3° на 2 studs, совпадает с планом Fork; на мосту
--- progressOf даёт путь h0 + u (±6), вбок — внутри ходовой части (sideOut = 0, мягкого возврата нет),
+-- progressOf даёт путь h0 + u (±PATH_TOL), вбок — внутри ходовой части (sideOut = 0, мягкого возврата нет),
 -- не ниже дна куска на FELL_DEPTH; ускорители на месте, борта на каждой плите, островки не шире зазора.
 local Fork = require(SHARED.Track.Fork)
 local W = Config.TRACK_WIDTH
+-- Допуск пути на мосту: progressOf проецирует точку на куски цепочки с окном ±4 stud за концом куска и при
+-- равном score берёт первый — над крутым gap (до ~12°) конец куска клампит h на 4 + высота моста над
+-- куском (≈ 15) × sin 12° ≈ 7 studs, на следующем куске сходится (ур. 20, u = 444: −6.7). Назад h не идёт,
+-- это не ошибка трассы; правка progressOf меняла бы серверный прогресс — допуск 10.
+local PATH_TOL = 10
 local function checkFork(tr): (number, number, { string }, { string })
 	local segs = tr.segments
 	local errs, info = {}, {}
@@ -344,7 +349,7 @@ local function checkFork(tr): (number, number, { string }, { string })
 		for u = -30, f.U + 30, 3 do
 			local P = f.origin * Vector3.new(f.x, guess(u) + 1.5, -u)
 			local h, x, y = tr:progressOf(P)
-			if u >= 0 and u <= f.U and math.abs(h - (h0 + u)) > 6 then
+			if u >= 0 and u <= f.U and math.abs(h - (h0 + u)) > PATH_TOL then
 				table.insert(errs, string.format("путь на мосту u=%.0f: h %.0f вместо %.0f", u, h, h0 + u))
 				break
 			end
@@ -443,4 +448,4 @@ print(string.format("Итого: лестниц %d, стыков с наруше
 if fails > 0 then
 	error("есть ошибки сборки трасс")
 end
-print("track_levels: OK")
+print("track_forks: OK")
