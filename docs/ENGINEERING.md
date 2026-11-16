@@ -51,7 +51,10 @@
      `Shape` у `BasePart`, deprecated API (`LoadCharacter`), циклы require между модулями;
   3. `selene src` по `selene.toml` (`std = "roblox"`, карта API — `roblox.yml`, генерирует
      `selene generate-roblox-std`): неиспользуемые переменные, одинаковые ветки `if` и т. п.;
-  4. `luau-compile --null` по каждому файлу — синтаксис, как сборка Open Cloud.
+  4. `luau-compile --null` по каждому файлу — синтаксис, как сборка Open Cloud;
+  5. `scripts/arch_lint.py` — карта модулей `docs/ARCHITECTURE.md` против `wc -l` (расхождение > 15 %,
+     файл > 600 строк без упоминания в «Сейчас выше порога») — только предупреждение; после правки модуля
+     `python3 scripts/arch_lint.py --fix` переписывает числа в таблице.
 - Инструменты: из `PATH`, иначе из `.tools/bin` (в `.gitignore`); недостающие `check.sh` сам
   скачивает с GitHub releases с фиксированными версиями (rojo 7.4.4, luau-lsp 1.70.1, selene 0.31.0,
   luau 0.746; `globalTypes.None.d.luau` с тега luau-lsp). `scripts/check.sh --install` — только

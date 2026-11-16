@@ -4,7 +4,8 @@
 #   2) luau-lsp analyze    — типы Roblox API (globalTypes): неизвестные глобалы/переменные после
 #                            слияний, несуществующие Enum.X.Y, опечатки в свойствах, deprecated API;
 #   3) selene              — линт по selene.toml (std = roblox);
-#   4) luau-compile --null — синтаксис каждого файла (как сборка Open Cloud).
+#   4) luau-compile --null — синтаксис каждого файла (как сборка Open Cloud);
+#   5) scripts/arch_lint.py — карта модулей docs/ARCHITECTURE.md против кода (только предупреждение).
 # Ненулевой код выхода, если хоть один шаг нашёл ошибку.
 #
 #   scripts/check.sh              — проверить src/
@@ -131,6 +132,10 @@ if need luau-compile; then
 else
   missing "luau-compile"
 fi
+
+# 5. карта модулей в ARCHITECTURE.md против wc -l — предупреждение, не ошибка (идея #87)
+echo "== arch_lint"
+python3 scripts/arch_lint.py || warn "arch_lint не запустился"
 
 if [ "$FAIL" -ne 0 ]; then
   echo "check.sh: НАЙДЕНЫ ОШИБКИ"

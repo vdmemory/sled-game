@@ -26,58 +26,61 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `src/server` | `ServerScriptService.Server` | `Main.server` (только порядок запуска и связывание) + `Remotes`, `Environment`, `Sleds`, `PlayerState`, `Runs`, `RunEvents`, `Pickups`, `Shop`, `Purchases`, `DevTools`, `Podium`, `MeshAssets.server` (см. «Карта модулей»), `AntiCheat` (правдоподобие заезда: предел скорости/пути, телепорт, полёт по серверу, проверки `Air`/`Trick`/`Smash`/`PowerUp`), `DataService` (DataStore), `Rewards` (задания, подарки, сундук, стрик), `Weekly` (лидерборд недели — см. ниже), `Tuning` (переопределения Config: DataStore `GameConfig_v1` + MessagingService), `Analytics` (AnalyticsService: онбординг, экономика, события заездов — `docs/METRICS.md`), `UIImages.server` (декали → ID картинок через InsertService → атрибуты `ReplicatedStorage.UIImages`) |
 | `src/client` | `StarterPlayerScripts.Client` | `SledController` (посадка и кадр физики санок) + `Sled/` (`State`, `Input`, `Launch`, `Tricks`, `Contacts` — см. «Карта модулей»), `HUD` (лобби/заезд/итог), `LobbyMenus` (окна меню), `DevPanel` (панель владельца), `ConfigSync` (применяет переопределения Config), `Effects` (осадки миров — в заезде по `RunTheme`, в лобби по `LobbyTheme`; частицы, пламя ракеты; детектор FPS → `AutoLowFps`), `PostFX` (свет и пост-обработка миров по пресетам `shared/WorldLook`: Lighting, Atmosphere, Clouds, Sky, ColorCorrection, Bloom, SunRays, DepthOfField — с твином; уровень графики 1–3 → атрибут `GfxTier`; виньетка скорости), `Sounds` (все звуки и музыка: каналы SoundGroup, набор `shared/AudioSet`, лупы, ducking — см. «Звук»), `Traffic` (движение машин), `Reveal` (анимация нового тира «было → стало»), `LobbyScene` (локальная витринная трасса своего мира за мостиком, декор и земля лобби по миру, витрина саней на подиумах с вращением `BulkMoveTo`, камера спавна, флаги на ветру, корона пьедестала топ-3), `WeeklyBoard` (табло лидеров и титулы над головой — только отображение `WeeklyBoard`/`WeeklyMe`/`Title`), `Tutorial` (подсказки первых заездов: свой ScreenGui `DisplayOrder` 90, опрос 5 Гц атрибутов игрока и `SledController.State` — `AwaitingLaunch`, `Airborne`, `Fuel`, `RocketOn`, `Stick.X`; находит в HUD `PlayButton` и `Card_<апгрейд>`) |
 
-## Карта модулей (после разбиения #17/#18, строки — 2026-11-09)
+## Карта модулей (после разбиения #17/#18, строки — 2026-11-16)
 
 Порог — файл ≤ ~600 строк. Папка с `init.luau` в Rojo — ModuleScript с дочерними модулями:
 `require(Shared.Track)` / `require(Shared.Props)` по-прежнему отдают весь API.
-Сейчас выше порога (кандидаты на разбиение, `IDEAS` #55): `Config` 1177, `DevPanel` 957,
-`LobbyMenus` 937, `HUD` 891, `UIKit` 758, `Sounds` 682, `Runs` 670.
+Числа строк сверяет `scripts/arch_lint.py` (шаг `check.sh`, только предупреждение: расхождение > 15 %
+или файл > 600 строк без упоминания ниже); обновить по коду — `python3 scripts/arch_lint.py --fix`.
+Сейчас выше порога (кандидаты на разбиение, `IDEAS` #55): `Config` 1707, `HUD` 1338,
+`LobbyMenus` 1179, `DevPanel` 959, `UIKit` 764, `Profile` 741, `Runs` 736, `Sounds` 693, `Track` (init) 686,
+`Lobby` 681.
 
 | Модуль | Строк | Что внутри |
 | --- | --- | --- |
-| `server/Main.server` | 84 | порядок запуска: `Tuning.init` → ремоуты в `ReplicatedStorage` → `Sleds.setup` (группа `Riders`, `workspace.Sleds`) → `Environment.setup` (свет) → `Track.buildLobby` → `Weekly.start` → `Podium.start` → `*.start()` обработчиков → `Runs.startLoop` (Heartbeat) → игроки, автосейв, `BindToClose` |
-| `server/Remotes` | 38 | все ремоуты (папка `Remotes`); `Remotes.folder` кладёт в `ReplicatedStorage` Main |
+| `server/Main.server` | 87 | порядок запуска: `Tuning.init` → ремоуты в `ReplicatedStorage` → `Sleds.setup` (группа `Riders`, `workspace.Sleds`) → `Environment.setup` (свет) → `Track.buildLobby` → `Weekly.start` → `Podium.start` → `*.start()` обработчиков → `Runs.startLoop` (Heartbeat) → игроки, автосейв, `BindToClose` |
+| `server/Remotes` | 41 | все ремоуты (папка `Remotes`); `Remotes.folder` кладёт в `ReplicatedStorage` Main |
 | `server/Environment` | 48 | Lighting, облака, цветокоррекция, bloom |
-| `server/Sleds` | 145 | `makeSled` (сиденье, модель/редкость/тиры, след, ракеты, крепления), `ragdoll`, `setRider` |
+| `server/Sleds` | 148 | `makeSled` (сиденье, модель/редкость/тиры, след, ракеты, крепления), `ragdoll`, `setRider` |
 | `server/PlayerState` | 158 | `sync` (профиль → атрибуты), `onPlayerAdded`, `postLevel` (OrderedDataStore `BestLevel_v1`), `TutorialStep`, `SetSetting` |
-| `server/Runs` | 690 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, рубежи дистанции `milestoneCheck` #61, финиш, остановка, вылет), таймаут без выстрела `IDLE_LAUNCH_TIMEOUT` → `endRun("idle")` (#20, custom-событие `RunIdle`), `onLeave`/`endAll` (выход/закрытие сервера посреди заезда → `endRun(..., leaving)` до `Data.release`/сохранения, #21, custom `RunLeft` с % трассы; события — `docs/METRICS.md`) |
-| `server/RunEvents` | 218 | `Launch`, `Air`, `Crash`, `Smash`, `Trick` |
+| `server/Runs` | 736 | `runs`/`slots`/`ending`, `startRun`, `endRun` (награды, задания, неделя, `RunEnded`, `respawn`), зона посадки `LaunchPad`, `Restart`/`Back`, `rescueCheck` (мягкий возврат), Heartbeat (сторож персонажа, прогресс, античит, рубежи дистанции `milestoneCheck` #61, финиш, остановка, вылет), таймаут без выстрела `IDLE_LAUNCH_TIMEOUT` → `endRun("idle")` (#20, custom-событие `RunIdle`), `onLeave`/`endAll` (выход/закрытие сервера посреди заезда → `endRun(..., leaving)` до `Data.release`/сохранения, #21, custom `RunLeft` с % трассы; события — `docs/METRICS.md`) |
+| `server/RunEvents` | 234 | `Launch`, `Air`, `Crash`, `Smash`, `Trick` |
 | `server/Pickups` | 190 | монеты (касание, магнит `CoinGrab`, комбо), `PowerUp` (x2, кольца, канистра, ускорители), гемы, кристалл |
 | `server/Podium` | 304 | пьедестал топ-3 недели (#48): аватары `CreateHumanoidModelFromUserIdAsync` (pcall, манекен при ошибке, кэш `PODIUM.CACHE`), поза/анимации на серверном `Animator`, таблички, «?» пустых ступеней; по смене `ReplicatedStorage.WeeklyBoard` |
-| `server/Shop` | 186 | `SledAction`, `TrailAction`, `RewardAction`, `BuyUpgrade`, `WorldAction` |
+| `server/Shop` | 189 | `SledAction`, `TrailAction`, `RewardAction`, `BuyUpgrade`, `WorldAction` |
 | `server/Purchases` | 71 | геймпасс x2, `PRODUCT_HANDLERS`, `ProcessReceipt` (дедуп чеков) |
-| `server/DevTools` | 110 | `DevAction` (только `game.CreatorId`) |
+| `server/DevTools` | 114 | `DevAction` (только `game.CreatorId`) |
 | `server/Ghosts` | 266 | призрак рекорда (#62): `GetGhost` (чтение `Ghost_v1`, кэш одной записи на игрока), `onRunEnd` (из `endRun`: рекорд? → `Ghost(level)` клиенту), приём записи `Ghost(level, dt, data)` — проверка и `UpdateAsync` |
 | `client/Ghost` | 343 | запись траектории с выстрела, сани-призрак (модель надетых саней, прозрачная, без коллизий, подпись «Твой рекорд»), HUD «±N м к рекорду» (`UILayout.ghost`/`ghostPhone`), настройка `SetGhost` |
 | `shared/GhostCodec` | 115 | сжатие записи: квантование, разности, zigzag-varint в base64url-символы; `encode`/`decode`/`quantize` |
-| `client/SledController` | 415 | посадка/высадка, кадр физики (скорость вдоль склона, руль, подсадка, прыжок, приземление) |
-| `client/Sled/State` | 133 | общее состояние санок (`st.speed`, `st.sled`, `st.trick`…) и объекты под контроллером (`State`, `Sfx`, `RequestLaunch`, `RocketInput`, `TrickPopup`) |
+| `client/SledController` | 429 | посадка/высадка, кадр физики (скорость вдоль склона, руль, подсадка, прыжок, приземление) |
+| `client/Sled/State` | 138 | общее состояние санок (`st.speed`, `st.sled`, `st.trick`…) и объекты под контроллером (`State`, `Sfx`, `RequestLaunch`, `RocketInput`, `TrickPopup`) |
 | `client/Sled/Input` | 109 | руль: клавиатура, PlayerModule, свайп с кольцом (`Stick`) |
-| `client/Sled/Launch` | 130 | рогатка: натяжение (`Launch("pull")`), вход в зону идеального запуска (`st.zoneAt`, `State.PerfectAt`), выстрел `Launch(power, zoneAge)` |
+| `client/Sled/Launch` | 131 | рогатка: натяжение (`Launch("pull")`), вход в зону идеального запуска (`st.zoneAt`, `State.PerfectAt`), выстрел `Launch(power, zoneAge)` |
 | `client/Sled/Tricks` | 345 | ручные и авто-трюки, `Tricks.land` (итог полёта), `Tricks.air` (кадр в воздухе), кнопки прыжка/ракеты |
-| `client/Sled/Contacts` | 386 | касания (авария, разбивание, щит, бонусы, гемы, кристалл, ускорители), `Contacts.scan` (монеты по отрезку пути, магнит) |
-| `shared/Track/init` | 574 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `rescueCFrame`, `destroy` |
+| `client/Sled/Contacts` | 466 | касания (авария, разбивание, щит, бонусы, гемы, кристалл, ускорители), `Contacts.scan` (монеты по отрезку пути, магнит) |
+| `shared/Track/init` | 686 | класс трассы: `new`, `buildStart`, `buildSegment`, `buildRoad`, `setMover`, `ensureAround`, `progressOf`, `rescueCFrame`, `destroy` |
 | `shared/DailyTasks` | 140 | задания дня игрока (#32): `baseSet(day)` (общий набор дня), `forPlayer(day, d)`, `revalidate(set, day, d, keep)` — замена невыполнимого (`Config.taskAvailable`), `describe`. Чистые функции; проверка — `scripts/stand/daily_tasks.luau` |
 | `shared/WeeklyQuest` | 57 | задание недели (#56): `forWeek(t)` → `{ key, id, target, trail }` (POOL/TRAILS по номеру недели от 1970), `text`, `stepOf` (этапы 25/50/75 %), `poolById`. Чистые функции; проверка — `scripts/stand/weekly_quest.luau` |
-| `shared/Track/Profile` | 244 | `buildProfile` — цепочка кусков уровня (тип `Segment`) |
-| `shared/Track/Sections` | 247 | профили сечений (чаша #74, жёлоб, дорога, озеро), цвета снега, `sidePoint`, поперечное сечение куска |
-| `shared/Track/Dress` | 324 | оформление миров вдоль трассы и разметка на ней |
-| `shared/Track/Items` | 189 | монеты, гемы, магнит, бонусы, кристалл, `tagObstacle` |
-| `shared/Track/Valley` | 150 | гребень над долиной: `build` — обрыв, дно, островки по миру; `prune` — убрать декор обочины над обрывом; участки помечает `Profile` (`seg.valley`) |
-| `shared/Track/Milestones` | 105 | рубежи дистанции (#61, `Config.MILESTONES`): `at` — рубежи на куске, `isBig`, `build` — арка-декор «N м» (модель `Milestone`, атрибут `Meters`; без коллизий и Random, отпечаток раскладки не меняется); награду считает `server/Runs` (`milestoneCheck` по `run.distance`) |
+| `shared/Track/Profile` | 741 | `buildProfile` — цепочка кусков уровня (тип `Segment`) |
+| `shared/Track/Sections` | 252 | профили сечений (чаша #74, жёлоб, дорога, озеро), цвета снега, `sidePoint`, поперечное сечение куска |
+| `shared/Track/Dress` | 350 | оформление миров вдоль трассы и разметка на ней |
+| `shared/Track/Items` | 213 | монеты, гемы, магнит, бонусы, кристалл, `tagObstacle` |
+| `shared/Track/Valley` | 159 | гребень над долиной: `build` — обрыв, дно, островки по миру; `prune` — убрать декор обочины над обрывом; участки помечает `Profile` (`seg.valley`) |
+| `shared/Track/Milestones` | 96 | рубежи дистанции (#61, `Config.MILESTONES`): `at` — рубежи на куске, `isBig`, `build` — арка-декор «N м» (модель `Milestone`, атрибут `Meters`; без коллизий и Random, отпечаток раскладки не меняется); награду считает `server/Runs` (`milestoneCheck` по `run.distance`) |
 | `shared/Track/Stairs` | 171 | трамплин-лестница (#43): `plan` — ступени, длины кусков, дуги монет (баллистика `Islands` со своим трамплином), `build` — трамплин с окном скорости, флажки, монеты, x2; `bonusAt` — гем/кристалл в дуге; куски `stair`/`stairLand` ставит `Profile` |
 | `shared/Track/Fork` | 347 | развилка у островков (#42): `plan` — профиль ледяного моста по плану островков (без Instance), `yAt`; `bridge` — настил, борта, ускорители на кусках `gap`/`isle`; `buildIn`/`buildLand` — пол к мосту, разделитель, вывеска, воронка; `prune` — декор обочины со стороны моста. Куски помечает `Profile` (`seg.fork`, `seg.open`) |
-| `shared/Track/IceTunnel` | 60 | ледяной тоннель с кольцами-ускорителями (#44): `build` — кольца `Items.boostRing` (тег `Boost`), монеты, лампы; свод — `Tunnel.build` с видом `Tunnel.ICE`; куски `iceTunnel` (`seg.ice`) ставит `Profile` перед островками |
-| `shared/Track/Tunnel` | 140 | тоннель над поворотом (#65): `build` — кольцо свода (меш `tunnel_vault` или блоки), порталы, свет, вид по миру; куски помечает `Profile` (`seg.tunnel`) |
+| `shared/Track/IceTunnel` | 58 | ледяной тоннель с кольцами-ускорителями (#44): `build` — кольца `Items.boostRing` (тег `Boost`), монеты, лампы; свод — `Tunnel.build` с видом `Tunnel.ICE`; куски `iceTunnel` (`seg.ice`) ставит `Profile` перед островками |
+| `shared/Track/Tunnel` | 145 | тоннель над поворотом (#65): `build` — кольцо свода (меш `tunnel_vault` или блоки), порталы, свет, вид по миру; куски помечает `Profile` (`seg.tunnel`) |
 | `shared/Props/init` | 16 | фасад: подключает модули категорий, отдаёт таблицу `Props` |
-| `shared/Props/Base` | 103 | `part`, `deco`, `pick`, надписи, колёса, общие цвета |
-| `shared/Props/Vehicles` | 219 | машины, трафик, поезд, канатка, знаки |
-| `shared/Props/Obstacles` | 357 | препятствия и `Props.obstacle(theme, …)` |
-| `shared/Props/Decor` | 309 | деревья, постройки, горы, трамплин, шар |
-| `shared/Props/Worlds` | 257 | модели миров 4–7 |
-| `shared/Props/LobbyDecor` | 320 | костёр, флагшток, гирлянда; меши лобби: `lampPost`, `podium`, `boardFrame`, `startGate` (фолбэк — Part); станции кольца (#69): `worldPortal`, `shopStall` (деталь `Zone` с атрибутом `Menu`), `tent`, `hangLamp`, `snowCap` |
-| `shared/UILayout` | 88 | места и размеры лобби-UI (`{ ax, ay, sx, ox, sy, oy, w, h }`), `DESIGN_W/H`, `MIN_TOUCH`/`MIN_PILL`/`MIN_TEXT` (+ для окон) |
-| `shared/Meshes` | 107 | меши декора (#45): `has(...)` (все шаблоны есть и `MESH_DECOR` = 1), `waitFor(имена, таймаут)` (ждать шаблоны с ID в `MeshIds`), `place(имя, основание, масштаб, свойства, родитель)`, `vary` (разброс оттенка по позиции), `load(wait, timeout)` (загрузка шаблонов из `MeshIds` через InsertService — для `MeshAssets.server` и `StudioTrack`) |
+| `shared/Props/Base` | 167 | `part`, `deco`, `pick`, надписи, колёса, общие цвета |
+| `shared/Props/Vehicles` | 365 | машины, трафик, поезд, канатка, знаки |
+| `shared/Props/Obstacles` | 589 | препятствия и `Props.obstacle(theme, …)` |
+| `shared/Props/Decor` | 373 | деревья, постройки, горы, трамплин, шар |
+| `shared/Props/Worlds` | 391 | модели миров 4–7 |
+| `shared/Props/LobbyDecor` | 337 | костёр, флагшток, гирлянда; меши лобби: `lampPost`, `podium`, `boardFrame`, `startGate` (фолбэк — Part); станции кольца (#69): `worldPortal`, `shopStall` (деталь `Zone` с атрибутом `Menu`), `tent`, `hangLamp`, `snowCap` |
+| `shared/UILayout` | 121 | места и размеры лобби-UI (`{ ax, ay, sx, ox, sy, oy, w, h }`), `DESIGN_W/H`, `MIN_TOUCH`/`MIN_PILL`/`MIN_TEXT` (+ для окон) |
+| `shared/Meshes` | 167 | меши декора (#45): `has(...)` (все шаблоны есть и `MESH_DECOR` = 1), `waitFor(имена, таймаут)` (ждать шаблоны с ID в `MeshIds`), `place(имя, основание, масштаб, свойства, родитель)`, `vary` (разброс оттенка по позиции), `load(wait, timeout)` (загрузка шаблонов из `MeshIds` через InsertService — для `MeshAssets.server` и `StudioTrack`) |
 | `shared/StudioTrack` | — | просмотр трассы в Studio без запуска: `build(уровень, отМ?, доМ?)` (тот же `Track.new`, все куски отрезка сразу, метки «N м» каждые `MARK_EVERY`, камера над стартом, сводка в Output), `clear()` (трасса + шаблоны мешей) |
 | `shared/SledModels/init` | 73 | фасад транспорта (прежний API): `build` (корпус: меши `BodyMeshes`, если все шаблоны модели есть, иначе Part `Bodies`), `extras`, `rocket`, `slingshot`, `ROCKETS`, `MOUNTS`, `ROPE_*`, `MESHES` (все меши транспорта — витрина ждёт их) |
 | `shared/SledModels/Builder` | 161 | сборка: `part`/`block`/`cyl`/`rod`/`torus`…, `mesh(имя, цвет, материал, кадр, масштаб)` — MeshPart из `MeshTemplates` с теми же свойствами (без коллизий, `Massless`, приварка), `meshesReady(имена)` (+ `Config.MESH_SLEDS`, `MESH_SLED_FLIP`) |
@@ -91,7 +94,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `shared/AudioIds` | — | генерируется (`scripts/gen_audio.py`/`upload_audio.py`): ID аудио-атласа v2 (0 — ещё не загружен) и куски `{начало, длина, луп}` |
 | `shared/AudioSetV1` | 51 | статический набор v1 (синтез, атлас 85020498524123) в том же формате `{ atlas, regions }`; не перегенерируется |
 | `shared/AudioSet` | 15 | выбор набора по `Config.SOUND_SET` (0 — встроенные `rbxasset` с регионами v1, 1 — v1, 2 — v2 из `AudioIds`); читается при старте клиента (`Sounds`, `DevPanel`) — смена набора требует перезахода |
-| `server/MeshAssets.server` | 44 | `InsertService:LoadAsset(MeshIds)` → шаблоны MeshPart в `ReplicatedStorage.MeshTemplates` |
+| `server/MeshAssets.server` | 16 | `InsertService:LoadAsset(MeshIds)` → шаблоны MeshPart в `ReplicatedStorage.MeshTemplates` |
 
 Зависимости сервера без циклов: `Remotes`, `Sleds` ← `PlayerState` ← `Runs` ← `RunEvents`,
 `Pickups`, `Shop`, `Purchases`, `DevTools` ← `Main`. Клиент: `State` ← `Input`, `Launch` ←
