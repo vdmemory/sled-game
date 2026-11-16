@@ -3,12 +3,16 @@
 отпечаток всех построенных инстансов (свойства, атрибуты, порядок детей).
 
   python3 scripts/stand/run.py [tail.luau] [--src src/shared] [--meshes] [--dump]
+                               [--from N] [--to M] [--levels K]
 
 tail.luau — сценарий (по умолчанию scripts/stand/sled_fp.luau: все сани × тиры обвеса × ракеты,
 ракеты 0–6, рогатка 0–10). --meshes — в ReplicatedStorage есть шаблоны MeshTemplates на все имена
 из MeshSpecs (как после загрузки мешей), без флага — фолбэк на Part. --dump — печатать строки
-отпечатка (для поиска расхождения). Сверка рефакторинга: прогнать до и после (`--src` на копию
-старого src/shared) и сравнить хэши. Нужен luau CLI (scripts/check.sh --install кладёт в .tools/bin).
+отпечатка (для поиска расхождения). --from/--to — глобалы ARGS_FROM/ARGS_TO (диапазон уровней в
+track_levels/track_forks/profile_dump; шимы копят инстансы, за один запуск ≈ 25 уровней — гонять
+1–25 и 26–45), --levels — глобал STAND_LEVELS (track_fp/layout_fp). Сверка рефакторинга: прогнать
+до и после (`--src` на копию старого src/shared) и сравнить хэши. Нужен luau CLI
+(scripts/check.sh --install кладёт в .tools/bin).
 """
 import os
 import pathlib
@@ -56,11 +60,16 @@ def main():
     src = ROOT / "src" / "shared"
     tail = HERE / "sled_fp.luau"
     flags = []
+    globals_ = {}  # --from/--to/--levels → глобалы сценария
+    names = {"--from": "ARGS_FROM", "--to": "ARGS_TO", "--levels": "STAND_LEVELS"}
     i = 0
     while i < len(args):
         a = args[i]
         if a == "--src":
             src = pathlib.Path(args[i + 1]).resolve()
+            i += 1
+        elif a in names:
+            globals_[names[a]] = int(args[i + 1])
             i += 1
         elif a in ("--meshes", "--dump"):
             flags.append(a)
@@ -70,6 +79,8 @@ def main():
     prog = (HERE / "shims.luau").read_text(encoding="utf-8")
     prog += f"\nSTAND_MESHES = {'true' if '--meshes' in flags else 'false'}\n"
     prog += f"STAND_DUMP = {'true' if '--dump' in flags else 'false'}\n"
+    for name, value in globals_.items():
+        prog += f"{name} = {value}\n"
     prog += module_tree(src)
     prog += tail.read_text(encoding="utf-8")
     luau = shutil.which("luau") or str(ROOT / ".tools" / "bin" / "luau")

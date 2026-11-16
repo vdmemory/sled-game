@@ -1,7 +1,7 @@
 --!nolint
 -- Дамп профиля уровней (#75) для scripts/relief_check.py: на уровень — JSON-строка {level, L, segs:[{k kind, a уклон°,
--- l длина, h hStart, hl hLen, y высота начала, t тоннель, c гребень}]}. Диапазон — глобалы ARGS_FROM/ARGS_TO.
---   python3 scripts/stand/run.py scripts/stand/profile_dump.luau
+-- l длина, h hStart, hl hLen, y высота начала, t тоннель, c гребень}]}. Диапазон — глобалы ARGS_FROM/ARGS_TO (--from/--to).
+--   python3 scripts/stand/run.py scripts/stand/profile_dump.luau [--from N --to M]
 local RS = game:GetService("ReplicatedStorage")
 RS.FindFirstChild = function(self, n) return rawget(self, n) end
 Config = require(SHARED.Config)

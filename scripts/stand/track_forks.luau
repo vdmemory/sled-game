@@ -13,8 +13,10 @@
 --     (тег Boost) построены, перед ним нет препятствий;
 --   • развилка-мост (#42, checkFork): настил без дыр/ступенек/изломов, путь и «вбок» по серверу на мосту;
 --   • статистика по уровням: сколько новых участков и какая доля пути.
---   python3 scripts/stand/run.py scripts/stand/track_levels.luau [--meshes]
+--   python3 scripts/stand/run.py scripts/stand/track_forks.luau [--meshes] [--from N --to M]
 -- STAND_MESHES — шаблоны MeshTemplates на все имена MeshSpecs (как после загрузки мешей).
+-- --from/--to → глобалы ARGS_FROM/ARGS_TO (без них 1–45). Шимы копят инстансы — за один запуск
+-- ≈ 25 уровней, полный прогон делать двумя: --from 1 --to 25 и --from 26 --to 45.
 
 local RS = game:GetService("ReplicatedStorage")
 RS.FindFirstChild = function(self, n) return rawget(self, n) end
