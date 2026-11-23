@@ -51,7 +51,7 @@ GitHub Actions публикует его в Roblox через Open Cloud.
 | `server/Shop` | 189 | `SledAction`, `TrailAction`, `RewardAction`, `BuyUpgrade`, `WorldAction` |
 | `server/Purchases` | 71 | геймпасс x2, `PRODUCT_HANDLERS`, `ProcessReceipt` (дедуп чеков) |
 | `server/DevTools` | 114 | `DevAction` (только `game.CreatorId`) |
-| `server/Ghosts` | 266 | призрак рекорда (#62): `GetGhost` (чтение `Ghost_v1`, кэш одной записи на игрока), `onRunEnd` (из `endRun`: рекорд? → `Ghost(level)` клиенту), приём записи `Ghost(level, dt, data)` — проверка и `UpdateAsync` |
+| `server/Ghosts` | 266 | призрак рекорда (#62): `GetGhost` (чтение `Ghost_v2`, кэш одной записи на игрока), `onRunEnd` (из `endRun`: рекорд? → `Ghost(level)` клиенту), приём записи `Ghost(level, dt, data)` — проверка и `UpdateAsync` |
 | `client/Ghost` | 343 | запись траектории с выстрела, сани-призрак (модель надетых саней, прозрачная, без коллизий, подпись «Твой рекорд»), HUD «±N м к рекорду» (`UILayout.ghost`/`ghostPhone`), настройка `SetGhost` |
 | `shared/GhostCodec` | 115 | сжатие записи: квантование, разности, zigzag-varint в base64url-символы; `encode`/`decode`/`quantize` |
 | `client/SledController` | 429 | посадка/высадка, кадр физики (скорость вдоль склона, руль, подсадка, прыжок, приземление) |
@@ -446,7 +446,7 @@ Open Cloud publish не принимает Union/EditableMesh, а MeshId у Mesh
 
 `Coins`, `Gems`, `Level`, `LevelBest`, `LaunchLevel`, `SledLevel`, `IncomeLevel`, `RocketLevel`,
 `Sled`/`SledRarity`/`OwnedSleds`, `Trail`/`OwnedTrails`, `Settings` (`Sfx`, `Snow`, `Shadows`,
-`Music`, `Ghost` — призрак рекорда, #62; сама запись — в `Ghost_v1`), `Daily` (задания дня: `day`, `set` — набор игрока `{ {id, target} }`, фиксируется в начале дня и перепроверяется при входе (#32; у сейвов без `set` — общий набор дня + замена невыполнимого), `progress` по id, `claimed` по номеру слота, `chest`; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `Streak` (`day` — последний засчитанный UTC-день, `count` — серия, `claimedDay` — день последней награды, `save` — серия, которую можно спасти сегодня; пересчёт в `Rewards.ensure`, недостающие ключи у старых сейвов дополняет `migrate`), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
+`Music`, `Ghost` — призрак рекорда, #62; сама запись — в `Ghost_v2`), `Daily` (задания дня: `day`, `set` — набор игрока `{ {id, target} }`, фиксируется в начале дня и перепроверяется при входе (#32; у сейвов без `set` — общий набор дня + замена невыполнимого), `progress` по id, `claimed` по номеру слота, `chest`; `Daily.big` — большой подарок получен сегодня), `ChestAt`, `GiftsClaimed` (подарки за время, сбрасываются при входе), `Streak` (`day` — последний засчитанный UTC-день, `count` — серия, `claimedDay` — день последней награды, `save` — серия, которую можно спасти сегодня; пересчёт в `Rewards.ensure`, недостающие ключи у старых сейвов дополняет `migrate`), `FarmWorld`, `Receipts` (дедуп покупок), `Stats` (Runs, Finishes,
 Onboard, Purchases, Playtime — для аналитики), `Tutorial` (биты пройденных шагов `Config.TUTORIAL.STEPS`, порядок не менять; при входе с `Stats.Runs ≥ 3` — все биты). Новые поля добавляются в `DEFAULT` — старые сейвы получают их сами.
 Новые поля — в `DEFAULT`, миграции — `migrate()` в `DataService`.
 
@@ -474,10 +474,12 @@ clean }` (где игрок попал в доски на неделе `key`); `
 Эксклюзивный след — в `OwnedTrails` навсегда. Клиенту — `Rewards.week` в атрибуте `Rewards` (`text, icon, progress,
 target, done, trail, trailName, trailOwned, gems, resetAt`). Миграции нет (новое поле `DEFAULT`; `migrate` дополняет ключи).
 
-## Призрак рекорда (#62, DataStore `Ghost_v1`, `server/Ghosts`, `client/Ghost`, `shared/GhostCodec`)
+## Призрак рекорда (#62, DataStore `Ghost_v2`, `server/Ghosts`, `client/Ghost`, `shared/GhostCodec`)
 
 Отдельное хранилище, не профиль: запись — килобайты и пишется только на рекорде, профиль
-`SledData_v1` остаётся маленьким и с сессионной блокировкой. Ключ `g_<UserId>_<уровень>` (≤ 50
+`SledData_v1` остаётся маленьким и с сессионной блокировкой. `v2` — с 2026-11-12 (длины уровней и
+раскладка изменились, старые записи ехали мимо трассы; версия раскладки в ключе — идея #124).
+Ключ `g_<UserId>_<уровень>` (≤ 50
 символов; уровень однозначно задаёт мир, фарм мира едет его последний уровень — призрак общий).
 Значение: `{ v = 1, level, dist (засчитанный путь, studs), fin, time (с от выстрела до endRun), dt,
 n, data, ts }`.
