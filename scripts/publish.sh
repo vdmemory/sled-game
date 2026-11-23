@@ -46,11 +46,12 @@ if [ ! -f "$FILE" ]; then
   fi
 fi
 
-# Статическая проверка (scripts/check.sh: luau-lsp с типами Roblox, selene, luau-compile) — до
-# публикации: ошибка в коде останавливает деплой. Инструменты check.sh скачивает сам (фиксированные
-# версии); если скачать не вышло — предупреждение, деплой продолжается. SKIP_CHECK=1 — пропустить.
+# Статическая проверка (scripts/check.sh: luau-lsp с типами Roblox, selene, luau-compile) и быстрые
+# стенды (--stands: shared-код исполняется в luau CLI, ≈ 30 с, #127) — до публикации: ошибка в коде
+# останавливает деплой. Инструменты check.sh скачивает сам (фиксированные версии); если скачать не
+# вышло — предупреждение, деплой продолжается. SKIP_CHECK=1 — пропустить.
 if [ -f scripts/check.sh ] && [ -z "${SKIP_CHECK:-}" ]; then
-  bash scripts/check.sh || { echo "::error::scripts/check.sh нашёл ошибки — публикация отменена"; exit 1; }
+  bash scripts/check.sh --stands || { echo "::error::scripts/check.sh нашёл ошибки — публикация отменена"; exit 1; }
 fi
 
 # ---- Ассеты: иконки (assets/ui/*.png → Decal), меши (#45, assets/meshes/*.glb → Model),

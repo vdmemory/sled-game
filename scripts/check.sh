@@ -5,10 +5,15 @@
 #                            слияний, несуществующие Enum.X.Y, опечатки в свойствах, deprecated API;
 #   3) selene              — линт по selene.toml (std = roblox);
 #   4) luau-compile --null — синтаксис каждого файла (как сборка Open Cloud);
-#   5) scripts/arch_lint.py — карта модулей docs/ARCHITECTURE.md против кода (только предупреждение).
+#   5) scripts/arch_lint.py — карта модулей docs/ARCHITECTURE.md против кода (только предупреждение);
+#   6) --stands: быстрые стенды scripts/stand (luau CLI исполняет src/shared на шимах Roblox API —
+#      ловит то, чего статика не видит: nil-индексы, расхождение Config ↔ Track, невыполнимые
+#      задания): daily_tasks, weekly_quest, sled_fp (только «отработал без ошибки»), track_forks.
+#      ≈ 30 с; publish.sh включает его в CI (идея #127).
 # Ненулевой код выхода, если хоть один шаг нашёл ошибку.
 #
 #   scripts/check.sh              — проверить src/
+#   scripts/check.sh --stands     — то же + стенды (шаг 6)
 #   scripts/check.sh --install    — только поставить инструменты в .tools/ и выйти
 #
 # Инструменты ищутся в PATH, затем в .tools/bin; недостающие скачиваются с GitHub releases
@@ -53,7 +58,7 @@ need() { # имя → 0, если инструмент есть (или удал
     rojo) fetch_zip "$gh/rojo-rbx/rojo/releases/download/v$ROJO_VERSION/rojo-$ROJO_VERSION-linux-x86_64.zip" ;;
     luau-lsp) fetch_zip "$gh/JohnnyMorganz/luau-lsp/releases/download/$LUAU_LSP_VERSION/luau-lsp-linux-x86_64.zip" ;;
     selene) fetch_zip "$gh/Kampfkarren/selene/releases/download/$SELENE_VERSION/selene-$SELENE_VERSION-linux.zip" ;;
-    luau-compile) fetch_zip "$gh/luau-lang/luau/releases/download/$LUAU_VERSION/luau-ubuntu.zip" ;;
+    luau-compile | luau) fetch_zip "$gh/luau-lang/luau/releases/download/$LUAU_VERSION/luau-ubuntu.zip" ;; # один zip: luau, luau-compile, luau-analyze
   esac
   command -v "$name" >/dev/null
 }
@@ -86,10 +91,12 @@ missing() {
 }
 
 if [ "${1:-}" = "--install" ]; then
-  for t in rojo luau-lsp selene luau-compile; do need "$t" || echo "не удалось поставить $t"; done
+  for t in rojo luau-lsp selene luau-compile luau; do need "$t" || echo "не удалось поставить $t"; done
   need_defs || echo "не удалось скачать globalTypes"
   exit 0
 fi
+STANDS=0
+[ "${1:-}" = "--stands" ] && STANDS=1
 
 mapfile -t FILES < <(find src -name '*.luau' | sort)
 
@@ -136,6 +143,27 @@ fi
 # 5. карта модулей в ARCHITECTURE.md против wc -l — предупреждение, не ошибка (идея #87)
 echo "== arch_lint"
 python3 scripts/arch_lint.py || warn "arch_lint не запустился"
+
+# 6. стенды (--stands): shared-код исполняется в luau CLI (scripts/stand/run.py + shims.luau) — идея #127.
+# Падает только на реальной ошибке стенда (error()/assert/рантайм в src/shared); нет luau или
+# python3 — как у остальных шагов: предупреждение (CHECK_REQUIRE_TOOLS=1 — ошибка).
+if [ "$STANDS" -eq 1 ]; then
+  echo "== стенды (scripts/stand)"
+  if need luau && command -v python3 >/dev/null; then
+    for s in daily_tasks weekly_quest sled_fp track_forks; do
+      T0=$(date +%s)
+      if OUT="$(python3 scripts/stand/run.py "scripts/stand/$s.luau" 2>&1)"; then
+        echo "  $s: OK ($(( $(date +%s) - T0 )) с) — $(printf '%s\n' "$OUT" | grep -v '^$' | tail -n 1)"
+      else
+        printf '%s\n' "$OUT" | tail -n 25
+        echo "  $s: ОШИБКА"
+        FAIL=1
+      fi
+    done
+  else
+    missing "luau / python3 (стенды)"
+  fi
+fi
 
 if [ "$FAIL" -ne 0 ]; then
   echo "check.sh: НАЙДЕНЫ ОШИБКИ"

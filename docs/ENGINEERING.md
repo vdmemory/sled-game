@@ -54,13 +54,21 @@
   4. `luau-compile --null` по каждому файлу — синтаксис, как сборка Open Cloud;
   5. `scripts/arch_lint.py` — карта модулей `docs/ARCHITECTURE.md` против `wc -l` (расхождение > 15 %,
      файл > 600 строк без упоминания в «Сейчас выше порога») — только предупреждение; после правки модуля
-     `python3 scripts/arch_lint.py --fix` переписывает числа в таблице.
+     `python3 scripts/arch_lint.py --fix` переписывает числа в таблице;
+  6. `--stands` — быстрые стенды `scripts/stand` через `run.py` (luau CLI исполняет `src/shared` на
+     шимах Roblox API, #127): `daily_tasks` (60 дней заданий без невыполнимых), `weekly_quest` (цели и
+     следы недели, ISO-недели), `sled_fp` (все сани × тиры × ракеты строятся; хэш печатается, но не
+     сверяется — он честно меняется при правке саней), `track_forks` (развилки и лестницы ур. 1–45:
+     стыки, снос). ≈ 30 с; ловит то, чего статика не видит: nil-индекс в рантайме, расхождение
+     `Config` ↔ `Track`, `error()`/`assert` стенда. Падает только на реальной ошибке (стенд `track_forks`
+     был красным неделю, пока запускался руками — CHANGELOG 16.11). Медленный `track_levels` (≈ 70 с)
+     сюда не входит — гонять руками `--from/--to` после правок `Track/*`.
 - Инструменты: из `PATH`, иначе из `.tools/bin` (в `.gitignore`); недостающие `check.sh` сам
   скачивает с GitHub releases с фиксированными версиями (rojo 7.4.4, luau-lsp 1.70.1, selene 0.31.0,
-  luau 0.746; `globalTypes.None.d.luau` с тега luau-lsp). `scripts/check.sh --install` — только
-  поставить. Нет сети и инструмента — шаг пропускается с предупреждением
-  (`CHECK_REQUIRE_TOOLS=1` — ошибка).
-- **В CI**: `scripts/publish.sh` запускает `check.sh` до публикации (workflow не менялся) —
+  luau 0.746 — один zip с `luau`, `luau-compile`, `luau-analyze`; `globalTypes.None.d.luau` с тега
+  luau-lsp). `scripts/check.sh --install` — только поставить. Нет сети и инструмента — шаг
+  пропускается с предупреждением (`CHECK_REQUIRE_TOOLS=1` — ошибка).
+- **В CI**: `scripts/publish.sh` запускает `check.sh --stands` до публикации (workflow не менялся) —
   ошибка останавливает деплой, `SKIP_CHECK=1` — пропустить. Сеть на раннере есть, инструменты
   скачиваются за секунды (`curl --retry 5 --retry-all-errors` — 504 от GitHub не валит шаг).
 - **Деплой не молчит (#22):** ассет не загрузился → `::warning::` + Summary; пересборка с новыми ID
